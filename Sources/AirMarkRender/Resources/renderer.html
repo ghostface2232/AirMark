@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'">
+<link rel="stylesheet" href="katex.min.css">
+<style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}#output{display:inline-block;white-space:nowrap;padding:4px;box-sizing:border-box}.katex-display{margin:0}.katex{font-size:1em}svg{max-width:none!important;display:block}</style>
+<script src="libraries.js"></script></head><body><div id="output"></div>
+<script>
+let sequence=0;
+// KaTeX glyphs are invisible until their @font-face files load. The first formula
+// used to be captured before that happened, so load every bundled face up front.
+const fontsLoaded=Promise.all([...document.fonts].map(face=>face.load().catch(()=>null))).then(()=>document.fonts.ready);
+window.renderAirMark=async function(source,kind,display,fontSize,dark,width){
+ await fontsLoaded;
+ const el=document.getElementById('output'); el.replaceChildren();
+ el.style.fontSize=fontSize+'px';el.style.color=dark?'#e4e4e7':'#252528';
+ if(kind==='math'){
+   const math=document.createElement('span');el.append(math);
+   airmarkLibraries.katex.render(source,math,{displayMode:display,throwOnError:true,trust:false,maxExpand:1000,maxSize:50,macros:{},output:'htmlAndMathml'});
+   const baseline=document.createElement('span');baseline.style.cssText='display:inline-block;width:0;height:0;vertical-align:baseline';el.append(baseline);
+   await document.fonts.ready;
+   // Glyphs such as superscripts and radicals can overflow the element box.
+   // Pad the box so the snapshot rectangle, which starts at the page origin, contains them.
+   let box=el.getBoundingClientRect();
+   let top=box.top,left=box.left,right=box.right,bottom=box.bottom;
+   for(const node of el.querySelectorAll('.katex-html *')){if(node.childElementCount>0)continue;const r=node.getBoundingClientRect();if(r.width===0||r.height===0)continue;top=Math.min(top,r.top);left=Math.min(left,r.left);right=Math.max(right,r.right);bottom=Math.max(bottom,r.bottom);}
+   el.style.padding=`${4+Math.ceil(box.top-top)}px ${4+Math.ceil(right-box.right)}px ${4+Math.ceil(bottom-box.bottom)}px ${4+Math.ceil(box.left-left)}px`;
+   box=el.getBoundingClientRect();
+   return {width:Math.ceil(box.width),height:Math.ceil(box.height),baseline:baseline.getBoundingClientRect().top-box.top};
+ }
+ airmarkLibraries.mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:dark?'dark':'default',fontFamily:'-apple-system, sans-serif',maxTextSize:50000,maxEdges:500,flowchart:{htmlLabels:false,useMaxWidth:false}});
+ const result=await airmarkLibraries.mermaid.render('airmark'+(++sequence),source);
+ el.innerHTML=result.svg;
+ const svg=el.querySelector('svg');const vb=svg.viewBox.baseVal;
+ let w=vb.width||svg.getBoundingClientRect().width,h=vb.height||svg.getBoundingClientRect().height;
+ const factor=Math.min(1,width/w);svg.style.width=(w*factor)+'px';svg.style.height=(h*factor)+'px';
+ await document.fonts.ready;
+ const box=el.getBoundingClientRect();return {width:Math.ceil(box.width),height:Math.ceil(box.height),baseline:box.height};
+};
+</script></body></html>

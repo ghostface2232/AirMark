@@ -1,0 +1,25 @@
+# AirMark development log
+
+## 2026-09-16 — Initial native implementation
+
+- Xcode is now installed at `/Applications/Xcode.app`, selected by xcode-select. Swift 6.4 / macOS 27; deployment target macOS 26, arm64.
+- Added the Xcode host and local Core/Editor/Render packages, pinned swift-markdown 0.8.0 and cmark 0.8.0.
+- Added source coordinate mapping, byte-preserving UTF-8/BOM IO, recovery snapshots, Markdown semantic parsing, and math extensions.
+- Added TextKit 2 paragraph presentation with source-length-preserving replacements, active paragraph reveal, IME deferral, and native undo.
+- Added bundled Mermaid 11.12.0 and KaTeX 0.16.22, independent lazy workers, bounded in-memory render cache, native table/local-image rendering.
+- Added the document app, menus, autosave/recovery, external conflict protection, and find/replace.
+- Validation: Debug Xcode build succeeded; 8 core tests and 3 editor integration tests passed. These include source round-trip, random position-index edits, reference links, math exclusions, stale recovery writes, presentation/source separation, native undo, and marked-text preservation.
+- Actual screen behavior and WebKit snapshots are still being verified. No claim yet for the target performance budgets, VoiceOver completeness, or runtime compatibility on macOS 26.
+
+## 2026-09-16 — Rendering fixes and document verification
+
+Validation host: macOS 27.0 (26A428), Xcode 27 / Swift 6.4. macOS 26 runtime behavior is still unverified.
+
+- **Overlapping blocks (Mermaid, tables, display math drawn over the following text).** Measured with a layout-fragment dump: lines carrying a rendered attachment kept the plain 27pt text height. Two causes. TextKit 2 sizes attachments from `attachmentBounds(for:location:textContainer:proposedLineFragment:position:)`, not from `bounds`, so `ArtifactAttachment` now overrides it and draws its image directly (`allowsTextAttachmentView = false`). Independently, concealing markers by replacing them with U+200B made TextKit 2 drop the attachment height for any line that contained one (reproduced in isolation: `"\u{FFFC}\u{200B}\n"` lays out at 27pt, `"\u{FFFC}x\n"` at 55pt). Concealment now keeps the source characters and applies a 0.01pt font and clear color. `LayoutTests` asserts that layout fragments of the showcase fixture never overlap.
+- **First inline formula blank.** Only the first KaTeX render in a WebView was empty; later ones were fine. KaTeX glyphs are invisible until their @font-face files load, and `document.fonts.ready` resolved before the lazily triggered loads. `renderer.html` now loads every bundled face before the first render. `RenderTests` checks ink coverage of the first inline render, display math, Mermaid and native tables.
+- **Clipped superscripts.** The snapshot rectangle followed the element box, which excludes overflowing glyphs. The renderer pads the output box to the union of leaf rects in `.katex-html` (the hidden MathML tree is excluded; including it produced a 6484pt box).
+- Table header cells are measured with the bold font they are drawn with. Block quote `>` prefixes are markers and are concealed.
+- **Document verification without XCUIAutomation.** `MarkdownDocument` and `DocumentSnapshot` moved from the app target into `AirMarkEditor` (Info.plist `NSDocumentClass` = `AirMarkMarkdownDocument`; the recovery store is injected at launch). `DocumentTests` covers five sequential saves with BOM/CRLF bytes and self-notifications, an external change while edited (save refused, Save As keeps the edits), an external change while clean (reload), and recovery records.
+- The file-change notification could arrive after a newer save had replaced the last persisted bytes; the snapshot now remembers every byte sequence the document read or wrote and treats any of them as its own.
+- UI tests (`UITests/AirMarkUITests.swift`): the repeated-save test passed twice on an idle machine; with the machine in use it failed from interference (typing arrived through the active Korean input source, focus moved). They synthesize keyboard input and need an idle session. `testInlineMathFixtureScreenshot` and `testShowcaseRendersSpecialContent` attach window captures; export them with `xcrun xcresulttool export attachments --path <bundle> --output-path <dir>`. The window state assertion was replaced by "app still running and no sheet"; under XCUITest the app reports `runningBackground` even while receiving input, whereas a LaunchServices launch brings it to the front normally.
+- Known limitations: `-`/`[ ]` list and task markers and code-fence lines are shown verbatim; images in the fixture are not exercised; no VoiceOver, dark mode or performance measurements yet.

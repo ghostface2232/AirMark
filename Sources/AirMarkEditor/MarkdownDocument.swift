@@ -1,0 +1,141 @@
+import AppKit
+import AirMarkCore
+
+public final class DocumentSnapshot: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = DocumentBytes()
+    private var conflict = false
+    private var diskData: Data?
+    private var writingData: Data?
+    // Every byte sequence this document has read from or written to disk. A file
+    // change notification whose contents match one of these came from AirMark itself,
+    // even when it arrives after a newer save has already replaced `diskData`.
+    private var ownContents: [Data] = []
+    public func get() -> DocumentBytes { lock.withLock { value } }
+    public func set(_ value: DocumentBytes) { lock.withLock { self.value = value } }
+    public func hasConflict() -> Bool { lock.withLock { conflict } }
+    public func setConflict(_ value: Bool) { lock.withLock { conflict = value } }
+    public func didRead(_ value: DocumentBytes) { lock.withLock { self.value = value; diskData = value.data; remember(value.data) } }
+    public func persistedData() -> Data? { lock.withLock { diskData } }
+    public func isOwnContent(_ data: Data) -> Bool { lock.withLock { ownContents.contains(data) } }
+    public func dataForWriting() -> Data { lock.withLock { writingData ?? value.data } }
+    public func isWriting() -> Bool { lock.withLock { writingData != nil } }
+    public func beginWrite() { lock.withLock { writingData = value.data } }
+    public func finishWrite(success: Bool) {
+        lock.withLock {
+            if success, let written = writingData { diskData = written; remember(written) }
+            writingData = nil
+        }
+    }
+    private func remember(_ data: Data) {
+        ownContents.removeAll { $0 == data }
+        ownContents.append(data)
+        if ownContents.count > 16 { ownContents.removeFirst() }
+    }
+}
+
+/// The document class is registered in Info.plist by its Objective-C name.
+@objc(AirMarkMarkdownDocument)
+@MainActor public final class MarkdownDocument: NSDocument {
+    /// Where drafts and the last active document are recorded. The app sets this at launch.
+    public static var recoveryStore: RecoveryStore?
+    public nonisolated let snapshot = DocumentSnapshot()
+    public var editor: EditorController?
+    public var identity = UUID()
+    var recoveryTask: Task<Void, Never>?
+    public nonisolated var externalConflict: Bool {
+        get { snapshot.hasConflict() }
+        set { snapshot.setConflict(newValue) }
+    }
+    public var restoredSelection = SourceSpan(0, 0)
+    public var restoredScroll = 0.0
+    // AppKit queries these policies on its background document-saving queue.
+    public nonisolated override class var autosavesInPlace: Bool { true }
+    public nonisolated override class var autosavesDrafts: Bool { false }
+    public nonisolated override class var preservesVersions: Bool { true }
+    public override init() { super.init(); hasUndoManager = true }
+    public override func makeWindowControllers() {
+        let controller = EditorController(source: snapshot.get().source)
+        editor = controller; controller.fileURL = fileURL
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.minSize = NSSize(width: 440, height: 320)
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = .textBackgroundColor
+        window.contentViewController = controller
+        window.tabbingMode = .disallowed
+        window.center(); window.setFrameAutosaveName("AirMarkDocument")
+        addWindowController(NSWindowController(window: window))
+        window.isRestorable = false
+        controller.onChange = { [weak self] in
+            guard let self, let editor = self.editor else { return }
+            let old = snapshot.get()
+            editor.fileURL = fileURL
+            snapshot.set(DocumentBytes(source: editor.source, hasBOM: old.hasBOM))
+            updateChangeCount(.changeDone)
+            scheduleRecovery()
+        }
+        controller.onSelectionChange = { [weak self] in self?.scheduleRecovery() }
+        controller.loadViewIfNeeded()
+        controller.restore(selection: restoredSelection, scrollY: restoredScroll)
+        window.makeFirstResponder(controller.textView)
+        scheduleRecovery()
+    }
+    public nonisolated override func read(from data: Data, ofType typeName: String) throws { snapshot.didRead(try DocumentBytes(data: data)) }
+    public nonisolated override func data(ofType typeName: String) throws -> Data { snapshot.dataForWriting() }
+    public nonisolated override func canAsynchronouslyWrite(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) -> Bool { true }
+    public override func writeSafely(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) throws {
+        if url == fileURL, let expected = snapshot.persistedData(), let disk = try? Data(contentsOf: url), disk != expected { externalConflict = true }
+        if externalConflict && url == fileURL { throw NSError(domain: "AirMark", code: 1, userInfo: [NSLocalizedDescriptionKey: "The file changed in another app. Use Save As to keep your edits, or Revert to read the external version."]) }
+        snapshot.beginWrite()
+        do {
+            try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
+            snapshot.finishWrite(success: true)
+        } catch {
+            snapshot.finishWrite(success: false)
+            throw error
+        }
+    }
+    public override func revert(toContentsOf url: URL, ofType typeName: String) throws {
+        let selection = editor?.selection, y = editor?.scrollY
+        try super.revert(toContentsOf: url, ofType: typeName)
+        externalConflict = false
+        editor?.replaceSource(snapshot.get().source, selection: selection, scrollY: y)
+    }
+    public nonisolated override func presentedItemDidChange() {
+        Task { @MainActor [weak self] in
+            guard let self, let url = fileURL, !snapshot.isWriting() else { return }
+            let data = try? await Task.detached { try Data(contentsOf: url) }.value
+            // Our own completed save may contain an earlier edit revision, and a
+            // notification can arrive after a newer save finished. Anything AirMark
+            // itself read or wrote is not an external change.
+            guard let data, !snapshot.isWriting(), !snapshot.isOwnContent(data) else { return }
+            if isDocumentEdited {
+                externalConflict = true; scheduleRecovery()
+                if let window = windowControllers.first?.window { window.subtitle = "File changed externally — edits preserved" }
+            } else {
+                do { try revert(toContentsOf: url, ofType: fileType ?? "net.daringfireball.markdown") }
+                catch { presentError(error) }
+            }
+        }
+    }
+    public func record() -> RecoveryRecord {
+        let bytes = snapshot.get()
+        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: editor?.revision ?? 0, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
+    }
+    public func scheduleRecovery() {
+        recoveryTask?.cancel()
+        recoveryTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled, let self else { return }
+            guard let store = Self.recoveryStore else { return }
+            do { try await store.save(record()) }
+            catch { windowControllers.first?.window?.subtitle = "Recovery could not be saved" }
+        }
+    }
+    public override func close() {
+        recoveryTask?.cancel()
+        let saved = record()
+        if let store = Self.recoveryStore { Task { try? await store.save(saved) } }
+        super.close()
+    }
+}

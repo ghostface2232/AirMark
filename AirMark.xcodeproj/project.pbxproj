@@ -1,0 +1,34 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+61DE1B08FE2FC56EE9044434 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/main.swift; sourceTree = SOURCE_ROOT; };
+D37B9395C2BAF168F977CE9F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITests/AirMarkUITests.swift; sourceTree = SOURCE_ROOT; };
+A8792157CB4F27FB949C035F = { isa = PBXFileReference; explicitFileType = wrapper.application; path = AirMark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+E7F08BCC397888750F5CB9BD = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AirMarkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+20D582C9C928C4566A260A84 = { isa = PBXBuildFile; fileRef = 61DE1B08FE2FC56EE9044434; };
+587854A59EFBF8969CAFD37F = { isa = PBXBuildFile; fileRef = D37B9395C2BAF168F977CE9F; };
+8473FB7C391915EE75DAD5DA = { isa = XCSwiftPackageProductDependency; productName = AirMarkCore; };
+356A469308138523C5A99A4E = { isa = XCSwiftPackageProductDependency; productName = AirMarkEditor; };
+91596F6079D535D734C1642A = { isa = PBXBuildFile; productRef = 8473FB7C391915EE75DAD5DA; };
+65AC01E78C74E9AE94912411 = { isa = PBXBuildFile; productRef = 356A469308138523C5A99A4E; };
+BC4A71180870F7945155FBB0 = { isa = XCLocalSwiftPackageReference; relativePath = .; };
+878A52FC5FF6A57D50B7B870 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (20D582C9C928C4566A260A84,); runOnlyForDeploymentPostprocessing = 0; };
+798B65A4B63A4D08FDD4C755 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (587854A59EFBF8969CAFD37F,); runOnlyForDeploymentPostprocessing = 0; };
+E2AA269EB967A8853A258BFA = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (91596F6079D535D734C1642A,65AC01E78C74E9AE94912411,); runOnlyForDeploymentPostprocessing = 0; };
+41D311A605520FC7B8B9A980 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+0A3E27B8CA818264D75C8D81 = { isa = PBXGroup; children = (A8792157CB4F27FB949C035F,E7F08BCC397888750F5CB9BD,); name = Products; sourceTree = "<group>"; };
+0D6E4079E36703EBD37C0072 = { isa = PBXGroup; children = (61DE1B08FE2FC56EE9044434,D37B9395C2BAF168F977CE9F,0A3E27B8CA818264D75C8D81,); sourceTree = "<group>"; };
+73EBF6644258C120893E685D = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 26.0; ARCHS = arm64; SWIFT_VERSION = 6.0; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = complete; }; };
+B00CCDD09424E369308D67FA = { isa = XCBuildConfiguration; name = Debug; buildSettings = { PRODUCT_NAME = AirMark; PRODUCT_BUNDLE_IDENTIFIER = com.airmark.AirMark; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_IDENTITY = "-"; CODE_SIGN_STYLE = Manual; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG"; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; }; };
+DD3F495F7D6A5AA1C1769021 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { PRODUCT_NAME = AirMarkUITests; PRODUCT_BUNDLE_IDENTIFIER = com.airmark.AirMarkUITests; GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_IDENTITY = "-"; CODE_SIGN_STYLE = Manual; TEST_TARGET_NAME = AirMark; }; };
+0B0C687DF8B6B8DC790B519C = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 26.0; ARCHS = arm64; SWIFT_VERSION = 6.0; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = complete; }; };
+1B104479E55E37CF8A63CBDF = { isa = XCBuildConfiguration; name = Release; buildSettings = { PRODUCT_NAME = AirMark; PRODUCT_BUNDLE_IDENTIFIER = com.airmark.AirMark; INFOPLIST_FILE = App/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_IDENTITY = "-"; CODE_SIGN_STYLE = Manual; ENABLE_APP_SANDBOX = NO; ENABLE_HARDENED_RUNTIME = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) "; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; }; };
+E670BC2FFE794172EBC92AE3 = { isa = XCBuildConfiguration; name = Release; buildSettings = { PRODUCT_NAME = AirMarkUITests; PRODUCT_BUNDLE_IDENTIFIER = com.airmark.AirMarkUITests; GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_IDENTITY = "-"; CODE_SIGN_STYLE = Manual; TEST_TARGET_NAME = AirMark; }; };
+76F8DEC3DFE0BDB465198890 = { isa = XCConfigurationList; buildConfigurations = (73EBF6644258C120893E685D,0B0C687DF8B6B8DC790B519C,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+06CB67C35A91E16DBD17B949 = { isa = XCConfigurationList; buildConfigurations = (B00CCDD09424E369308D67FA,1B104479E55E37CF8A63CBDF,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+5FA394EFD07597E96CACD8E1 = { isa = XCConfigurationList; buildConfigurations = (DD3F495F7D6A5AA1C1769021,E670BC2FFE794172EBC92AE3,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+1241936D4DD3AAD68FE7BFBD = { isa = PBXContainerItemProxy; containerPortal = 244210E48437B6556980A702; proxyType = 1; remoteGlobalIDString = A172CEDCAE47474B615C54D5; remoteInfo = AirMark; };
+F26350DAFE3F19AABFD69AC4 = { isa = PBXTargetDependency; target = A172CEDCAE47474B615C54D5; targetProxy = 1241936D4DD3AAD68FE7BFBD; };
+A172CEDCAE47474B615C54D5 = { isa = PBXNativeTarget; buildConfigurationList = 06CB67C35A91E16DBD17B949; buildPhases = (878A52FC5FF6A57D50B7B870,E2AA269EB967A8853A258BFA,41D311A605520FC7B8B9A980,); buildRules = (); dependencies = (); name = AirMark; packageProductDependencies = (8473FB7C391915EE75DAD5DA,356A469308138523C5A99A4E,); productName = AirMark; productReference = A8792157CB4F27FB949C035F; productType = "com.apple.product-type.application"; };
+9F86D081884C7D659A2FEAA0 = { isa = PBXNativeTarget; buildConfigurationList = 5FA394EFD07597E96CACD8E1; buildPhases = (798B65A4B63A4D08FDD4C755,); buildRules = (); dependencies = (F26350DAFE3F19AABFD69AC4,); name = AirMarkUITests; productName = AirMarkUITests; productReference = E7F08BCC397888750F5CB9BD; productType = "com.apple.product-type.bundle.ui-testing"; };
+244210E48437B6556980A702 = { isa = PBXProject; attributes = { LastUpgradeCheck = 2700; BuildIndependentTargetsInParallel = YES; TargetAttributes = { 9F86D081884C7D659A2FEAA0 = { TestTargetID = A172CEDCAE47474B615C54D5; }; }; }; buildConfigurationList = 76F8DEC3DFE0BDB465198890; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,ko,); mainGroup = 0D6E4079E36703EBD37C0072; productRefGroup = 0A3E27B8CA818264D75C8D81; projectDirPath = ""; projectRoot = ""; packageReferences = (BC4A71180870F7945155FBB0,); targets = (A172CEDCAE47474B615C54D5,9F86D081884C7D659A2FEAA0,); };
+}; rootObject = 244210E48437B6556980A702; }
