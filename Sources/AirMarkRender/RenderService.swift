@@ -170,6 +170,9 @@ public enum RenderFailure: LocalizedError {
         guard host.window?.isMiniaturized != true else { throw RenderFailure.unavailable }
         do {
             let web = try await prepare(host: host)
+            // Measure in a viewport wider than any result. A frame left small by the previous
+            // snapshot let display-mode KaTeX report a box thousands of points wide.
+            web.setFrameSize(NSSize(width: max(1024, ceil(environment.width) + 64), height: 2048))
             let result = try await javascript(web, body: "return await window.renderAirMark(source, kind, display, fontSize, dark, width);", arguments: ["source": element.content, "kind": element.kind.rawValue, "display": !element.inline, "fontSize": environment.fontSize, "dark": environment.dark, "width": environment.width])
             guard let metrics = try JSONSerialization.jsonObject(with: result) as? [String: Any], let width = metrics["width"] as? Double, let height = metrics["height"] as? Double,
                   width.isFinite, height.isFinite, width > 0, height > 0,

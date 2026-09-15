@@ -44,6 +44,25 @@ func inkCoverage(_ image: CGImage) -> Double {
         #expect(result.size.height > 20)
         #expect(inkCoverage(result.image) > 0.005, "diagram snapshot has no visible ink")
     }
+    /// The WebView keeps the frame of its last snapshot; a display formula rendered after a
+    /// small inline one must still measure its natural width.
+    @Test func displayMathAfterInlineKeepsNaturalWidth() async throws {
+        _ = NSApplication.shared
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host; window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let environment = RenderEnvironment(width: 720, fontSize: 16, scale: 2, dark: false)
+        let inline = RenderElement(span: SourceSpan(0, 1), kind: .math, content: "a_1", inline: true)
+        let display = RenderElement(span: SourceSpan(2, 1), kind: .math, content: "y = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", inline: false)
+        let small = try await RenderService.shared.render(inline, environment: environment, baseURL: nil, host: host)
+        #expect(small.size.width < 60)
+        let artifact = try await RenderService.shared.render(display, environment: environment, baseURL: nil, host: host)
+        #expect(artifact.size.width > 100 && artifact.size.width < 400)
+        #expect(artifact.size.height > 40 && artifact.size.height < 120)
+        #expect(inkCoverage(artifact.image) > 0.03)
+    }
+
     @Test func nativeTableHasContentAndDimensions() async throws {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let element = RenderElement(span: SourceSpan(0, 10), kind: .table, content: "[[\"이름\",\"Value\"],[\"한글\",\"42\"]]")
