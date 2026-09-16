@@ -10,7 +10,7 @@ let sequence=0;
 const fontsLoaded=Promise.all([...document.fonts].map(face=>face.load().catch(()=>null))).then(()=>document.fonts.ready);
 window.renderAirMark=async function(source,kind,display,fontSize,dark,width){
  await fontsLoaded;
- const el=document.getElementById('output'); el.replaceChildren(); el.style.padding='4px';
+ const el=document.getElementById('output'); el.replaceChildren(); el.style.padding=kind==='math'&&!display?'2px 1px':'4px';
  el.style.fontSize=fontSize+'px';el.style.color=dark?'#e4e4e7':'#252528';
  if(kind==='math'){
    const math=document.createElement('span');el.append(math);
@@ -23,7 +23,8 @@ window.renderAirMark=async function(source,kind,display,fontSize,dark,width){
    let top=box.top,left=box.left,right=box.right,bottom=box.bottom;
    // Stretchy delimiters are 400em-wide SVGs clipped by their parent; measure text leaves only.
    for(const node of el.querySelectorAll('.katex-html *:not(svg):not(svg *)')){if(node.childElementCount>0)continue;const r=node.getBoundingClientRect();if(r.width===0||r.height===0)continue;top=Math.min(top,r.top);left=Math.min(left,r.left);right=Math.max(right,r.right);bottom=Math.max(bottom,r.bottom);}
-   el.style.padding=`${4+Math.ceil(box.top-top)}px ${4+Math.ceil(right-box.right)}px ${4+Math.ceil(bottom-box.bottom)}px ${4+Math.ceil(box.left-left)}px`;
+   const pv=display?4:2,ph=display?4:1;
+   el.style.padding=`${pv+Math.ceil(box.top-top)}px ${ph+Math.ceil(right-box.right)}px ${pv+Math.ceil(bottom-box.bottom)}px ${ph+Math.ceil(box.left-left)}px`;
    box=el.getBoundingClientRect();
    return {width:Math.ceil(box.width),height:Math.ceil(box.height),baseline:baseline.getBoundingClientRect().top-box.top};
  }
