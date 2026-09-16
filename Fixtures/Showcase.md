@@ -33,6 +33,8 @@ flowchart LR
 
 > Small details make a place feel calm.
 
+![Two color swatches](swatch.png)
+
 ```swift
 let thought = "Start here."
 print(thought)

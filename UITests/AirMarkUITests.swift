@@ -45,6 +45,7 @@ import XCTest
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let copy = output.appendingPathComponent("Showcase.md")
         try FileManager.default.copyItem(at: fixture, to: copy)
+        try FileManager.default.copyItem(at: repository.appendingPathComponent("Fixtures/swatch.png"), to: output.appendingPathComponent("swatch.png"))
         let app = XCUIApplication()
         app.launchArguments = ["--open", copy.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path

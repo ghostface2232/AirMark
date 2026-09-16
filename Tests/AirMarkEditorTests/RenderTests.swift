@@ -63,6 +63,21 @@ func inkCoverage(_ image: CGImage) -> Double {
         #expect(inkCoverage(artifact.image) > 0.03)
     }
 
+    @Test func localImageIsDownsampledToTheColumn() async throws {
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let document = repository.appendingPathComponent("Fixtures/Showcase.md")
+        let element = RenderElement(span: SourceSpan(0, 10), kind: .image, content: "swatch.png", label: "Two color swatches")
+        let artifact = try await RenderService.shared.render(element, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: document, host: host)
+        #expect(artifact.size == CGSize(width: 32, height: 20))
+        #expect(artifact.label == "Two color swatches")
+        #expect(inkCoverage(artifact.image) > 0.5)
+        // Without a document location a relative path cannot be resolved; remote images are never fetched.
+        await #expect(throws: (any Error).self) { try await RenderService.shared.render(element, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: nil, host: host) }
+        let remote = RenderElement(span: SourceSpan(0, 10), kind: .image, content: "https://example.org/a.png")
+        await #expect(throws: (any Error).self) { try await RenderService.shared.render(remote, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: document, host: host) }
+    }
+
     @Test func nativeTableHasContentAndDimensions() async throws {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let element = RenderElement(span: SourceSpan(0, 10), kind: .table, content: "[[\"이름\",\"Value\"],[\"한글\",\"42\"]]")
