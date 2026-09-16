@@ -39,3 +39,16 @@ import Testing
     let records = await store.records()
     #expect(records.first?.source == "new")
 }
+
+@Test func listAndFenceMarkers() {
+    let source = "- item\n- [ ] todo\n1. one\n\n```swift\nlet x = 1\n```\n\n~~~\nopen\n"
+    let result = MarkdownParser.parse(source)
+    let index = SourceIndex(source)
+    #expect(result.styles.filter { $0.kind == .bullet }.count == 1)
+    #expect(result.styles.contains { $0.kind == .list && $0.markers.map { index.text(in: $0) } == ["- "] })
+    #expect(result.styles.contains { $0.kind == .checkbox(false) && index.text(in: $0.span) == "[ ]" })
+    let fenced = result.styles.first { $0.kind == .codeBlock && index.text(in: $0.span).hasPrefix("```") }
+    #expect(fenced?.markers.map { index.text(in: $0) } == ["```swift\n", "\n```\n"])
+    let open = result.styles.first { $0.kind == .codeBlock && index.text(in: $0.span).hasPrefix("~~~") }
+    #expect(open?.markers.map { index.text(in: $0) } == ["~~~\n"])
+}

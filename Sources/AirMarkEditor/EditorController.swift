@@ -258,6 +258,14 @@ import os
                 result.addAttributes([.font: NSFont.monospacedSystemFont(ofSize: fontSize * 0.88, weight: .regular), .backgroundColor: NSColor.quaternaryLabelColor.withAlphaComponent(0.12)], range: local)
             case .quote: paragraph.headIndent = 18; paragraph.firstLineHeadIndent = 18; result.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: local)
             case .list: paragraph.headIndent = 22
+            case .bullet:
+                if !showsMarkers && local.length == 1 && marked?.intersects(run.span) != true { result.replaceCharacters(in: local, with: "\u{2022}") }
+            case .checkbox(let checked):
+                if !showsMarkers && local.length == 3 && marked?.intersects(run.span) != true {
+                    result.replaceCharacters(in: NSRange(location: local.location, length: 1), with: checked ? "\u{2611}" : "\u{2610}")
+                    result.addAttribute(.foregroundColor, value: checked ? NSColor.controlAccentColor : NSColor.secondaryLabelColor, range: NSRange(location: local.location, length: 1))
+                    conceal(SourceSpan(run.span.location + 1, 2), in: result, paragraphRange: range)
+                }
             case .link(let target): result.addAttributes([.foregroundColor: NSColor.controlAccentColor, .link: target], range: local)
             case .rule: result.addAttribute(.foregroundColor, value: NSColor.separatorColor, range: local)
             }
@@ -313,6 +321,14 @@ import os
     public func wrapSelection(_ marker: String, closing: String? = nil) {
         let range = textView.selectedRange(), selected = (source as NSString).substring(with: range), end = closing ?? marker
         performEdit(range: range, replacement: marker + selected + end, selection: NSRange(location: range.location + marker.utf16.count, length: range.length))
+    }
+    /// Toggles the task box presented at `location` (the symbol occupies the first source character).
+    public func toggleCheckbox(at location: Int) -> Bool {
+        guard !showsMarkers, parsed.revision == revision,
+              let checkbox = parsed.checkboxes.first(where: { $0.location <= location && location <= $0.location + 1 }) else { return false }
+        let old = (source as NSString).substring(with: checkbox.nsRange)
+        performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]", selection: textView.selectedRange())
+        return true
     }
     public func toggleTask() {
         let paragraph = SourceIndex(source).paragraph(at: textView.selectedRange().location)

@@ -3,6 +3,10 @@ import Markdown
 
 public enum StyleKind: Hashable, Sendable {
     case heading(Int), strong, emphasis, strike, code, codeBlock, quote, list, link(String), rule
+    /// The `-`, `+` or `*` of an unordered list item; presented as a bullet symbol.
+    case bullet
+    /// A GFM task box `[ ]` / `[x]`; presented as a checkbox symbol.
+    case checkbox(Bool)
 }
 public struct StyleRun: Hashable, Sendable {
     public var span: SourceSpan
@@ -82,7 +86,17 @@ public enum MarkdownParser {
                 let lang = (code.language ?? "").lowercased().split(separator: " ").first.map(String.init) ?? ""
                 if lang == "mermaid" || lang == "math" || lang == "latex" {
                     output.elements.append(RenderElement(span: s, kind: lang == "mermaid" ? .mermaid : .math, content: code.code))
-                } else { add(.codeBlock) }
+                } else {
+                    var markers = fenceMarkers(raw, at: s.location)
+                    // The block span stops before its line break. Hide that break with the closing
+                    // fence so the fence line collapses instead of leaving an empty code line.
+                    if markers.count == 2 {
+                        let following = index.text(in: SourceSpan(s.end, min(2, index.utf16Count - s.end)))
+                        if following.hasPrefix("\r\n") { markers[1].length += 2 }
+                        else if let first = following.first, first.isNewline { markers[1].length += 1 }
+                    }
+                    add(.codeBlock, markers: markers)
+                }
             case is BlockQuote:
                 var markers: [SourceSpan] = []
                 if let regex = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines) {
@@ -92,11 +106,22 @@ public enum MarkdownParser {
                 }
                 add(.quote, markers: markers)
             case is ListItem:
-                add(.list)
-                if let regex = try? NSRegularExpression(pattern: "^[ \\t]*(?:[-+*]|[0-9]+[.)])[ \\t]+(\\[[ xX]\\])"),
+                var extra: [StyleRun] = [], markers: [SourceSpan] = []
+                if let regex = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?"),
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
-                    let r = m.range(at: 1); output.checkboxes.append(SourceSpan(s.location + r.location, r.length))
+                    let marker = m.range(at: 1), box = m.range(at: 2)
+                    if box.location != NSNotFound {
+                        // A task item shows only its checkbox; the list marker before it is hidden.
+                        markers.append(SourceSpan(s.location + marker.location, box.location - marker.location))
+                        let span = SourceSpan(s.location + box.location, box.length)
+                        output.checkboxes.append(span)
+                        extra.append(StyleRun(span: span, kind: .checkbox((raw as NSString).substring(with: box).lowercased() == "[x]")))
+                    } else if marker.length == 1 {
+                        extra.append(StyleRun(span: SourceSpan(s.location + marker.location, 1), kind: .bullet))
+                    }
                 }
+                add(.list, markers: markers)
+                output.styles += extra
             case let image as Markdown.Image:
                 output.elements.append(RenderElement(span: s, kind: .image, content: image.source ?? "", label: plain(image)))
                 protected.append(s); return
@@ -143,6 +168,32 @@ public enum MarkdownParser {
             return math.end >= run.span.end && math.intersects(run.span)
         }
         return output
+    }
+
+    /// The opening fence line including its line break, and the closing fence including the
+    /// line break before it. Indented code blocks and unterminated fences have fewer markers.
+    private static func fenceMarkers(_ raw: String, at base: Int) -> [SourceSpan] {
+        let text = raw as NSString
+        guard text.length > 0 else { return [] }
+        let firstLine = text.lineRange(for: NSRange(location: 0, length: 0))
+        let opening = text.substring(with: firstLine).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let fenceCharacter = opening.first, fenceCharacter == "`" || fenceCharacter == "~" else { return [] }
+        let fence = opening.prefix { $0 == fenceCharacter }
+        guard fence.count >= 3 else { return [] }
+        var markers = [SourceSpan(base + firstLine.location, firstLine.length)]
+        var end = text.length
+        while end > 0, let scalar = Unicode.Scalar(text.character(at: end - 1)), CharacterSet.newlines.contains(scalar) { end -= 1 }
+        guard end > NSMaxRange(firstLine) else { return markers }
+        let lastLine = text.lineRange(for: NSRange(location: end - 1, length: 0))
+        let closing = text.substring(with: NSRange(location: lastLine.location, length: end - lastLine.location)).trimmingCharacters(in: .whitespaces)
+        guard closing.count >= fence.count, closing.allSatisfy({ $0 == fenceCharacter }) else { return markers }
+        var start = lastLine.location
+        if start > 0, let scalar = Unicode.Scalar(text.character(at: start - 1)), CharacterSet.newlines.contains(scalar) {
+            start -= 1
+            if start > 0, text.character(at: start - 1) == 13, text.character(at: start) == 10 { start -= 1 }
+        }
+        markers.append(SourceSpan(base + start, end - start))
+        return markers
     }
 
     private static func mathSpans(_ source: String, excluding: [SourceSpan]) -> [RenderElement] {

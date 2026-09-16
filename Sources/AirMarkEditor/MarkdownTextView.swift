@@ -8,6 +8,7 @@ import AirMarkCore
         let point = convert(event.locationInWindow, from: nil)
         let offset = characterIndexForInsertion(at: point)
         if editor?.enterElement(at: offset) == true { window?.makeFirstResponder(self); return }
+        if event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option]).isEmpty, editor?.toggleCheckbox(at: offset) == true { return }
         super.mouseDown(with: event)
     }
     public override func insertNewline(_ sender: Any?) {

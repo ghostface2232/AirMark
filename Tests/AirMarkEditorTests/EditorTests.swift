@@ -74,6 +74,30 @@ import AirMarkCore
         #expect(isConcealed(paragraph, "## "))
         #expect(editor.source == "## Heading continued")
     }
+    @Test func listsAndFencesArePresentedAsSymbols() async throws {
+        let source = "- item\n- [ ] todo\n\n```swift\nlet x = 1\n```\n"
+        let editor = try await make(source)
+        let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        func paragraph(_ location: Int) throws -> NSAttributedString {
+            let range = (editor.source as NSString).paragraphRange(for: NSRange(location: location, length: 0))
+            return try #require(editor.textContentStorage(storage, textParagraphWith: range)).attributedString
+        }
+        #expect(try paragraph(0).string == "\u{2022} item\n")
+        #expect(try paragraph(7).string.hasPrefix("- \u{2610}"))
+        #expect(isConcealed(try paragraph(7), "- "))
+        #expect(isConcealed(try paragraph(7), " ] todo") == false)
+        let fence = try paragraph(19)
+        #expect(fence.string == "```swift\n")
+        #expect(isConcealed(fence, "```swift"))
+        #expect(isConcealed(try paragraph(28), "let") == false)
+        #expect(isConcealed(try paragraph(38), "```\n"))
+        // Clicking the box toggles the source and the symbol follows the next parse.
+        #expect(editor.toggleCheckbox(at: 9))
+        #expect(editor.source == "- item\n- [x] todo\n\n```swift\nlet x = 1\n```\n")
+        for _ in 0..<100 where editor.parsed.source != editor.source { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(try paragraph(7).string.hasPrefix("- \u{2611}"))
+        #expect(!editor.toggleCheckbox(at: 0))
+    }
     @Test func markedTextIsNotConcealed() async throws {
         let editor = try await make("**hello**\n")
         editor.textView.setSelectedRange(NSRange(location: 2, length: 0))
