@@ -39,6 +39,8 @@ public final class DocumentSnapshot: @unchecked Sendable {
 @MainActor public final class MarkdownDocument: NSDocument {
     /// Where drafts and the last active document are recorded. The app sets this at launch.
     public static var recoveryStore: RecoveryStore?
+    /// Launch milestones for Scripts/measure.sh; nil unless AIRMARK_LAUNCH_LOG is set.
+    public static var launchTimeline: LaunchTimeline?
     public nonisolated let snapshot = DocumentSnapshot()
     public var editor: EditorController?
     public var identity = UUID()
@@ -75,10 +77,17 @@ public final class DocumentSnapshot: @unchecked Sendable {
             scheduleRecovery()
         }
         controller.onSelectionChange = { [weak self] in self?.scheduleRecovery() }
+        controller.onParseApplied = { Self.launchTimeline?.mark("firstParse") }
+        controller.onFirstRender = { Self.launchTimeline?.mark("firstRender") }
         controller.loadViewIfNeeded()
         controller.restore(selection: restoredSelection, scrollY: restoredScroll)
         window.makeFirstResponder(controller.textView)
+        Self.launchTimeline?.mark("editable")
         scheduleRecovery()
+    }
+    public override func showWindows() {
+        super.showWindows()
+        Self.launchTimeline?.mark("windowShown")
     }
     public nonisolated override func read(from data: Data, ofType typeName: String) throws { snapshot.didRead(try DocumentBytes(data: data)) }
     public nonisolated override func data(ofType typeName: String) throws -> Data { snapshot.dataForWriting() }

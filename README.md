@@ -17,7 +17,7 @@ swift test --disable-sandbox
 bash Scripts/test-ui.sh
 ```
 
-UI tests synthesize keyboard input and must run on an idle machine; their window captures are attachments in the result bundle (`xcrun xcresulttool export attachments`). `Scripts/generate_project.py` reproducibly generates the thin Xcode host. `Scripts/vendor.sh` rebuilds the offline renderer from the pinned `Tooling/package-lock.json`; Node is needed only for that maintenance step.
+`Scripts/measure.sh` builds Release and records launch milestones, memory, idle CPU and keystroke cost; it launches the app repeatedly. UI tests synthesize keyboard input and must run on an idle machine; their window captures are attachments in the result bundle (`xcrun xcresulttool export attachments`). `Scripts/generate_project.py` reproducibly generates the thin Xcode host. `Scripts/vendor.sh` rebuilds the offline renderer from the pinned `Tooling/package-lock.json`; Node is needed only for that maintenance step.
 
 ## Editing
 

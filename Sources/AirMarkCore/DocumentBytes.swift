@@ -38,10 +38,15 @@ public actor RecoveryStore {
     public init(directory: URL) { self.directory = directory }
     public func save(_ record: RecoveryRecord) throws {
         guard record.revision >= revisions[record.id, default: 0] else { return }
+        try Self.write(record, to: directory)
+        revisions[record.id] = record.revision
+    }
+    /// Synchronous write for paths that cannot await, such as application termination, where AppKit
+    /// runs a nested event loop that does not drain the main actor.
+    public nonisolated static func write(_ record: RecoveryRecord, to directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(record)
         try data.write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
-        revisions[record.id] = record.revision
     }
     public func records() -> [RecoveryRecord] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }

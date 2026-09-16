@@ -8,6 +8,9 @@ import os
     public let scrollView = NSScrollView()
     public var onChange: (() -> Void)?
     public var onSelectionChange: (() -> Void)?
+    /// Called each time a parse result is applied, and once when the first artifact is shown.
+    public var onParseApplied: (() -> Void)?
+    public var onFirstRender: (() -> Void)?
     public var fileURL: URL?
     public private(set) var revision: UInt64 = 0
     public private(set) var parsed = ParsedDocument(source: "")
@@ -172,6 +175,7 @@ import os
             let changed = Array(Set(old.styles).symmetricDifference(Set(result.styles))).map(\.span)
             invalidatePresentation(spans: changed + old.elements.map(\.span) + result.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
             scheduleRenders()
+            onParseApplied?()
         }
     }
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
@@ -227,6 +231,7 @@ import os
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
                     guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
                     artifacts[element.span] = artifact
+                    if let onFirstRender { self.onFirstRender = nil; onFirstRender() }
                 } catch {
                     guard !Task.isCancelled, revision == currentRevision else { return }
                     errors[element.span] = error.localizedDescription

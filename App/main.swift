@@ -31,6 +31,7 @@ import os
     func applicationWillFinishLaunching(_ notification: Notification) {
         documents = AirMarkDocumentController()
         MarkdownDocument.recoveryStore = Self.recovery
+        MarkdownDocument.launchTimeline = LaunchTimeline()
         buildMenu()
     }
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
@@ -87,12 +88,13 @@ import os
         if let url = sender.representedObject as? URL { open(url) }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let records = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.record() }
-        Task {
-            do { for record in records { try await Self.recovery.save(record) }; NSApp.reply(toApplicationShouldTerminate: true) }
-            catch { NSApp.presentError(error); NSApp.reply(toApplicationShouldTerminate: false) }
+        // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
+        // never runs a main-actor Task, so an asynchronous reply would hang the quit.
+        for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
+            do { try RecoveryStore.write(document.record(), to: Self.recovery.directory) }
+            catch { NSApp.presentError(error); return .terminateCancel }
         }
-        return .terminateLater
+        return .terminateNow
     }
     func buildMenu() {
         let main = NSMenu()
