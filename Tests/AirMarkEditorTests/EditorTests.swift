@@ -228,6 +228,24 @@ import AirMarkCore
         editor.textView.undoManager?.undo()
         #expect(editor.source == "# Title\n\nfind **this** and this\n")
     }
+    /// What assistive technology can read: the view's label, and descriptions on rendered elements.
+    @Test func accessibilityExposesLabelsAndElementDescriptions() async throws {
+        let editor = try await make("- [x] done\n\n| a | b |\n| - | - |\n| 1 | 2 |\n")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor; window.orderFront(nil)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 800, height: 600); editor.view.layoutSubtreeIfNeeded(); editor.viewDidAppear()
+        defer { window.orderOut(nil) }
+        #expect(editor.textView.accessibilityLabel() == "Markdown editor")
+        #expect(editor.textView.accessibilityIdentifier() == "markdown-editor")
+        #expect((editor.textView.accessibilityValue() as? String) == editor.source)
+        for _ in 0..<100 where editor.renderedElementCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        let task = try #require(editor.textContentStorage(storage, textParagraphWith: NSRange(location: 0, length: 11))).attributedString
+        #expect((task.attribute(.attachment, at: 2, effectiveRange: nil) as? NSTextAttachment)?.image?.accessibilityDescription == "Completed task")
+        let table = try #require(editor.textContentStorage(storage, textParagraphWith: NSRange(location: 12, length: 10))).attributedString
+        let attachment = try #require(table.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
+        #expect(attachment.image?.accessibilityDescription == "Table, 2 rows")
+    }
     @Test func markedTextIsNotConcealed() async throws {
         let editor = try await make("**hello**\n")
         editor.textView.setSelectedRange(NSRange(location: 2, length: 0))

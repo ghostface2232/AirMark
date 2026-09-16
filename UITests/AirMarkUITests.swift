@@ -113,9 +113,14 @@ import XCTest
         let attachment = XCTAttachment(screenshot: window.screenshot())
         attachment.name = "inline-math"; attachment.lifetime = .keepAlways
         add(attachment)
+        // Quit goes through applicationShouldTerminate and must actually end the process.
+        app.typeKey("q", modifierFlags: .command)
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
+        let recovery = try FileManager.default.contentsOfDirectory(atPath: output.appendingPathComponent("Recovery").path)
+        XCTAssertFalse(recovery.filter { $0.hasSuffix(".json") }.isEmpty, "quit should leave a recovery record")
     }
 
-    /// Typing, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
+    /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
     func testTypingUndoAndReplaceAll() {
         let app = XCUIApplication()
         app.launchArguments = ["--blank"]
@@ -123,8 +128,18 @@ import XCTest
         app.launch()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.label, "Markdown editor")
         editor.click(); editor.typeText("# A note\n\nalpha **beta** alpha\n")
         XCTAssertTrue((editor.value as? String)?.contains("**beta**") == true)
+        // Keyboard-only formatting: select the last word with Option-Shift-Left, then Cmd-I.
+        app.typeKey(.upArrow, modifierFlags: [])
+        app.typeKey(.rightArrow, modifierFlags: .command)
+        app.typeKey(.leftArrow, modifierFlags: [.option, .shift])
+        app.typeKey("i", modifierFlags: .command)
+        XCTAssertTrue((editor.value as? String)?.contains("alpha **beta** *alpha*") == true, editor.value as? String ?? "")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue((editor.value as? String)?.contains("alpha **beta** alpha\n") == true)
+        app.typeKey(.downArrow, modifierFlags: .command)
         app.typeKey("z", modifierFlags: .command)
         XCTAssertNotEqual(editor.value as? String, "# A note\n\nalpha **beta** alpha\n")
         app.typeKey("z", modifierFlags: [.command, .shift])
