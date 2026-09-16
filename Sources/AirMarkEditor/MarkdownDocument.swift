@@ -101,6 +101,32 @@ public final class DocumentSnapshot: @unchecked Sendable {
         externalConflict = false
         editor?.replaceSource(snapshot.get().source, selection: selection, scrollY: y)
     }
+    /// Finder moved or renamed the file: relative image paths and the recovery record follow it.
+    public nonisolated override func presentedItemDidMove(to newURL: URL) {
+        super.presentedItemDidMove(to: newURL)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if fileURL != newURL { fileURL = newURL }
+            editor?.fileLocationChanged(to: newURL)
+            scheduleRecovery()
+        }
+    }
+    /// The file was deleted underneath the document. Keep the text as an untitled, edited document
+    /// so Save asks where to put it; nothing is written back to the old path on its own.
+    public nonisolated override func accommodatePresentedItemDeletion(completionHandler: @escaping @Sendable ((any Error)?) -> Void) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let name = fileURL?.lastPathComponent ?? displayName ?? "Untitled"
+            fileURL = nil
+            displayName = "Deleted \u{2014} " + name
+            editor?.fileLocationChanged(to: nil)
+            externalConflict = false
+            updateChangeCount(.changeDone)
+            windowControllers.first?.window?.subtitle = "The file was deleted. Save As to keep this text."
+            scheduleRecovery()
+        }
+        completionHandler(nil)
+    }
     public nonisolated override func presentedItemDidChange() {
         Task { @MainActor [weak self] in
             guard let self, let url = fileURL, !snapshot.isWriting() else { return }

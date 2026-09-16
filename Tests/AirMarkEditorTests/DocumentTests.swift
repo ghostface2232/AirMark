@@ -82,6 +82,57 @@ import AirMarkCore
         #expect(!document.isDocumentEdited)
     }
 
+    @Test func movedFileUpdatesEditorPathAndRecovery() async throws {
+        let (document, url, directory) = try makeDocument(Data("![pic](pic.png)\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        let moved = directory.appendingPathComponent("Renamed.md")
+        try FileManager.default.moveItem(at: url, to: moved)
+        document.presentedItemDidMove(to: moved)
+        try await settle()
+        #expect(document.fileURL == moved)
+        #expect(document.editor?.fileURL == moved)
+        try await Task.sleep(for: .milliseconds(700))
+        let records = await MarkdownDocument.recoveryStore!.records()
+        #expect(records.first?.filePath == moved.path)
+    }
+
+    @Test func deletedFileKeepsTextAsUntitledDocument() async throws {
+        let (document, url, directory) = try makeDocument(Data("keep me\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.removeItem(at: url)
+        document.accommodatePresentedItemDeletion { _ in }
+        try await settle()
+        #expect(document.fileURL == nil)
+        #expect(document.isDocumentEdited)
+        #expect(document.editor?.source == "keep me\n")
+        #expect(document.displayName.contains("Note.md"))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        try await Task.sleep(for: .milliseconds(700))
+        let records = await MarkdownDocument.recoveryStore!.records()
+        #expect(records.first?.source == "keep me\n")
+        #expect(records.first?.filePath == nil)
+        // Save As restores a file; the old path stays deleted.
+        let other = directory.appendingPathComponent("Restored.md")
+        try await document.save(to: other, ofType: Self.type, for: .saveAsOperation)
+        #expect(try String(contentsOf: other, encoding: .utf8) == "keep me\n")
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func forceQuitRecoveryReopensUnsavedEdits() async throws {
+        let (document, url, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        append(document, "unsaved")
+        try await Task.sleep(for: .milliseconds(900))
+        // A force quit never reaches close(); the record written after the edit is what survives.
+        let records = await MarkdownDocument.recoveryStore!.records()
+        let plan = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        guard case .recoverDraft(let record) = plan else { Issue.record("expected a draft, got \(plan)"); return }
+        #expect(record.source == "saved\nunsaved")
+        #expect(record.filePath == url.path)
+        #expect(record.selection.location == "saved\nunsaved".utf16.count)
+        document.close()
+    }
+
     @Test func recoveryRecordFollowsEditsAndClose() async throws {
         let (document, _, directory) = try makeDocument(Data("draft\n".utf8))
         defer { try? FileManager.default.removeItem(at: directory) }

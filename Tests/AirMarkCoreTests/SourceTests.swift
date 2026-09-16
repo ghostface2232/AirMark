@@ -28,3 +28,19 @@ import Testing
         #expect(index.lines == SourceIndex(index.source).lines)
     }
 }
+
+@Test func launchPlanPrefersRecoveryThenRecent() {
+    func record(_ path: String?, _ source: String) -> RecoveryRecord {
+        RecoveryRecord(id: UUID(), filePath: path, source: source, hasBOM: false, revision: 1, selection: SourceSpan(2, 0), scrollY: 0)
+    }
+    let matching = record("/notes/a.md", "same")
+    #expect(LaunchPlan.resolve(records: [matching], recentPaths: [], fileData: { _ in Data("same".utf8) }) == .openFile(path: "/notes/a.md", record: matching))
+    let newer = record("/notes/a.md", "edited")
+    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in Data("same".utf8) }) == .recoverDraft(newer))
+    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in nil }) == .recoverDraft(newer))
+    let untitled = record(nil, "draft")
+    #expect(LaunchPlan.resolve(records: [untitled], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == .recoverDraft(untitled))
+    #expect(LaunchPlan.resolve(records: [record("/gone.md", "")], recentPaths: [], fileData: { _ in nil }) == .newDocument)
+    #expect(LaunchPlan.resolve(records: [], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == .openRecent(path: "/notes/b.md"))
+    #expect(LaunchPlan.resolve(records: [], recentPaths: [], fileData: { _ in nil }) == .newDocument)
+}

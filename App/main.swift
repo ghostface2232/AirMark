@@ -43,19 +43,19 @@ import os
             }
             let records = await Self.recovery.records()
             guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
-            if let record = records.first {
-                if let path = record.filePath, let data = try? Data(contentsOf: URL(fileURLWithPath: path)), data == DocumentBytes(source: record.source, hasBOM: record.hasBOM).data {
-                    open(URL(fileURLWithPath: path), recovery: record)
-                } else {
-                    let document = MarkdownDocument(); document.identity = record.id
-                    document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
-                    document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
-                    NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
-                    if record.filePath != nil { document.displayName = "Recovered — " + URL(fileURLWithPath: record.filePath!).lastPathComponent }
-                    if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
-                }
-            } else if let recent = NSDocumentController.shared.recentDocumentURLs.first { open(recent) }
-            else { newDocument(nil) }
+            let recent = NSDocumentController.shared.recentDocumentURLs.map(\.path)
+            switch LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) }) {
+            case .openFile(let path, let record): open(URL(fileURLWithPath: path), recovery: record)
+            case .openRecent(let path): open(URL(fileURLWithPath: path))
+            case .newDocument: newDocument(nil)
+            case .recoverDraft(let record):
+                let document = MarkdownDocument(); document.identity = record.id
+                document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
+                document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
+                NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
+                if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
+                if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
+            }
             NSApp.activate()
         }
     }

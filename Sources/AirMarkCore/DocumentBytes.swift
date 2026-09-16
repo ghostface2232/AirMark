@@ -17,7 +17,7 @@ public struct DocumentBytes: Sendable, Equatable {
     }
 }
 
-public struct RecoveryRecord: Codable, Sendable {
+public struct RecoveryRecord: Codable, Sendable, Equatable {
     public var id: UUID
     public var filePath: String?
     public var source: String

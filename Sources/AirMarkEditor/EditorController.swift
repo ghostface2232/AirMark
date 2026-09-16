@@ -97,6 +97,15 @@ import os
         scheduleParse(immediate: true)
         if let scrollY { scrollView.contentView.scroll(to: NSPoint(x: 0, y: scrollY)) }
     }
+    /// The document moved or lost its file. Image paths resolve relative to the file, so their
+    /// artifacts are dropped and rendered again.
+    public func fileLocationChanged(to url: URL?) {
+        fileURL = url
+        let images = Set(parsed.elements.filter { $0.kind == .image }.map(\.span))
+        for span in images { artifacts[span] = nil; errors[span] = nil; renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
+        invalidatePresentation(spans: Array(images))
+        scheduleRenders()
+    }
     public func restore(selection: SourceSpan, scrollY: Double) {
         loadViewIfNeeded()
         let count = textView.string.utf16.count
