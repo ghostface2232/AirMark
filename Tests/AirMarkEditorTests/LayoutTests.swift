@@ -9,6 +9,7 @@ import AirMarkCore
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Fixtures/Showcase.md")
         let source = try String(contentsOf: url, encoding: .utf8)
         let editor = EditorController(source: source)
+        editor.fileURL = url  // the fixture references a relative image
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 760), styleMask: [.titled], backing: .buffered, defer: false)
         window.contentViewController = editor
         window.orderFront(nil)

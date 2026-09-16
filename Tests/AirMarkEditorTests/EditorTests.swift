@@ -202,6 +202,32 @@ import AirMarkCore
         view.moveLeft(nil)
         #expect(view.selectedRange().location == 6)
     }
+    /// Find goes through NSTextFinder, which reads the system find pasteboard when the text view
+    /// is created. Replacing the selection is a normal edit: Markdown around the match survives and undo restores it.
+    @Test func findSelectsMatchesAndReplacingKeepsMarkdown() async throws {
+        let pasteboard = NSPasteboard(name: .find)
+        let previous = pasteboard.string(forType: .string)
+        pasteboard.clearContents()
+        pasteboard.setString("this", forType: .string)
+        defer { pasteboard.clearContents(); if let previous { pasteboard.setString(previous, forType: .string) } }
+        let editor = try await make("# Title\n\nfind **this** and this\n")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor
+        window.makeFirstResponder(editor.textView)
+        defer { window.orderOut(nil) }
+        // NSTextFinder re-reads the find pasteboard when the application becomes active.
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApplication.shared)
+        let next = NSMenuItem(); next.tag = NSTextFinder.Action.nextMatch.rawValue
+        editor.textView.setSelectedRange(NSRange(location: 0, length: 0))
+        editor.textView.performFindPanelAction(next)
+        #expect(editor.textView.selectedRange() == NSRange(location: 16, length: 4))
+        editor.textView.insertText("that", replacementRange: editor.textView.selectedRange())
+        #expect(editor.source == "# Title\n\nfind **that** and this\n")
+        editor.textView.performFindPanelAction(next)
+        #expect(editor.textView.selectedRange() == NSRange(location: 27, length: 4))
+        editor.textView.undoManager?.undo()
+        #expect(editor.source == "# Title\n\nfind **this** and this\n")
+    }
     @Test func markedTextIsNotConcealed() async throws {
         let editor = try await make("**hello**\n")
         editor.textView.setSelectedRange(NSRange(location: 2, length: 0))

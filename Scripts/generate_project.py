@@ -16,6 +16,10 @@ add('product', 'isa = PBXFileReference; explicitFileType = wrapper.application; 
 add('testproduct', 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AirMarkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
 add('appbuild', f'isa = PBXBuildFile; fileRef = {ref("appfile")};')
 add('testbuild', f'isa = PBXBuildFile; fileRef = {ref("testfile")};')
+# Fixtures ship inside the UI test bundle: the runner must not read the repository, which lives in a
+# folder macOS gates behind a permission dialog that would block the run.
+add('fixturesfolder', 'isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = SOURCE_ROOT;')
+add('fixturesbuild', f'isa = PBXBuildFile; fileRef = {ref("fixturesfolder")};')
 add('coreproduct', f'isa = XCSwiftPackageProductDependency; productName = AirMarkCore;')
 add('editorproduct', f'isa = XCSwiftPackageProductDependency; productName = AirMarkEditor;')
 add('corebuild', f'isa = PBXBuildFile; productRef = {ref("coreproduct")};')
@@ -23,10 +27,11 @@ add('editorbuild', f'isa = PBXBuildFile; productRef = {ref("editorproduct")};')
 add('package', 'isa = XCLocalSwiftPackageReference; relativePath = .;')
 add('sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({ref("appbuild")},); runOnlyForDeploymentPostprocessing = 0;')
 add('testsources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({ref("testbuild")},); runOnlyForDeploymentPostprocessing = 0;')
+add('testresources', f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({ref("fixturesbuild")},); runOnlyForDeploymentPostprocessing = 0;')
 add('frameworks', f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({ref("corebuild")},{ref("editorbuild")},); runOnlyForDeploymentPostprocessing = 0;')
 add('resources', 'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
 add('products', f'isa = PBXGroup; children = ({ref("product")},{ref("testproduct")},); name = Products; sourceTree = "<group>";')
-add('main', f'isa = PBXGroup; children = ({ref("appfile")},{ref("testfile")},{ref("products")},); sourceTree = "<group>";')
+add('main', f'isa = PBXGroup; children = ({ref("appfile")},{ref("testfile")},{ref("fixturesfolder")},{ref("products")},); sourceTree = "<group>";')
 for mode in ['Debug', 'Release']:
     add('project'+mode, f'isa = XCBuildConfiguration; name = {mode}; buildSettings = {{ SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 26.0; ARCHS = arm64; SWIFT_VERSION = 6.0; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = complete; }};')
     opt = '-Onone' if mode == 'Debug' else '-O'
@@ -37,7 +42,7 @@ for kind in ['project','app','test']:
 add('proxy', f'isa = PBXContainerItemProxy; containerPortal = {ref("project")}; proxyType = 1; remoteGlobalIDString = {ref("app")}; remoteInfo = AirMark;')
 add('dependency', f'isa = PBXTargetDependency; target = {ref("app")}; targetProxy = {ref("proxy")};')
 add('app', f'isa = PBXNativeTarget; buildConfigurationList = {ref("appconfigs")}; buildPhases = ({ref("sources")},{ref("frameworks")},{ref("resources")},); buildRules = (); dependencies = (); name = AirMark; packageProductDependencies = ({ref("coreproduct")},{ref("editorproduct")},); productName = AirMark; productReference = {ref("product")}; productType = "com.apple.product-type.application";')
-add('test', f'isa = PBXNativeTarget; buildConfigurationList = {ref("testconfigs")}; buildPhases = ({ref("testsources")},); buildRules = (); dependencies = ({ref("dependency")},); name = AirMarkUITests; productName = AirMarkUITests; productReference = {ref("testproduct")}; productType = "com.apple.product-type.bundle.ui-testing";')
+add('test', f'isa = PBXNativeTarget; buildConfigurationList = {ref("testconfigs")}; buildPhases = ({ref("testsources")},{ref("testresources")},); buildRules = (); dependencies = ({ref("dependency")},); name = AirMarkUITests; productName = AirMarkUITests; productReference = {ref("testproduct")}; productType = "com.apple.product-type.bundle.ui-testing";')
 add('project', f'isa = PBXProject; attributes = {{ LastUpgradeCheck = 2700; BuildIndependentTargetsInParallel = YES; TargetAttributes = {{ {ref("test")} = {{ TestTargetID = {ref("app")}; }}; }}; }}; buildConfigurationList = {ref("projectconfigs")}; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,ko,); mainGroup = {ref("main")}; productRefGroup = {ref("products")}; projectDirPath = ""; projectRoot = ""; packageReferences = ({ref("package")},); targets = ({ref("app")},{ref("test")},);')
 project = root/'AirMark.xcodeproj'
 project.mkdir(exist_ok=True)

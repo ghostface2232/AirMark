@@ -1,6 +1,9 @@
 import XCTest
 
 @MainActor final class AirMarkUITests: XCTestCase {
+    /// Fixtures are bundled with the runner; reading them from the source tree would trigger the
+    /// Documents-folder permission dialog and block the run.
+    static var fixtures: URL { Bundle(for: AirMarkUITests.self).resourceURL!.appendingPathComponent("Fixtures") }
     func testRepeatedAsynchronousSavesPreserveSource() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkSaveTests-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -39,13 +42,12 @@ import XCTest
     /// Attaches window captures of the showcase fixture so rendering can be inspected without screen-recording access.
     /// Export them with: xcrun xcresulttool export attachments --path <result bundle> --output-path <dir>
     func testShowcaseRendersSpecialContent() throws {
-        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let fixture = repository.appendingPathComponent("Fixtures/Showcase.md")
+        let fixture = Self.fixtures.appendingPathComponent("Showcase.md")
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkShowcase-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let copy = output.appendingPathComponent("Showcase.md")
         try FileManager.default.copyItem(at: fixture, to: copy)
-        try FileManager.default.copyItem(at: repository.appendingPathComponent("Fixtures/swatch.png"), to: output.appendingPathComponent("swatch.png"))
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("swatch.png"), to: output.appendingPathComponent("swatch.png"))
         let app = XCUIApplication()
         app.launchArguments = ["--open", copy.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
@@ -75,11 +77,10 @@ import XCTest
 
     /// Launches the app on a fixture and attaches one window capture. No input is synthesized.
     func testInlineMathFixtureScreenshot() throws {
-        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkInline-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let copy = output.appendingPathComponent("InlineMath.md")
-        try FileManager.default.copyItem(at: repository.appendingPathComponent("Fixtures/InlineMath.md"), to: copy)
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("InlineMath.md"), to: copy)
         let app = XCUIApplication()
         app.launchArguments = ["--open", copy.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
@@ -92,16 +93,34 @@ import XCTest
         add(attachment)
     }
 
-    func testTypingUndoAndFind() {
+    /// Typing, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
+    func testTypingUndoAndReplaceAll() {
         let app = XCUIApplication()
         app.launchArguments = ["--blank"]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = NSTemporaryDirectory() + "AirMarkUITests-" + UUID().uuidString
         app.launch()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
-        editor.click(); editor.typeText("# A note\n\nWriting **bold** text.\n")
-        XCTAssertTrue((editor.value as? String)?.contains("**bold**") == true)
-        app.typeKey("f", modifierFlags: .command)
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 2) || app.textFields.count > 0)
+        editor.click(); editor.typeText("# A note\n\nalpha **beta** alpha\n")
+        XCTAssertTrue((editor.value as? String)?.contains("**beta**") == true)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertNotEqual(editor.value as? String, "# A note\n\nalpha **beta** alpha\n")
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertEqual(editor.value as? String, "# A note\n\nalpha **beta** alpha\n")
+        app.typeKey("f", modifierFlags: [.command, .option])
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        // The bar starts with the system find pasteboard's last search; replace it.
+        search.click(); app.typeKey("a", modifierFlags: .command); search.typeText("alpha")
+        let replaceField = app.textFields.firstMatch
+        XCTAssertTrue(replaceField.waitForExistence(timeout: 3))
+        replaceField.click(); app.typeKey("a", modifierFlags: .command); replaceField.typeText("gamma")
+        let all = app.buttons["All"].exists ? app.buttons["All"] : app.buttons["Replace All"]
+        XCTAssertTrue(all.waitForExistence(timeout: 3), app.debugDescription)
+        all.click()
+        let replaced = NSPredicate { _, _ in (editor.value as? String) == "# A note\n\ngamma **beta** gamma\n" }
+        expectation(for: replaced, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(app.sheets.count, 0)
     }
 }

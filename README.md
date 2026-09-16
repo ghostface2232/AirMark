@@ -5,15 +5,16 @@ A native Markdown editor for macOS 26+ and Apple Silicon. Swift 6, AppKit, TextK
 ## Build and run
 
 ```sh
-bash Scripts/build.sh Debug
-open build/Build/Products/Debug/AirMark.app
+bash Scripts/run.sh
 ```
+
+`Scripts/build.sh Debug|Release` builds into `~/Library/Developer/Xcode/DerivedData/AirMark` (override with `AIRMARK_DERIVED_DATA`).
 
 The application is ad-hoc signed for local use. Requires Xcode 26 or newer (the current validation host uses Xcode 27). Select Xcode normally or set `DEVELOPER_DIR`. The first build resolves pinned Swift packages. Renderer JS and fonts are included; the app never needs Node or a network connection.
 
 ```sh
 swift test --disable-sandbox
-xcodebuild -project AirMark.xcodeproj -scheme AirMark -derivedDataPath build -destination 'platform=macOS,arch=arm64' test
+bash Scripts/test-ui.sh
 ```
 
 UI tests synthesize keyboard input and must run on an idle machine; their window captures are attachments in the result bundle (`xcrun xcresulttool export attachments`). `Scripts/generate_project.py` reproducibly generates the thin Xcode host. `Scripts/vendor.sh` rebuilds the offline renderer from the pinned `Tooling/package-lock.json`; Node is needed only for that maintenance step.
