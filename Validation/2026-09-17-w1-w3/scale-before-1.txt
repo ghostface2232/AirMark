@@ -1,0 +1,8 @@
+SCALE load=55ms parse=332ms elements=7693 rendered=12 keystroke p50=3.49ms p95=8.56ms max=11.93ms
+✔ Test largeDocumentRendersNearTheViewportAndStaysResponsive() passed after 3.750 seconds.
+DOCUMENT_SCALE position=head samples=30 p50=3.47ms p95=3.75ms max=6.91ms
+DOCUMENT_SCALE position=middle samples=30 p50=3.38ms p95=3.51ms max=3.51ms
+DOCUMENT_SCALE position=tail samples=30 p50=3.25ms p95=3.33ms max=3.34ms
+✔ Test documentKeystrokeCostsIncludeSnapshotAndDirtyState() passed after 1.364 seconds.
+✔ Suite ScaleTests passed after 5.115 seconds.
+✔ Test run with 2 tests in 1 suite passed after 5.115 seconds.

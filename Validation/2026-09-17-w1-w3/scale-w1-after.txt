@@ -1,0 +1,15 @@
+SCALE load=49ms parse=380ms elements=7693 rendered=12 keystroke p50=0.32ms p95=0.56ms max=2.50ms
+SCALE_PHASES rebase p50=0.00 p95=0.01 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE position=head samples=30 p50=0.68ms p95=0.90ms max=2.43ms layout p50=0.07ms p95=0.12ms
+DOCUMENT_SCALE_PHASES position=head rebase p50=0.34 p95=0.39 | paragraph p50=0.03 p95=0.04 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE position=middle samples=30 p50=0.42ms p95=0.55ms max=0.57ms layout p50=0.18ms p95=0.27ms
+DOCUMENT_SCALE_PHASES position=middle rebase p50=0.17 p95=0.20 | paragraph p50=0.06 p95=0.09 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE position=tail samples=30 p50=0.12ms p95=0.16ms max=0.24ms layout p50=0.14ms p95=0.24ms
+DOCUMENT_SCALE_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.06 p95=0.07 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE_10MB position=head samples=30 p50=3.85ms p95=4.17ms max=7.49ms layout p50=0.08ms p95=0.12ms
+DOCUMENT_SCALE_10MB_PHASES position=head rebase p50=3.52 p95=3.78 | paragraph p50=0.03 p95=0.04 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=1.95ms p95=2.14ms max=2.75ms layout p50=0.19ms p95=0.27ms
+DOCUMENT_SCALE_10MB_PHASES position=middle rebase p50=1.66 p95=1.78 | paragraph p50=0.06 p95=0.10 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.15ms max=0.65ms layout p50=0.14ms p95=0.19ms
+DOCUMENT_SCALE_10MB_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.06 p95=0.08 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 3 tests in 1 suite passed after 14.091 seconds.

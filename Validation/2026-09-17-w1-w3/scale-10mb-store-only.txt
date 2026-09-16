@@ -1,0 +1,7 @@
+DOCUMENT_SCALE_10MB position=head samples=30 p50=6.89ms p95=7.28ms max=10.50ms layout p50=0.09ms p95=0.14ms
+DOCUMENT_SCALE_10MB_PHASES position=head rebase p50=3.31 p95=3.40 | paragraph p50=0.03 p95=0.05 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=4.93ms p95=5.12ms max=6.03ms layout p50=0.20ms p95=0.26ms
+DOCUMENT_SCALE_10MB_PHASES position=middle rebase p50=1.63 p95=1.69 | paragraph p50=0.07 p95=0.09 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=3.21ms p95=3.30ms max=3.71ms layout p50=0.16ms p95=0.22ms
+DOCUMENT_SCALE_10MB_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.07 p95=0.09 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 1 test in 1 suite passed after 9.711 seconds.
