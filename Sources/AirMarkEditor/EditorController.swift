@@ -20,7 +20,16 @@ import os
     private var artifacts: [SourceSpan: RenderArtifact] = [:]
     private var errors: [SourceSpan: String] = [:]
     private var editingElement: SourceSpan?
-    private var presentation = ParsedDocument(source: "")
+    private var presentation = ParsedDocument(source: "") { didSet { rebuildStyleIndex() } }
+    /// `prefixEnd[i]` is the largest span end among `presentation.styles[0...i]`; it is monotonic, so
+    /// the first style that can intersect a range is found by binary search.
+    private var prefixEnd: [Int] = []
+    /// Paragraph ranges whose presentation changed while they were away from the viewport. TextKit 2
+    /// regenerates every paragraph in an edited range at once, so a whole-document invalidation on a
+    /// large file stalls for seconds; these are applied as the viewport reaches them.
+    private var pendingInvalidation: [NSRange] = []
+    /// The text storage's own NSString. `textView.string` bridges a copy of the whole document.
+    private var text: NSString { textView.textStorage?.mutableString ?? NSMutableString() }
     private var renderEnvironment: RenderEnvironment?
     private var renderTokens: [SourceSpan: UUID] = [:]
     private var invalidating = false
@@ -38,6 +47,7 @@ import os
     public var scrollY: Double { scrollView.contentView.bounds.origin.y }
     public var renderErrorCount: Int { errors.count }
     public var renderedElementCount: Int { artifacts.count }
+    public var pendingRenderCount: Int { renderTasks.count }
 
     public init(source: String = "") { sourceForInitialLoad = source; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -74,7 +84,7 @@ import os
         })
         scrollView.contentView.postsBoundsChangedNotifications = true
         observations.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.scheduleRenders(); self?.onSelectionChange?() }
+            MainActor.assumeIsolated { self?.viewportDidChange(); self?.onSelectionChange?() }
         })
         textView.string = sourceForInitialLoad
         scheduleParse(immediate: true)
@@ -86,6 +96,7 @@ import os
         if abs(textView.textContainerInset.width - inset) > 0.5 { textView.textContainerInset = NSSize(width: inset, height: 40) }
         textView.minSize = NSSize(width: width, height: scrollView.contentSize.height)
         if textView.frame.width != width { textView.setFrameSize(NSSize(width: width, height: max(textView.frame.height, scrollView.contentSize.height))) }
+        applyPendingInvalidation()
         scheduleRenders()
     }
     public func replaceSource(_ source: String, selection: SourceSpan? = nil, scrollY: Double? = nil) {
@@ -166,9 +177,10 @@ import os
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }
         let previous = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
-        let replacement = (textStorage.string as NSString).substring(with: editedRange)
+        let replacement = textStorage.mutableString.substring(with: editedRange)
         let edit = PresentationEdit(range: previous, replacement: replacement)
         presentation = presentation.rebased(for: edit)
+        pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
         artifacts = Dictionary(uniqueKeysWithValues: artifacts.compactMap { span, artifact in
             edit.unchanged(span).map { ($0, artifact) }
         })
@@ -194,16 +206,9 @@ import os
             invalidatePresentation(spans: parsed.elements.map(\.span))
         }
         let currentRevision = revision
-        let viewport = textView.textLayoutManager?.textViewportLayoutController.viewportRange
-        let content = textView.textLayoutManager?.textContentManager
-        let visible: SourceSpan?
-        if let viewport, let content {
-            let a = content.offset(from: content.documentRange.location, to: viewport.location)
-            let b = content.offset(from: content.documentRange.location, to: viewport.endLocation)
-            visible = SourceSpan(max(0, a - 2000), b - a + 4000)
-        } else { visible = SourceSpan(0, 5000) }
-        for element in parsed.elements where !isEditing(element.span) && artifacts[element.span] == nil && errors[element.span] == nil && renderTasks[element.span] == nil {
-            guard visible?.intersects(element.span) != false, renderTasks.count < 12 else { continue }
+        let candidates = elements(intersecting: viewportWindow(margin: 2000))
+        for element in candidates where !isEditing(element.span) && artifacts[element.span] == nil && errors[element.span] == nil && renderTasks[element.span] == nil {
+            guard renderTasks.count < 12 else { break }
             let token = UUID(); renderTokens[element.span] = token
             renderTasks[element.span] = Task { [weak self] in
                 guard let self else { return }
@@ -227,24 +232,102 @@ import os
     }
     public override func viewDidAppear() { super.viewDidAppear(); scheduleRenders() }
 
+    /// The laid-out range plus `margin` UTF-16 units on either side, in source coordinates.
+    private func viewportWindow(margin: Int) -> NSRange {
+        guard let manager = textView.textLayoutManager, let content = manager.textContentManager,
+              let viewport = manager.textViewportLayoutController.viewportRange else { return NSRange(location: 0, length: 5000) }
+        let a = content.offset(from: content.documentRange.location, to: viewport.location)
+        let b = content.offset(from: content.documentRange.location, to: viewport.endLocation)
+        guard a >= 0, b >= a else { return NSRange(location: 0, length: 5000) }
+        return NSRange(location: max(0, a - margin), length: b - max(0, a - margin) + margin)
+    }
+    /// Scrolling or resizing moved the viewport: refresh deferred paragraphs there and queue renders.
+    func viewportDidChange() {
+        textView.textLayoutManager?.textViewportLayoutController.layoutViewport()
+        applyPendingInvalidation()
+        scheduleRenders()
+    }
+    public var pendingInvalidationCount: Int { pendingInvalidation.count }
+    private func rebuildStyleIndex() {
+        var end = 0
+        prefixEnd = presentation.styles.map { end = max(end, $0.span.end); return end }
+    }
+    /// Styles intersecting `range`, in document order. O(log n + k) plus any containers that start
+    /// earlier and reach past the range.
+    private func styles(intersecting range: NSRange) -> [StyleRun] {
+        let styles = presentation.styles
+        guard !styles.isEmpty, prefixEnd.count == styles.count else { return styles.filter { $0.span.intersects(SourceSpan(range)) } }
+        var low = 0, high = styles.count
+        while low < high { let middle = (low + high) / 2; if prefixEnd[middle] > range.location { high = middle } else { low = middle + 1 } }
+        var result: [StyleRun] = []
+        var index = low
+        let end = NSMaxRange(range)
+        while index < styles.count, styles[index].span.location < end {
+            if styles[index].span.end > range.location { result.append(styles[index]) }
+            index += 1
+        }
+        return result
+    }
+    /// Elements never nest, so their ends are monotonic as well.
+    private func elements(intersecting range: NSRange) -> [RenderElement] {
+        let elements = presentation.elements
+        var low = 0, high = elements.count
+        while low < high { let middle = (low + high) / 2; if elements[middle].span.end > range.location { high = middle } else { low = middle + 1 } }
+        var result: [RenderElement] = []
+        var index = low
+        let end = NSMaxRange(range)
+        while index < elements.count, elements[index].span.location < end { result.append(elements[index]); index += 1 }
+        return result
+    }
+
     private func invalidatePresentation(spans: [SourceSpan]? = nil) {
         guard isViewLoaded, !textView.hasMarkedText(), let storage = textView.textStorage,
               let manager = textView.textLayoutManager, let content = manager.textContentManager as? NSTextContentStorage else { return }
         let length = storage.length
         guard length > 0, !invalidating else { return }
-        var ranges = (spans ?? [SourceSpan(0, length)]).compactMap { span -> NSRange? in
+        let text = storage.mutableString
+        let ranges = (spans ?? [SourceSpan(0, length)]).compactMap { span -> NSRange? in
             guard span.location < length, span.location >= 0 else { return nil }
-            return (storage.string as NSString).paragraphRange(for: NSRange(location: span.location, length: min(span.length, length - span.location)))
-        }.sorted { $0.location < $1.location }
+            return text.paragraphRange(for: NSRange(location: span.location, length: min(span.length, length - span.location)))
+        }
+        let merged = Self.merge(ranges)
+        pendingInvalidation = Self.merge(pendingInvalidation + merged)
+        applyPendingInvalidation()
+    }
+    private static func merge(_ ranges: [NSRange]) -> [NSRange] {
         var merged: [NSRange] = []
-        for range in ranges {
+        for range in ranges.sorted(by: { $0.location < $1.location }) {
             if let last = merged.last, NSMaxRange(last) >= range.location { merged[merged.count - 1] = NSUnionRange(last, range) } else { merged.append(range) }
         }
-        ranges = merged
+        return merged
+    }
+    /// Regenerates the pending paragraphs that lie within the viewport window and keeps the rest.
+    private func applyPendingInvalidation() {
+        guard !pendingInvalidation.isEmpty, isViewLoaded, !invalidating, !textView.hasMarkedText(), let storage = textView.textStorage,
+              let manager = textView.textLayoutManager, let content = manager.textContentManager as? NSTextContentStorage else { return }
+        let length = storage.length
+        guard length > 0 else { pendingInvalidation.removeAll(); return }
+        let text = storage.mutableString
+        var window = viewportWindow(margin: 4000)
+        window = NSIntersectionRange(window, NSRange(location: 0, length: length))
+        guard window.length > 0 else { return }
+        window = text.paragraphRange(for: window)
+        var apply: [NSRange] = [], keep: [NSRange] = []
+        for range in pendingInvalidation {
+            let clipped = NSIntersectionRange(range, NSRange(location: 0, length: length))
+            guard clipped.length > 0 || range.length == 0 else { continue }
+            let hit = NSIntersectionRange(clipped, window)
+            guard hit.length > 0 else { keep.append(clipped); continue }
+            apply.append(hit)
+            if clipped.location < hit.location { keep.append(NSRange(location: clipped.location, length: hit.location - clipped.location)) }
+            if NSMaxRange(clipped) > NSMaxRange(hit) { keep.append(NSRange(location: NSMaxRange(hit), length: NSMaxRange(clipped) - NSMaxRange(hit))) }
+        }
+        pendingInvalidation = keep
+        guard !apply.isEmpty else { return }
         invalidating = true
         let origin = scrollView.contentView.bounds.origin
         content.performEditingTransaction {
-            for range in ranges { storage.edited(.editedAttributes, range: range, changeInLength: 0) }
+            for range in apply { storage.edited(.editedAttributes, range: range, changeInLength: 0) }
         }
         invalidating = false
         scrollView.contentView.scroll(to: origin)
@@ -260,7 +343,7 @@ import os
         result.addAttributes([.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: NSColor.textColor], range: entire)
         let marked = textView.hasMarkedText() ? SourceSpan(textView.markedRange()) : nil
         let current = SourceSpan(range)
-        for run in presentation.styles where run.span.intersects(current) {
+        for run in styles(intersecting: range) {
             let absolute = NSIntersectionRange(range, run.span.nsRange)
             let local = NSRange(location: absolute.location - range.location, length: absolute.length)
             switch run.kind {
@@ -296,7 +379,7 @@ import os
             }
         }
         result.addAttribute(.paragraphStyle, value: paragraph.copy(), range: entire)
-        for element in presentation.elements where element.span.intersects(current) && !isEditing(element.span) {
+        for element in elements(intersecting: range) where !isEditing(element.span) {
             if let artifact = artifacts[element.span] {
                 conceal(element.span, in: result, paragraphRange: range)
                 if current.contains(element.span.location) {
@@ -369,11 +452,13 @@ import os
             }
         }
     }
-    func concealUnits() -> [ConcealUnit] {
+    func concealUnits(near position: Int) -> [ConcealUnit] {
         guard !showsMarkers, !textView.hasMarkedText() else { return [] }
-        let text = source as NSString
+        let text = self.text
         var units: [ConcealUnit] = []
-        for run in presentation.styles {
+        // A closing fence marker reaches one line break past its block, hence the slack.
+        let window = NSRange(location: max(0, position - 2), length: 6)
+        for run in styles(intersecting: window) {
             if case .checkbox = run.kind, run.span.length == 3, run.span.end < text.length {
                 // "☐" stays visible; " ]" is hidden and the following space belongs to the box.
                 units.append(ConcealUnit(kind: .opening, range: NSRange(location: run.span.location + 1, length: 3), removal: NSRange(location: run.span.location, length: 4)))
@@ -385,18 +470,16 @@ import os
                 units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: marker.nsRange))
             }
         }
-        for element in presentation.elements where element.span.length > 1 && artifacts[element.span] != nil && !isEditing(element.span) {
+        for element in elements(intersecting: window) where element.span.length > 1 && artifacts[element.span] != nil && !isEditing(element.span) {
             units.append(ConcealUnit(kind: .element, range: element.span.nsRange, removal: element.span.nsRange))
         }
         return units
     }
     /// The nearest position that is not inside concealed source, following the caret's direction.
     public func normalizedCaret(_ position: Int, direction: CaretDirection) -> Int {
-        let units = concealUnits()
-        guard !units.isEmpty else { return position }
         var current = position
         for _ in 0..<8 {
-            guard let unit = units.first(where: { $0.avoids(current) }) else { break }
+            guard let unit = concealUnits(near: current).first(where: { $0.avoids(current) }) else { break }
             let end = NSMaxRange(unit.range)
             switch (unit.kind, direction) {
             case (.opening, .left): current = unit.range.location > 0 ? unit.range.location - 1 : end
@@ -423,8 +506,8 @@ import os
     }
     /// Backspace at the edge of concealed source. Returns false when the default behaviour applies.
     public func deleteBackwardAcrossMarkers(at position: Int) -> Bool {
-        let text = source as NSString
-        guard let unit = concealUnits().first(where: { NSMaxRange($0.range) == position }) else { return false }
+        let text = self.text
+        guard let unit = concealUnits(near: position).first(where: { NSMaxRange($0.range) == position }) else { return false }
         switch unit.kind {
         case .opening:
             performEdit(range: unit.removal, replacement: "", selection: NSRange(location: unit.removal.location, length: 0))
@@ -439,8 +522,8 @@ import os
     }
     /// Forward delete at the edge of concealed source. Returns false when the default behaviour applies.
     public func deleteForwardAcrossMarkers(at position: Int) -> Bool {
-        let text = source as NSString
-        guard let unit = concealUnits().first(where: { $0.range.location == position }) else { return false }
+        let text = self.text
+        guard let unit = concealUnits(near: position).first(where: { $0.range.location == position }) else { return false }
         switch unit.kind {
         case .opening:
             performEdit(range: unit.removal, replacement: "", selection: NSRange(location: unit.removal.location, length: 0))
@@ -469,21 +552,21 @@ import os
         textView.setSelectedRange(selection ?? NSRange(location: range.location + replacement.utf16.count, length: 0))
     }
     public func wrapSelection(_ marker: String, closing: String? = nil) {
-        let range = textView.selectedRange(), selected = (source as NSString).substring(with: range), end = closing ?? marker
+        let range = textView.selectedRange(), selected = text.substring(with: range), end = closing ?? marker
         performEdit(range: range, replacement: marker + selected + end, selection: NSRange(location: range.location + marker.utf16.count, length: range.length))
     }
     /// Toggles the task box presented at `location` (the symbol occupies the first source character).
     public func toggleCheckbox(at location: Int) -> Bool {
         guard !showsMarkers, parsed.revision == revision,
               let checkbox = parsed.checkboxes.first(where: { $0.location <= location && location <= $0.location + 1 }) else { return false }
-        let old = (source as NSString).substring(with: checkbox.nsRange)
+        let old = text.substring(with: checkbox.nsRange)
         performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]", selection: textView.selectedRange())
         return true
     }
     public func toggleTask() {
-        let paragraph = SourceIndex(source).paragraph(at: textView.selectedRange().location)
+        let paragraph = SourceSpan(text.paragraphRange(for: NSRange(location: textView.selectedRange().location, length: 0)))
         guard let checkbox = parsed.checkboxes.first(where: { $0.intersects(paragraph) }) else { return }
-        let old = (source as NSString).substring(with: checkbox.nsRange)
+        let old = text.substring(with: checkbox.nsRange)
         performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]")
     }
 }

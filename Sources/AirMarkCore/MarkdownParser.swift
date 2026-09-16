@@ -150,6 +150,8 @@ public enum MarkdownParser {
             for child in node.children { walk(child) }
         }
         walk(document)
+        // Sorted by start, containers before their contents, so presentation can binary-search.
+        output.styles.sort { $0.span.location != $1.span.location ? $0.span.location < $1.span.location : $0.span.length > $1.span.length }
         output.elements += mathSpans(source, excluding: protected)
         output.elements.sort { $0.span.location < $1.span.location }
         // A math expression's contents are TeX, never Markdown emphasis/links.
