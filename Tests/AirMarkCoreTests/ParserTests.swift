@@ -52,3 +52,20 @@ import Testing
     let open = result.styles.first { $0.kind == .codeBlock && index.text(in: $0.span).hasPrefix("~~~") }
     #expect(open?.markers.map { index.text(in: $0) } == ["~~~\n"])
 }
+
+@Test func terminationRecoveryCannotBeOverwrittenByPendingSave() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = RecoveryStore(directory: directory), id = UUID()
+    let old = RecoveryRecord(id: id, filePath: nil, source: "before", hasBOM: true, revision: 3, selection: SourceSpan(0, 0), scrollY: 0)
+    var current = old
+    current.source = "latest 한😀\r\n"; current.revision = 4
+    current.date = old.date.addingTimeInterval(1)
+    try store.saveImmediately(current)
+    try await store.save(old)
+    var staleSelection = current
+    staleSelection.date = old.date
+    staleSelection.selection = SourceSpan(2, 0)
+    try await store.save(staleSelection)
+    #expect(await store.records() == [current])
+}

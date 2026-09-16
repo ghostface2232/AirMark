@@ -34,3 +34,5 @@ Set `AIRMARK_STATE_DIR` to isolate recovery data for testing. `--blank` opens a 
 ## Status
 
 This is an initial implementation undergoing UI validation. Performance budgets in the design are targets, not measured guarantees. See `DEV_LOG.md` for actual checks and remaining limitations. Keep important documents backed up while evaluating the early build.
+
+The latest detailed review, fixes, measurements and follow-up validation plan are in [REVIEW.md](REVIEW.md). Raw before/after parser measurements are in [Validation/2026-09-16-review](Validation/2026-09-16-review). Reproduce the long-paragraph stress case with `swift run -c release --disable-sandbox AirMarkBench --long-lines`.

@@ -1,0 +1,7 @@
+Result bundle: /tmp/airmark-review-complete-20260916.xcresult
+Test Case '-[AirMarkUITests.AirMarkUITests testInlineMathFixtureScreenshot]' passed (7.089 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource]' passed (13.581 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseDarkAppearanceScreenshot]' passed (11.879 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseRendersSpecialContent]' passed (15.354 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll]' passed (13.049 seconds).
+** TEST SUCCEEDED **

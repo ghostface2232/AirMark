@@ -71,6 +71,11 @@ func inkCoverage(_ image: CGImage) -> Double {
         let artifact = try await RenderService.shared.render(element, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: document, host: host)
         #expect(artifact.size == CGSize(width: 32, height: 20))
         #expect(artifact.label == "Two color swatches")
+        var relabeled = element
+        relabeled.label = "Different accessible description"
+        let second = try await RenderService.shared.render(relabeled, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: document, host: host)
+        #expect(second.label == relabeled.label)
+        #expect(second.image === artifact.image, "pixel cache should still be shared")
         #expect(inkCoverage(artifact.image) > 0.5)
         // Without a document location a relative path cannot be resolved; remote images are never fetched.
         await #expect(throws: (any Error).self) { try await RenderService.shared.render(element, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: nil, host: host) }

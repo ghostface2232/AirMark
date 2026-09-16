@@ -91,7 +91,7 @@ import os
         // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
         // never runs a main-actor Task, so an asynchronous reply would hang the quit.
         for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
-            do { try RecoveryStore.write(document.record(), to: Self.recovery.directory) }
+            do { try Self.recovery.saveImmediately(document.record()) }
             catch { NSApp.presentError(error); return .terminateCancel }
         }
         return .terminateNow

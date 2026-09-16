@@ -69,6 +69,57 @@ import AirMarkCore
         try await document.save(to: other, ofType: Self.type, for: .saveAsOperation)
         #expect(try String(contentsOf: other, encoding: .utf8) == "original\nlocal edit\n")
         #expect(try String(contentsOf: url, encoding: .utf8) == "changed elsewhere\n")
+        #expect(!document.externalConflict)
+        append(document, "after Save As\n")
+        try await document.save(to: other, ofType: Self.type, for: .saveOperation)
+        #expect(try String(contentsOf: other, encoding: .utf8) == "original\nlocal edit\nafter Save As\n")
+    }
+
+    @Test func externalRestoreOfPreviouslySavedBytesIsNotIgnored() async throws {
+        let original = Data("original\n".utf8)
+        let (document, url, directory) = try makeDocument(original)
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        append(document, "saved edit\n")
+        try await settle()
+        try await document.save(to: url, ofType: Self.type, for: .saveOperation)
+        try await waitUntilClean(document)
+        try original.write(to: url, options: .atomic)
+        document.presentedItemDidChange()
+        try await settle()
+        #expect(document.editor?.source == "original\n")
+        #expect(!document.isDocumentEdited)
+    }
+
+    @Test func failedSaveDoesNotAdvancePersistedSnapshot() async throws {
+        let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        append(document, "pending\n")
+        try await settle()
+        let before = document.snapshot.persistedData()
+        let blocker = directory.appendingPathComponent("not-a-directory")
+        try Data().write(to: blocker)
+        await #expect(throws: (any Error).self) {
+            try await document.save(to: blocker.appendingPathComponent("Fail.md"), ofType: Self.type, for: .saveAsOperation)
+        }
+        #expect(document.snapshot.persistedData() == before)
+        #expect(!document.snapshot.isWriting())
+        #expect(document.isDocumentEdited)
+        #expect(document.editor?.source == "saved\npending\n")
+    }
+
+    @Test func exportingCopyDoesNotChangeOriginalSaveBaseline() async throws {
+        let original = Data("original\n".utf8)
+        let (document, url, directory) = try makeDocument(original)
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        append(document, "local edit\n")
+        try await settle()
+        let copy = directory.appendingPathComponent("Export.md")
+        try await document.save(to: copy, ofType: Self.type, for: .saveToOperation)
+        #expect(document.snapshot.persistedData() == original)
+        #expect(try Data(contentsOf: url) == original)
+        #expect(try String(contentsOf: copy, encoding: .utf8) == "original\nlocal edit\n")
+        try await document.save(to: url, ofType: Self.type, for: .saveOperation)
+        #expect(try Data(contentsOf: url) == Data("original\nlocal edit\n".utf8))
     }
 
     @Test func externalChangeWhileCleanReloads() async throws {

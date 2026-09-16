@@ -169,14 +169,24 @@ import os
             let state = signposter.beginInterval("Parse")
             guard let result = try? await parsingWorker.parse(source, revision: revision) else { return }
             signposter.endInterval("Parse", state)
-            guard !Task.isCancelled, self.revision == revision, !textView.hasMarkedText() else { return }
-            let old = presentation
-            parsed = result; presentation = result
-            let changed = Array(Set(old.styles).symmetricDifference(Set(result.styles))).map(\.span)
-            invalidatePresentation(spans: changed + old.elements.map(\.span) + result.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
-            scheduleRenders()
-            onParseApplied?()
+            guard !Task.isCancelled else { return }
+            applyParsedDocument(result)
         }
+    }
+    @discardableResult func applyParsedDocument(_ result: ParsedDocument) -> Bool {
+        guard result.revision == revision, !textView.hasMarkedText() else { return false }
+        let old = presentation
+        // A distant reference definition can change an image's content without moving its span.
+        // Source coordinates alone do not identify a reusable artifact.
+        let reusable = Set(old.elements).intersection(Set(result.elements))
+        let spans = Set(reusable.map(\.span))
+        artifacts = artifacts.filter { spans.contains($0.key) }
+        parsed = result; presentation = result
+        let changed = Array(Set(old.styles).symmetricDifference(Set(result.styles))).map(\.span)
+        invalidatePresentation(spans: changed + old.elements.map(\.span) + result.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
+        scheduleRenders()
+        onParseApplied?()
+        return true
     }
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }
@@ -292,8 +302,7 @@ import os
     }
 
     private func invalidatePresentation(spans: [SourceSpan]? = nil) {
-        guard isViewLoaded, !textView.hasMarkedText(), let storage = textView.textStorage,
-              let manager = textView.textLayoutManager, let content = manager.textContentManager as? NSTextContentStorage else { return }
+        guard isViewLoaded, !textView.hasMarkedText(), let storage = textView.textStorage else { return }
         let length = storage.length
         guard length > 0, !invalidating else { return }
         let text = storage.mutableString
@@ -347,6 +356,10 @@ import os
 
     public func textContentStorage(_ textContentStorage: NSTextContentStorage, textParagraphWith range: NSRange) -> NSTextParagraph? {
         guard let storage = textContentStorage.textStorage, NSMaxRange(range) <= storage.length else { return nil }
+        if textView.hasMarkedText(), NSIntersectionRange(range, textView.markedRange()).length > 0 {
+            // The input method owns both characters and attributes until composition commits.
+            return NSTextParagraph(attributedString: storage.attributedSubstring(from: range))
+        }
         let result = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         let entire = NSRange(location: 0, length: result.length)
         let paragraph = NSMutableParagraphStyle()

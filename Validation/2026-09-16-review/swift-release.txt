@@ -1,0 +1,6 @@
+SCALE load=10ms parse=428ms elements=7693 rendered=12 keystroke p50=3.77ms p95=6.26ms max=8.48ms
+DOCUMENT_SCALE position=head samples=30 p50=3.59ms p95=4.00ms max=4.81ms
+DOCUMENT_SCALE position=middle samples=30 p50=3.46ms p95=3.69ms max=3.71ms
+DOCUMENT_SCALE position=tail samples=30 p50=3.53ms p95=3.84ms max=4.03ms
+✔ Test run with 31 tests in 5 suites passed after 8.625 seconds.
+✔ Test run with 12 tests in 0 suites passed after 0.029 seconds.

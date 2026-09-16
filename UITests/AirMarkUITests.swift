@@ -1,9 +1,18 @@
 import XCTest
+import Carbon
 
 @MainActor final class AirMarkUITests: XCTestCase {
     /// Fixtures are bundled with the runner; reading them from the source tree would trigger the
     /// Documents-folder permission dialog and block the run.
     static var fixtures: URL { Bundle(for: AirMarkUITests.self).resourceURL!.appendingPathComponent("Fixtures") }
+    /// XCUIAutomation types key events through the active input method. Pin an ASCII source for
+    /// these English keyboard fixtures, then restore the user's original source after each test.
+    private func useASCIIInputSource() {
+        let previous = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        let ascii = TISCopyCurrentASCIICapableKeyboardInputSource().takeRetainedValue()
+        XCTAssertEqual(TISSelectInputSource(ascii), noErr)
+        addTeardownBlock { XCTAssertEqual(TISSelectInputSource(previous), noErr) }
+    }
     func testRepeatedAsynchronousSavesPreserveSource() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkSaveTests-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -15,13 +24,15 @@ import XCTest
         app.launchArguments = ["--open", file.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = directory.appendingPathComponent("Recovery").path
         app.launch()
+        useASCIIInputSource()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         for number in 1...5 {
-            editor.click()
+            // The editor is the launch first responder. Stay on the keyboard: clicking each
+            // time races macOS's transient input-source indicator beside the insertion point.
             app.typeKey(.downArrow, modifierFlags: .command)
             let addition = "Save \(number). "
-            editor.typeText(addition)
+            app.typeText(addition)
             source += addition
             app.typeKey("s", modifierFlags: .command)
             let expected = prefix + Data(source.utf8)
@@ -31,7 +42,12 @@ import XCTest
             // A save that AirMark mistook for an external change used to show an error sheet here.
             XCTAssertNotEqual(app.state, .notRunning)
             XCTAssertEqual(app.sheets.count, 0, app.sheets.firstMatch.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " / "))
-            XCTAssertEqual(app.dialogs.count, 0, app.dialogs.firstMatch.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " / "))
+            // macOS exposes its temporary input-source indicator as a dialog with an
+            // InputSource button. Only that identified system indicator is allowed;
+            // error sheets and all other dialogs still fail this test.
+            for dialog in app.dialogs.allElementsBoundByIndex {
+                XCTAssertTrue(dialog.buttons["InputSource"].exists, dialog.debugDescription)
+            }
         }
         app.terminate()
         app.launch()
@@ -126,6 +142,7 @@ import XCTest
         app.launchArguments = ["--blank"]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = NSTemporaryDirectory() + "AirMarkUITests-" + UUID().uuidString
         app.launch()
+        useASCIIInputSource()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         XCTAssertEqual(editor.label, "Markdown editor")

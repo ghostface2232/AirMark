@@ -63,11 +63,11 @@ public enum MarkdownParser {
         }
         func walk(_ node: any Markup) {
             guard let s = span(node) else { for child in node.children { walk(child) }; return }
-            let raw = index.text(in: s)
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch node {
             case let heading as Heading:
+                let raw = index.text(in: s)
                 let prefix = raw.prefix { $0 == "#" || $0 == " " }.utf16.count
                 var markers: [SourceSpan] = []
                 if raw.hasPrefix("#") { markers.append(SourceSpan(s.location, prefix)) }
@@ -79,6 +79,7 @@ public enum MarkdownParser {
             case is Emphasis: add(.emphasis, markers: edges(1))
             case is Strikethrough: add(.strike, markers: edges(2))
             case is InlineCode:
+                let raw = index.text(in: s)
                 let count = raw.prefix { $0 == "`" }.count
                 add(.code, markers: edges(count)); protected.append(s)
             case let code as CodeBlock:
@@ -87,7 +88,7 @@ public enum MarkdownParser {
                 if lang == "mermaid" || lang == "math" || lang == "latex" {
                     output.elements.append(RenderElement(span: s, kind: lang == "mermaid" ? .mermaid : .math, content: code.code))
                 } else {
-                    var markers = fenceMarkers(raw, at: s.location)
+                    var markers = fenceMarkers(index.text(in: s), at: s.location)
                     // The block span stops before its line break. Hide that break with the closing
                     // fence so the fence line collapses instead of leaving an empty code line.
                     if markers.count == 2 {
@@ -98,6 +99,7 @@ public enum MarkdownParser {
                     add(.codeBlock, markers: markers)
                 }
             case is BlockQuote:
+                let raw = index.text(in: s)
                 var markers: [SourceSpan] = []
                 if let regex = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines) {
                     for match in regex.matches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
@@ -106,6 +108,7 @@ public enum MarkdownParser {
                 }
                 add(.quote, markers: markers)
             case is ListItem:
+                let raw = index.text(in: s)
                 var extra: [StyleRun] = [], markers: [SourceSpan] = []
                 if let regex = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?"),
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {

@@ -34,19 +34,15 @@ public struct RecoveryRecord: Codable, Sendable, Equatable {
 
 public actor RecoveryStore {
     public let directory: URL
-    private var revisions: [UUID: UInt64] = [:]
+    private nonisolated let writer = RecoveryWriter()
     public init(directory: URL) { self.directory = directory }
     public func save(_ record: RecoveryRecord) throws {
-        guard record.revision >= revisions[record.id, default: 0] else { return }
-        try Self.write(record, to: directory)
-        revisions[record.id] = record.revision
+        try saveImmediately(record)
     }
     /// Synchronous write for paths that cannot await, such as application termination, where AppKit
     /// runs a nested event loop that does not drain the main actor.
-    public nonisolated static func write(_ record: RecoveryRecord, to directory: URL) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(record)
-        try data.write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
+    public nonisolated func saveImmediately(_ record: RecoveryRecord) throws {
+        try writer.save(record, to: directory)
     }
     public func records() -> [RecoveryRecord] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
@@ -56,8 +52,32 @@ public actor RecoveryStore {
         }.sorted { $0.date > $1.date }
     }
     public func remove(_ id: UUID) throws {
-        let url = directory.appendingPathComponent(id.uuidString + ".json")
-        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
-        revisions.removeValue(forKey: id)
+        try writer.remove(id, from: directory)
+    }
+}
+
+/// The termination path and actor tasks share one ordering gate. Atomic file replacement alone
+/// prevents torn JSON, but does not stop an older asynchronous save replacing a newer quit record.
+private final class RecoveryWriter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest: [UUID: (revision: UInt64, date: Date)] = [:]
+    func save(_ record: RecoveryRecord, to directory: URL) throws {
+        try lock.withLock {
+            if let saved = latest[record.id] {
+                guard record.revision > saved.revision ||
+                        (record.revision == saved.revision && record.date >= saved.date) else { return }
+            }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(record)
+            try data.write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
+            latest[record.id] = (record.revision, record.date)
+        }
+    }
+    func remove(_ id: UUID, from directory: URL) throws {
+        try lock.withLock {
+            let url = directory.appendingPathComponent(id.uuidString + ".json")
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            latest.removeValue(forKey: id)
+        }
     }
 }

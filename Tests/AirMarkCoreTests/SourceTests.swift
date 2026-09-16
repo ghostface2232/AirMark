@@ -26,6 +26,30 @@ import Testing
         let a = random(boundaries.count), b = min(a + random(3), boundaries.count - 1)
         try index.apply(NSRange(location: boundaries[a], length: boundaries[b] - boundaries[a]), replacement: inserts[random(inserts.count)])
         #expect(index.lines == SourceIndex(index.source).lines)
+        checkColumns(index)
+    }
+}
+
+/// Compare every byte column (including invalid scalar interiors) with independent decoding.
+private func checkColumns(_ index: SourceIndex) {
+    for (line, span) in index.lines.enumerated() {
+        let bytes = Array(index.text(in: span).utf8)
+        for column in 0...bytes.count {
+            let expected = String(bytes: bytes.prefix(column), encoding: .utf8).map { span.location + $0.utf16.count }
+            #expect(index.offset(line: line + 1, utf8Column: column + 1) == expected)
+        }
+        #expect(index.offset(line: line + 1, utf8Column: bytes.count + 2) == nil)
+    }
+}
+
+@Test func sparseColumnsPreserveScalarBoundariesAndLineEndings() {
+    for source in ["", "\r\n", "\r", "\n", String(repeating: "a", count: 63) + "😀한e\u{301}\r\n",
+                   String(repeating: "한😀e\u{301}\u{2028}\u{2029}", count: 100) + "\rnext\nend"] {
+        let index = SourceIndex(source)
+        checkColumns(index)
+        #expect(index.offset(line: 0, utf8Column: 1) == nil)
+        #expect(index.offset(line: 1, utf8Column: 0) == nil)
+        #expect(index.offset(line: 1, utf8Column: Int.max) == nil)
     }
 }
 

@@ -54,8 +54,8 @@ public enum RenderFailure: LocalizedError {
     public func cached(_ key: String) -> RenderArtifact? { cache[key] }
     public func render(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?, host: NSView) async throws -> RenderArtifact {
         let identifier = key(element, environment: environment, baseURL: baseURL)
-        if let result = cache[identifier] { touch(identifier); return result }
-        if let task = pending[identifier] { return try await task.value }
+        if let result = cache[identifier] { touch(identifier); return labeled(result, for: element, baseURL: baseURL) }
+        if let task = pending[identifier] { return labeled(try await task.value, for: element, baseURL: baseURL) }
         guard pending.count < 32 else { throw RenderFailure.unavailable }
         let task = Task<RenderArtifact, Error> { [self] in
             if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
@@ -69,7 +69,17 @@ public enum RenderFailure: LocalizedError {
         guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
         cache[identifier] = result; bytes += result.cost; touch(identifier); renderedCount += 1
         while bytes > memoryLimit, let oldest = order.first { order.removeFirst(); if let removed = cache.removeValue(forKey: oldest) { bytes -= removed.cost } }
-        return result
+        return labeled(result, for: element, baseURL: baseURL)
+    }
+    /// Accessibility belongs to the requesting element, while identical pixels remain shared.
+    private func labeled(_ artifact: RenderArtifact, for element: RenderElement, baseURL: URL?) -> RenderArtifact {
+        let label: String
+        switch element.kind {
+        case .image: label = element.label.isEmpty ? localURL(element.content, baseURL: baseURL)?.lastPathComponent ?? "" : element.label
+        case .table: label = element.label
+        case .math, .mermaid: return artifact
+        }
+        return RenderArtifact(image: artifact.image, size: artifact.size, baseline: artifact.baseline, label: label)
     }
     private func touch(_ key: String) { order.removeAll { $0 == key }; order.append(key) }
     private func localURL(_ path: String, baseURL: URL?) -> URL? {

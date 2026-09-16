@@ -7,30 +7,20 @@ public final class DocumentSnapshot: @unchecked Sendable {
     private var conflict = false
     private var diskData: Data?
     private var writingData: Data?
-    // Every byte sequence this document has read from or written to disk. A file
-    // change notification whose contents match one of these came from AirMark itself,
-    // even when it arrives after a newer save has already replaced `diskData`.
-    private var ownContents: [Data] = []
     public func get() -> DocumentBytes { lock.withLock { value } }
     public func set(_ value: DocumentBytes) { lock.withLock { self.value = value } }
     public func hasConflict() -> Bool { lock.withLock { conflict } }
     public func setConflict(_ value: Bool) { lock.withLock { conflict = value } }
-    public func didRead(_ value: DocumentBytes) { lock.withLock { self.value = value; diskData = value.data; remember(value.data) } }
+    public func didRead(_ value: DocumentBytes) { lock.withLock { self.value = value; diskData = value.data } }
     public func persistedData() -> Data? { lock.withLock { diskData } }
-    public func isOwnContent(_ data: Data) -> Bool { lock.withLock { ownContents.contains(data) } }
     public func dataForWriting() -> Data { lock.withLock { writingData ?? value.data } }
     public func isWriting() -> Bool { lock.withLock { writingData != nil } }
     public func beginWrite() { lock.withLock { writingData = value.data } }
     public func finishWrite(success: Bool) {
         lock.withLock {
-            if success, let written = writingData { diskData = written; remember(written) }
+            if success, let written = writingData { diskData = written }
             writingData = nil
         }
-    }
-    private func remember(_ data: Data) {
-        ownContents.removeAll { $0 == data }
-        ownContents.append(data)
-        if ownContents.count > 16 { ownContents.removeFirst() }
     }
 }
 
@@ -98,7 +88,9 @@ public final class DocumentSnapshot: @unchecked Sendable {
         snapshot.beginWrite()
         do {
             try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
-            snapshot.finishWrite(success: true)
+            // Save To exports a copy; the original document's disk baseline is unchanged.
+            snapshot.finishWrite(success: saveOperation != .saveToOperation)
+            if saveOperation == .saveAsOperation { externalConflict = false }
         } catch {
             snapshot.finishWrite(success: false)
             throw error
@@ -139,11 +131,12 @@ public final class DocumentSnapshot: @unchecked Sendable {
     public nonisolated override func presentedItemDidChange() {
         Task { @MainActor [weak self] in
             guard let self, let url = fileURL, !snapshot.isWriting() else { return }
+            let expected = snapshot.persistedData()
             let data = try? await Task.detached { try Data(contentsOf: url) }.value
-            // Our own completed save may contain an earlier edit revision, and a
-            // notification can arrive after a newer save finished. Anything AirMark
-            // itself read or wrote is not an external change.
-            guard let data, !snapshot.isWriting(), !snapshot.isOwnContent(data) else { return }
+            // The read can finish after a save or move. Reject that stale observation;
+            // only the current persisted bytes identify our own write, never historical content.
+            guard let data, fileURL == url, !snapshot.isWriting(),
+                  snapshot.persistedData() == expected, data != expected else { return }
             if isDocumentEdited {
                 externalConflict = true; scheduleRecovery()
                 if let window = windowControllers.first?.window { window.subtitle = "File changed externally — edits preserved" }

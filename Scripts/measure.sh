@@ -36,16 +36,20 @@ PID="$(pgrep -x AirMark | head -1)"
 RSS_KB="$(ps -o rss= -p "$PID" | tr -d ' ')"
 IDLE_CPU="$(top -l 3 -s 2 -stats cpu -pid "$PID" | tail -1 | tr -d ' ')"
 pkill -x AirMark || true
-KEYSTROKES="$(swift test -c release --disable-sandbox --filter ScaleTests 2>&1 | grep -E '^SCALE' || true)"
+if ! swift test -c release --disable-sandbox --filter ScaleTests > "$WORK/scale.log" 2>&1; then
+  cat "$WORK/scale.log" >&2
+  exit 1
+fi
+KEYSTROKES="$(grep -E '^(SCALE|DOCUMENT_SCALE)' "$WORK/scale.log" || true)"
 python3 - "$LOG" "$RSS_KB" "$IDLE_CPU" "$KEYSTROKES" <<'REPORT'
-import json, sys, platform
+import json, sys, platform, math
 records = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 def pct(values, p):
-    values = sorted(values); return values[max(0, min(len(values) - 1, round(p * len(values) + 0.5) - 1))]
+    values = sorted(values); return values[max(0, min(len(values) - 1, math.ceil(p * len(values)) - 1))]
 print(f"host: macOS {platform.mac_ver()[0]}  runs: {len(records)}")
 for doc in sorted({r['document'] for r in records}):
     rows = [r for r in records if r['document'] == doc]
-    print(f"{doc} ({rows[0]['bytes']} bytes, {len(rows)} runs; first run is cold)")
+    print(f"{doc} ({rows[0]['bytes']} bytes, {len(rows)} runs; OS cache state uncontrolled)")
     for key in ['windowShown', 'editable', 'firstParse', 'firstRender']:
         values = [r[key] for r in rows if key in r]
         if values: print(f"  {key:12s} p50 {pct(values, .5):7.1f} ms  p95 {pct(values, .95):7.1f} ms  first {values[0]:7.1f} ms")

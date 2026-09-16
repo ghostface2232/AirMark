@@ -5,7 +5,7 @@ import AirMarkCore
 
 /// Behaviour on a 1MB document: parsing stays off the main thread, only elements near the viewport
 /// are rendered, in-flight renders are capped, and a keystroke's main-thread work stays small.
-/// Printed timings are from a Debug build and are observations, not budgets.
+/// Printed timings use the selected build configuration and are observations, not budgets.
 @Suite(.serialized) @MainActor struct ScaleTests {
     static func source(bytes: Int) -> String {
         let block = "## Heading\n\nA paragraph with **bold**, *emphasis*, [link](https://example.org) and 한글. Inline $x_{n}^2$ formula.\n\n- [ ] Task\n\n"
@@ -69,9 +69,44 @@ import AirMarkCore
         }
         let sorted = costs.sorted()
         func ms(_ duration: Duration) -> Double { Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15 }
-        print(String(format: "SCALE load=%.0fms parse=%.0fms elements=%d rendered=%d keystroke p50=%.2fms p95=%.2fms max=%.2fms", ms(started.duration(to: loaded)), ms(loaded.duration(to: parsed)), total, rendered, ms(sorted[sorted.count / 2]), ms(sorted[Int(Double(sorted.count) * 0.95) - 1]), ms(sorted.last!)))
+        print(String(format: "SCALE load=%.0fms parse=%.0fms elements=%d rendered=%d keystroke p50=%.2fms p95=%.2fms max=%.2fms", ms(started.duration(to: loaded)), ms(loaded.duration(to: parsed)), total, rendered, ms(sorted[Int(ceil(Double(sorted.count) * 0.5)) - 1]), ms(sorted[Int(ceil(Double(sorted.count) * 0.95)) - 1]), ms(sorted.last!)))
         #expect(ms(sorted[sorted.count / 2]) < 50)
         #expect(editor.source.hasSuffix(String(repeating: "x", count: 30)))
+        #expect(editor.textKitFallbackCount == 0)
+    }
+
+    /// Include the document's snapshot copying and dirty-state callback, which the editor-only
+    /// measurement above does not exercise. Head/middle/tail edits all rebase different suffixes.
+    @Test func documentKeystrokeCostsIncludeSnapshotAndDirtyState() async throws {
+        _ = NSApplication.shared
+        let document = MarkdownDocument()
+        let source = Self.source(bytes: 1_000_000)
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: true))
+        document.makeWindowControllers()
+        defer { document.close() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        let clock = ContinuousClock()
+        for (name, target) in [("head", 0), ("middle", source.utf16.count / 2), ("tail", source.utf16.count)] {
+            for _ in 0..<600 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            #expect(editor.parsed.revision == editor.revision)
+            let text = editor.source as NSString
+            // Start on a paragraph boundary, never in the middle of a surrogate pair.
+            let offset = text.paragraphRange(for: NSRange(location: min(target, text.length), length: 0)).location
+            var costs: [Duration] = []
+            for number in 0..<30 {
+                let start = clock.now
+                editor.performEdit(range: NSRange(location: offset + number, length: 0), replacement: "x")
+                costs.append(start.duration(to: clock.now))
+            }
+            func ms(_ value: Duration) -> Double { Double(value.components.seconds) * 1000 + Double(value.components.attoseconds) / 1e15 }
+            let sorted = costs.sorted()
+            print(String(format: "DOCUMENT_SCALE position=%@ samples=%d p50=%.2fms p95=%.2fms max=%.2fms", name, sorted.count, ms(sorted[14]), ms(sorted[28]), ms(sorted.last!)))
+            #expect(document.snapshot.get().data == Data([0xEF, 0xBB, 0xBF]) + Data(editor.source.utf8))
+            #expect(document.isDocumentEdited)
+        }
         #expect(editor.textKitFallbackCount == 0)
     }
 }

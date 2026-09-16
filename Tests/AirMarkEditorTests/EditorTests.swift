@@ -237,7 +237,7 @@ import AirMarkCore
         defer { window.orderOut(nil) }
         #expect(editor.textView.accessibilityLabel() == "Markdown editor")
         #expect(editor.textView.accessibilityIdentifier() == "markdown-editor")
-        #expect((editor.textView.accessibilityValue() as? String) == editor.source)
+        #expect(editor.textView.accessibilityValue() == editor.source)
         for _ in 0..<100 where editor.renderedElementCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
         let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
         let task = try #require(editor.textContentStorage(storage, textParagraphWith: NSRange(location: 0, length: 11))).attributedString
@@ -257,7 +257,44 @@ import AirMarkCore
         #expect((paragraph.attributedString.string as NSString).substring(with: editor.textView.markedRange()) == "ㅎ")
         #expect(editor.source == "**ㅎhello**\n")
         #expect(paragraph.attributedString.length == editor.source.utf16.count)
+        let marked = editor.textView.markedRange()
+        let native = try #require(editor.textView.textStorage).attributedSubstring(from: marked)
+        #expect(paragraph.attributedString.attributedSubstring(from: marked).isEqual(to: native), "composition attributes must remain owned by the input method")
         editor.textView.unmarkText()
         #expect(!editor.textView.hasMarkedText())
+    }
+
+    @Test func staleParseAndCompositionCannotApplyPresentation() async throws {
+        let editor = try await make("**old**\n")
+        let old = editor.parsed
+        editor.performEdit(range: NSRange(location: 2, length: 3), replacement: "한😀")
+        #expect(!editor.applyParsedDocument(old))
+        #expect(Data(editor.source.utf8) == Data("**한😀**\n".utf8))
+        let latest = MarkdownParser.parse(editor.source, revision: editor.revision)
+        #expect(editor.applyParsedDocument(latest))
+        editor.textView.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.textView.setMarkedText("ㅎ", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        let composing = MarkdownParser.parse(editor.source, revision: editor.revision)
+        #expect(!editor.applyParsedDocument(composing))
+        editor.textView.unmarkText()
+    }
+
+    @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = "![picture][id]\n\n[id]: swatch.png\n"
+        let editor = try await make(source)
+        editor.fileURL = repository.appendingPathComponent("Fixtures/Showcase.md")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor; window.orderFront(nil)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+        editor.view.layoutSubtreeIfNeeded(); editor.viewDidAppear()
+        defer { window.orderOut(nil) }
+        for _ in 0..<100 where editor.renderedElementCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(editor.renderedElementCount == 1)
+        let span = try #require(editor.parsed.elements.first?.span)
+        editor.performEdit(range: (source as NSString).range(of: "swatch.png"), replacement: "missing-image.png")
+        for _ in 0..<100 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(editor.parsed.elements.first?.span == span)
+        #expect(editor.renderedElementCount == 0, "old pixels must not survive a changed reference target")
     }
 }

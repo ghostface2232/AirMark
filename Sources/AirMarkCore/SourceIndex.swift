@@ -16,14 +16,49 @@ public struct SourceIndex: Sendable {
     public private(set) var source: String
     public private(set) var lines: [SourceSpan]
     private var units: [UInt16]
+    private struct Checkpoint: Sendable {
+        var utf8: Int
+        var utf16: Int
+    }
+    private var checkpoints: [Checkpoint] = []
+    private var lineByteOffsets: [Int] = []
+    private var byteCount = 0
     public var utf16Count: Int { units.count }
     public init(_ source: String) {
         self.source = source
         self.units = Array(source.utf16)
-        self.lines = Self.lineRanges(source)
+        self.lines = Self.lineRanges(units)
+        rebuildColumns()
     }
-    private static func lineRanges(_ source: String) -> [SourceSpan] {
-        let units = Array(source.utf16)
+    /// Checkpoints about every 64 UTF-16 units bound a lookup to at most 65 units (a surrogate pair
+    /// can cross the threshold).
+    /// No line-sized strings, byte arrays or decoded prefixes are allocated per AST location.
+    private mutating func rebuildColumns() {
+        checkpoints = [Checkpoint(utf8: 0, utf16: 0)]
+        lineByteOffsets = []
+        lineByteOffsets.reserveCapacity(lines.count)
+        var offset = 0, bytes = 0, line = 0
+        while offset < units.count {
+            if line < lines.count, lines[line].location == offset {
+                lineByteOffsets.append(bytes); line += 1
+            }
+            if offset - checkpoints.last!.utf16 >= 64 {
+                checkpoints.append(Checkpoint(utf8: bytes, utf16: offset))
+            }
+            let width = scalarWidth(at: offset)
+            offset += width.utf16; bytes += width.utf8
+        }
+        if line < lines.count { lineByteOffsets.append(bytes) }
+        byteCount = bytes
+    }
+    private func scalarWidth(at offset: Int) -> (utf8: Int, utf16: Int) {
+        let unit = units[offset]
+        if unit < 0x80 { return (1, 1) }
+        if unit < 0x800 { return (2, 1) }
+        if (0xD800...0xDBFF).contains(unit) { return (4, 2) }
+        return (3, 1)
+    }
+    private static func lineRanges(_ units: [UInt16]) -> [SourceSpan] {
         var result: [SourceSpan] = []
         var start = 0, i = 0
         while i < units.count {
@@ -38,12 +73,22 @@ public struct SourceIndex: Sendable {
     }
     public func offset(line: Int, utf8Column: Int) -> Int? {
         guard line > 0, line <= lines.count, utf8Column > 0 else { return nil }
-        let span = lines[line - 1]
-        let text = self.text(in: span)
-        let bytes = Array(text.utf8)
+        let start = lineByteOffsets[line - 1]
+        let end = line < lines.count ? lineByteOffsets[line] : byteCount
         let count = utf8Column - 1
-        guard count <= bytes.count, let prefix = String(bytes: bytes.prefix(count), encoding: .utf8) else { return nil }
-        return span.location + prefix.utf16.count
+        guard count <= end - start else { return nil }
+        let target = start + count
+        var low = 0, high = checkpoints.count
+        while low < high {
+            let middle = (low + high) / 2
+            if checkpoints[middle].utf8 <= target { low = middle + 1 } else { high = middle }
+        }
+        var position = checkpoints[low - 1]
+        while position.utf8 < target {
+            let width = scalarWidth(at: position.utf16)
+            position.utf8 += width.utf8; position.utf16 += width.utf16
+        }
+        return position.utf8 == target ? position.utf16 : nil
     }
     public func paragraph(at offset: Int) -> SourceSpan {
         let string = source as NSString
@@ -51,7 +96,7 @@ public struct SourceIndex: Sendable {
         return SourceSpan(string.paragraphRange(for: NSRange(location: min(max(0, offset), string.length), length: 0)))
     }
     public func text(in span: SourceSpan) -> String {
-        guard span.location >= 0, span.end <= utf16Count else { return "" }
+        guard span.location >= 0, span.length >= 0, span.end <= utf16Count else { return "" }
         return String(decoding: units[span.location..<span.end], as: UTF16.self)
     }
     public mutating func apply(_ range: NSRange, replacement: String) throws {
@@ -63,7 +108,8 @@ public struct SourceIndex: Sendable {
         source = (source as NSString).replacingCharacters(in: range, with: replacement)
         units.replaceSubrange(range.location..<NSMaxRange(range), with: replacement.utf16)
         let suffix = (source as NSString).substring(from: restart)
-        lines = Array(lines.prefix(first)) + Self.lineRanges(suffix).map { SourceSpan($0.location + restart, $0.length) }
+        lines = Array(lines.prefix(first)) + Self.lineRanges(Array(suffix.utf16)).map { SourceSpan($0.location + restart, $0.length) }
+        rebuildColumns()
     }
 }
 
