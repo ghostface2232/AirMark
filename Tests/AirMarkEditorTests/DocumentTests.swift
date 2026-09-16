@@ -4,6 +4,8 @@ import AirMarkCore
 @testable import AirMarkEditor
 
 /// Saving, external-change detection and recovery without XCUIAutomation.
+/// Other suites run in parallel and their documents also write to `MarkdownDocument.recoveryStore`,
+/// so recovery assertions select this test's record by document identity.
 @Suite(.serialized) @MainActor struct DocumentTests {
     static let type = "net.daringfireball.markdown"
     func makeDocument(_ data: Data) throws -> (MarkdownDocument, URL, URL) {
@@ -143,7 +145,7 @@ import AirMarkCore
         #expect(document.fileURL == moved)
         #expect(document.editor?.fileURL == moved)
         try await Task.sleep(for: .milliseconds(700))
-        let records = await MarkdownDocument.recoveryStore!.records()
+        let records = await MarkdownDocument.recoveryStore!.records().filter { $0.id == document.identity }
         #expect(records.first?.filePath == moved.path)
     }
 
@@ -159,7 +161,7 @@ import AirMarkCore
         #expect(document.displayName.contains("Note.md"))
         #expect(!FileManager.default.fileExists(atPath: url.path))
         try await Task.sleep(for: .milliseconds(700))
-        let records = await MarkdownDocument.recoveryStore!.records()
+        let records = await MarkdownDocument.recoveryStore!.records().filter { $0.id == document.identity }
         #expect(records.first?.source == "keep me\n")
         #expect(records.first?.filePath == nil)
         // Save As restores a file; the old path stays deleted.
@@ -175,7 +177,7 @@ import AirMarkCore
         append(document, "unsaved")
         try await Task.sleep(for: .milliseconds(900))
         // A force quit never reaches close(); the record written after the edit is what survives.
-        let records = await MarkdownDocument.recoveryStore!.records()
+        let records = await MarkdownDocument.recoveryStore!.records().filter { $0.id == document.identity }
         let plan = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         guard case .recoverDraft(let record) = plan else { Issue.record("expected a draft, got \(plan)"); return }
         #expect(record.source == "saved\nunsaved")
@@ -190,9 +192,9 @@ import AirMarkCore
         append(document, "more")
         try await Task.sleep(for: .milliseconds(900))
         let store = try #require(MarkdownDocument.recoveryStore)
-        let records = await store.records()
+        let records = await store.records().filter { $0.id == document.identity }
+        #expect(records.count == 1)
         #expect(records.first?.source == "draft\nmore")
-        #expect(records.first?.id == document.identity)
         document.close()
     }
 }
