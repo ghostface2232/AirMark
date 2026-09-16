@@ -295,6 +295,20 @@ import AirMarkCore
         #expect(editor.source == "xx- [ ] a\n- [] b\n")
     }
 
+    /// Return continues a list item with the same kind of marker; a task item continues as an
+    /// unchecked task whether its marker is a bullet or a number.
+    @Test func newlineContinuesTaskItems() async throws {
+        for (source, expected) in [("1. [ ] task", "1. [ ] task\n2. [ ] "),
+                                   ("  3) [x] done", "  3) [x] done\n  4) [ ] "),
+                                   ("- [X] done", "- [X] done\n- [ ] "),
+                                   ("1. plain", "1. plain\n2. ")] {
+            let editor = try await make(source)
+            editor.textView.setSelectedRange(NSRange(location: source.utf16.count, length: 0))
+            editor.textView.insertNewline(nil)
+            #expect(editor.source == expected, "from \(source.debugDescription)")
+        }
+    }
+
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
         let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = "![picture][id]\n\n[id]: swatch.png\n"
