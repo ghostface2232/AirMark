@@ -96,6 +96,25 @@ public final class DocumentSnapshot: @unchecked Sendable {
             throw error
         }
     }
+    /// Save As, and the first save of an untitled document, give the document a new location without
+    /// an edit or a presenter callback. Relative image paths resolve against it, so tell the editor
+    /// before reporting completion.
+    public override func save(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType, completionHandler: @escaping ((any Error)?) -> Void) {
+        // AppKit calls this handler on the main thread; the fallback hop exists only for safety.
+        nonisolated(unsafe) let handler = completionHandler
+        super.save(to: url, ofType: typeName, for: saveOperation) { [weak self] error in
+            let finish: @MainActor @Sendable () -> Void = {
+                self?.followFileLocation()
+                handler(error)
+            }
+            if Thread.isMainThread { MainActor.assumeIsolated(finish) } else { Task { @MainActor in finish() } }
+        }
+    }
+    private func followFileLocation() {
+        guard let editor, editor.fileURL != fileURL else { return }
+        editor.fileLocationChanged(to: fileURL)
+        scheduleRecovery()
+    }
     public override func revert(toContentsOf url: URL, ofType typeName: String) throws {
         let selection = editor?.selection, y = editor?.scrollY
         try super.revert(toContentsOf: url, ofType: typeName)

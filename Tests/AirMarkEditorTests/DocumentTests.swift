@@ -180,6 +180,31 @@ import AirMarkCore
         #expect(!FileManager.default.fileExists(atPath: url.path))
     }
 
+    /// Relative image paths resolve against the document's location, which Save As changes
+    /// without any edit or file-presenter callback.
+    @Test func saveAsResolvesRelativeImagesFromTheNewLocation() async throws {
+        let (document, _, directory) = try makeDocument(Data("![Two color swatches](swatch.png)\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        let editor = try #require(document.editor)
+        let window = try #require(document.windowControllers.first?.window)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        editor.view.layoutSubtreeIfNeeded(); editor.viewDidAppear()
+        // The image exists only beside the new location.
+        for _ in 0..<100 where editor.renderErrorCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(editor.renderErrorCount == 1)
+        let elsewhere = directory.appendingPathComponent("Elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        try FileManager.default.copyItem(at: repository.appendingPathComponent("Fixtures/swatch.png"), to: elsewhere.appendingPathComponent("swatch.png"))
+        let moved = elsewhere.appendingPathComponent("Note.md")
+        try await document.save(to: moved, ofType: Self.type, for: .saveAsOperation)
+        #expect(editor.fileURL == moved)
+        for _ in 0..<100 where editor.renderedElementCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(editor.renderedElementCount == 1)
+        #expect(editor.renderErrorCount == 0)
+    }
+
     @Test func forceQuitRecoveryReopensUnsavedEdits() async throws {
         let (document, url, directory) = try makeDocument(Data("saved\n".utf8))
         defer { try? FileManager.default.removeItem(at: directory) }
