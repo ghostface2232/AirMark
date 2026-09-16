@@ -98,6 +98,66 @@ import AirMarkCore
         #expect(try paragraph(7).string.hasPrefix("- \u{2611}"))
         #expect(!editor.toggleCheckbox(at: 0))
     }
+    @Test func caretStaysOutsideConcealedMarkers() async throws {
+        // "## Heading" 0..<10, "\n" 10, "\n" 11, "**" 12..<14, "bold" 14..<18, "**" 18..<20, " more" 20..<25
+        let editor = try await make("## Heading\n\n**bold** more\n")
+        let view = editor.textView
+        func caret() -> Int { view.selectedRange().location }
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        #expect(caret() == 3)
+        view.moveLeft(nil)
+        #expect(caret() == 3)
+        view.setSelectedRange(NSRange(location: 13, length: 0))
+        #expect(caret() == 14)
+        view.moveLeft(nil)
+        #expect(caret() == 11)
+        view.setSelectedRange(NSRange(location: 18, length: 0))
+        #expect(caret() == 18)
+        view.moveRight(nil)
+        #expect(caret() == 20)
+        view.moveRight(nil)
+        #expect(caret() == 21)
+        view.moveLeft(nil)
+        #expect(caret() == 20)
+        view.moveLeft(nil)
+        #expect(caret() == 18)
+        view.setSelectedRange(NSRange(location: 19, length: 0))
+        #expect(caret() == 18)
+        view.setSelectedRange(NSRange(location: 14, length: 0))
+        for _ in 0..<5 { view.moveRightAndModifySelection(nil) }
+        #expect(view.selectedRange() == NSRange(location: 14, length: 6))
+        editor.showsMarkers = true
+        view.setSelectedRange(NSRange(location: 13, length: 0))
+        #expect(caret() == 13)
+        #expect(editor.source == "## Heading\n\n**bold** more\n")
+    }
+    @Test func deletingAtMarkerEdgesEditsSourceUnits() async throws {
+        let editor = try await make("## Heading\n\n**bold** more\n- [ ] task\n")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor
+        window.makeFirstResponder(editor.textView)
+        defer { window.orderOut(nil) }
+        let view = editor.textView
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        view.deleteBackward(nil)
+        #expect(editor.source == "Heading\n\n**bold** more\n- [ ] task\n")
+        #expect(view.selectedRange().location == 0)
+        // "**bold**" is now 9..<16; Backspace after the hidden closing marker deletes the "d".
+        view.setSelectedRange(NSRange(location: 17, length: 0))
+        view.deleteBackward(nil)
+        #expect(editor.source == "Heading\n\n**bol** more\n- [ ] task\n")
+        // Forward delete before the hidden closing marker deletes the space after it.
+        view.setSelectedRange(NSRange(location: 14, length: 0))
+        view.deleteForward(nil)
+        #expect(editor.source == "Heading\n\n**bol**more\n- [ ] task\n")
+        for _ in 0..<100 where editor.parsed.source != editor.source { try await Task.sleep(for: .milliseconds(20)) }
+        // Backspace at the start of task text removes the box, leaving a bullet item.
+        view.setSelectedRange(NSRange(location: 27, length: 0))
+        view.deleteBackward(nil)
+        #expect(editor.source == "Heading\n\n**bol**more\n- task\n")
+        view.undoManager?.undo()
+        #expect(editor.source == "Heading\n\n**bol**more\n- [ ] task\n")
+    }
     @Test func markedTextIsNotConcealed() async throws {
         let editor = try await make("**hello**\n")
         editor.textView.setSelectedRange(NSRange(location: 2, length: 0))

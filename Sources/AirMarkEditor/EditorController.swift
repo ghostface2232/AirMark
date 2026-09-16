@@ -27,6 +27,10 @@ import os
     private var themeWasDark = false
     private var observations: [NSObjectProtocol] = []
     private var sourceForInitialLoad = ""
+    private var normalizingSelection = false
+    private var lastSelection = NSRange(location: 0, length: 0)
+    /// Set by the text view around keyboard movement so selection changes know which way the caret went.
+    var caretDirection = CaretDirection.none
     private var firstPendingParse: ContinuousClock.Instant?
     private let signposter = OSSignposter(subsystem: "com.airmark.AirMark", category: "Editor")
     public var source: String { isViewLoaded ? textView.string : sourceForInitialLoad }
@@ -113,6 +117,12 @@ import os
         guard !invalidating else { return }
         onSelectionChange?()
         guard !textView.hasMarkedText() else { return }
+        if !normalizingSelection, let adjusted = normalizedSelection(textView.selectedRange(), previous: lastSelection, direction: caretDirection) {
+            normalizingSelection = true
+            textView.setSelectedRange(adjusted)
+            normalizingSelection = false
+        }
+        lastSelection = textView.selectedRange()
         if let editing = editingElement {
             let selected = textView.selectedRange()
             if selected.location < editing.location || selected.location > editing.end {
@@ -305,6 +315,108 @@ import os
         // with U+200B made TextKit 2 drop the height of any attachment sharing the line.
         result.addAttributes([.font: NSFont.systemFont(ofSize: 0.01), .foregroundColor: NSColor.clear], range: local)
     }
+    // MARK: Caret placement around concealed source
+
+    /// Concealed source the caret should not rest inside. `range` is the hidden text; `removal`
+    /// is what a deletion at its edge removes.
+    struct ConcealUnit {
+        enum Kind { case opening, closing, element }
+        var kind: Kind
+        var range: NSRange
+        var removal: NSRange
+        func avoids(_ position: Int) -> Bool {
+            switch kind {
+            case .opening: return range.location <= position && position < NSMaxRange(range)
+            case .closing, .element: return range.location < position && position < NSMaxRange(range)
+            }
+        }
+    }
+    func concealUnits() -> [ConcealUnit] {
+        guard !showsMarkers, !textView.hasMarkedText() else { return [] }
+        let text = source as NSString
+        var units: [ConcealUnit] = []
+        for run in presentation.styles {
+            if case .checkbox = run.kind, run.span.length == 3, run.span.end < text.length {
+                // "☐" stays visible; " ]" is hidden and the following space belongs to the box.
+                units.append(ConcealUnit(kind: .opening, range: NSRange(location: run.span.location + 1, length: 3), removal: NSRange(location: run.span.location, length: 4)))
+                continue
+            }
+            for marker in run.markers where marker.length > 0 && marker.end <= text.length {
+                let afterBreak = marker.location == 0 || [10, 13, 0x2029].contains(text.character(at: marker.location - 1))
+                let kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
+                units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: marker.nsRange))
+            }
+        }
+        for element in presentation.elements where element.span.length > 1 && artifacts[element.span] != nil && !isEditing(element.span) {
+            units.append(ConcealUnit(kind: .element, range: element.span.nsRange, removal: element.span.nsRange))
+        }
+        return units
+    }
+    /// The nearest position that is not inside concealed source, following the caret's direction.
+    public func normalizedCaret(_ position: Int, direction: CaretDirection) -> Int {
+        let units = concealUnits()
+        guard !units.isEmpty else { return position }
+        var current = position
+        for _ in 0..<8 {
+            guard let unit = units.first(where: { $0.avoids(current) }) else { break }
+            let end = NSMaxRange(unit.range)
+            switch (unit.kind, direction) {
+            case (.opening, .left): current = unit.range.location > 0 ? unit.range.location - 1 : end
+            case (.opening, _): current = end
+            case (.closing, .right), (.element, .right): current = end
+            case (.closing, _), (.element, .left): current = unit.range.location
+            case (.element, .none): current = (current - unit.range.location) * 2 < unit.range.length ? unit.range.location : end
+            }
+        }
+        return current
+    }
+    private func normalizedSelection(_ selection: NSRange, previous: NSRange, direction: CaretDirection) -> NSRange? {
+        if selection.length == 0 {
+            let target = normalizedCaret(selection.location, direction: direction)
+            return target == selection.location ? nil : NSRange(location: target, length: 0)
+        }
+        guard direction != .none else { return nil }
+        // Keyboard extension: only the end that moved is adjusted.
+        var start = selection.location, end = NSMaxRange(selection)
+        if start != previous.location { start = normalizedCaret(start, direction: direction) }
+        if end != NSMaxRange(previous) { end = normalizedCaret(end, direction: direction) }
+        guard start != selection.location || end != NSMaxRange(selection) else { return nil }
+        return end >= start ? NSRange(location: start, length: end - start) : NSRange(location: direction == .left ? start : end, length: 0)
+    }
+    /// Backspace at the edge of concealed source. Returns false when the default behaviour applies.
+    public func deleteBackwardAcrossMarkers(at position: Int) -> Bool {
+        let text = source as NSString
+        guard let unit = concealUnits().first(where: { NSMaxRange($0.range) == position }) else { return false }
+        switch unit.kind {
+        case .opening:
+            performEdit(range: unit.removal, replacement: "", selection: NSRange(location: unit.removal.location, length: 0))
+        case .closing:
+            guard unit.range.location > 0 else { return true }
+            let victim = text.rangeOfComposedCharacterSequence(at: unit.range.location - 1)
+            performEdit(range: victim, replacement: "", selection: NSRange(location: victim.location, length: 0))
+        case .element:
+            if enterElement(at: unit.range.location) { textView.setSelectedRange(NSRange(location: position, length: 0)) }
+        }
+        return true
+    }
+    /// Forward delete at the edge of concealed source. Returns false when the default behaviour applies.
+    public func deleteForwardAcrossMarkers(at position: Int) -> Bool {
+        let text = source as NSString
+        guard let unit = concealUnits().first(where: { $0.range.location == position }) else { return false }
+        switch unit.kind {
+        case .opening:
+            performEdit(range: unit.removal, replacement: "", selection: NSRange(location: unit.removal.location, length: 0))
+        case .closing:
+            let end = NSMaxRange(unit.range)
+            guard end < text.length else { return true }
+            let victim = text.rangeOfComposedCharacterSequence(at: end)
+            performEdit(range: victim, replacement: "", selection: NSRange(location: position, length: 0))
+        case .element:
+            _ = enterElement(at: position)
+        }
+        return true
+    }
+
     public func enterElement(at location: Int) -> Bool {
         guard parsed.revision == revision, let element = parsed.elements.first(where: { $0.span.contains(location) }), !isEditing(element.span) else { return false }
         editingElement = element.span
@@ -337,6 +449,8 @@ import os
         performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]")
     }
 }
+
+public enum CaretDirection: Sendable { case left, right, none }
 
 /// TextKit 2 measures line height from `attachmentBounds(for:…)`, not from `bounds`.
 /// Drawing the image directly avoids per-paragraph attachment views that outlive re-created paragraphs.

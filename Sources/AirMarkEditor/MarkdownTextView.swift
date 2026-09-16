@@ -11,6 +11,29 @@ import AirMarkCore
         if event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option]).isEmpty, editor?.toggleCheckbox(at: offset) == true { return }
         super.mouseDown(with: event)
     }
+    private func move(_ direction: CaretDirection, _ action: () -> Void) {
+        editor?.caretDirection = direction
+        action()
+        editor?.caretDirection = .none
+    }
+    public override func moveLeft(_ sender: Any?) { move(.left) { super.moveLeft(sender) } }
+    public override func moveRight(_ sender: Any?) { move(.right) { super.moveRight(sender) } }
+    public override func moveBackward(_ sender: Any?) { move(.left) { super.moveBackward(sender) } }
+    public override func moveForward(_ sender: Any?) { move(.right) { super.moveForward(sender) } }
+    public override func moveLeftAndModifySelection(_ sender: Any?) { move(.left) { super.moveLeftAndModifySelection(sender) } }
+    public override func moveRightAndModifySelection(_ sender: Any?) { move(.right) { super.moveRightAndModifySelection(sender) } }
+    public override func moveWordLeft(_ sender: Any?) { move(.left) { super.moveWordLeft(sender) } }
+    public override func moveWordRight(_ sender: Any?) { move(.right) { super.moveWordRight(sender) } }
+    public override func deleteBackward(_ sender: Any?) {
+        let selected = selectedRange()
+        if !hasMarkedText(), selected.length == 0, editor?.deleteBackwardAcrossMarkers(at: selected.location) == true { return }
+        super.deleteBackward(sender)
+    }
+    public override func deleteForward(_ sender: Any?) {
+        let selected = selectedRange()
+        if !hasMarkedText(), selected.length == 0, editor?.deleteForwardAcrossMarkers(at: selected.location) == true { return }
+        super.deleteForward(sender)
+    }
     public override func insertNewline(_ sender: Any?) {
         guard !hasMarkedText(), selectedRange().length == 0 else { super.insertNewline(sender); return }
         let selected = selectedRange(), paragraph = (string as NSString).paragraphRange(for: selected)
