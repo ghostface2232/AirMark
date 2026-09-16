@@ -42,6 +42,12 @@ public actor MarkdownParsingWorker {
         try Task.checkCancellation()
         return MarkdownParser.parse(source, revision: revision)
     }
+    /// The parse and the presentation built from it, so neither is constructed on the main actor.
+    public func parsePresentation(_ source: String, revision: UInt64) throws -> (ParsedDocument, PresentationStore) {
+        let document = try parse(source, revision: revision)
+        try Task.checkCancellation()
+        return (document, PresentationStore(document))
+    }
 }
 
 public enum MarkdownParser {

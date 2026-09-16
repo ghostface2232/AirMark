@@ -21,6 +21,11 @@ public struct PresentationEdit: Sendable {
         let end = max(range.location + replacementLength, span.end + replacementLength - range.length)
         return end > start ? SourceSpan(start, end - start) : nil
     }
+    /// Where `enclosing` moves the start of a span beginning at `position`. Monotonic, so an
+    /// ordered list of starts stays ordered.
+    public func start(of position: Int) -> Int {
+        position > range.end ? position + replacementLength - range.length : min(position, range.location)
+    }
 }
 
 extension ParsedDocument {

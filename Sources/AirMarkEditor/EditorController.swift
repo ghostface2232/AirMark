@@ -23,10 +23,8 @@ import os
     private var artifacts: [SourceSpan: RenderArtifact] = [:]
     private var errors: [SourceSpan: String] = [:]
     private var editingElement: SourceSpan?
-    private var presentation = ParsedDocument(source: "") { didSet { rebuildStyleIndex() } }
-    /// `prefixEnd[i]` is the largest span end among `presentation.styles[0...i]`; it is monotonic, so
-    /// the first style that can intersect a range is found by binary search.
-    private var prefixEnd: [Int] = []
+    /// What paragraphs are drawn from. Follows each edit in place until the next parse replaces it.
+    private var presentation = PresentationStore()
     /// Paragraph ranges whose presentation changed while they were away from the viewport. TextKit 2
     /// regenerates every paragraph in an edited range at once, so a whole-document invalidation on a
     /// large file stalls for seconds; these are applied as the viewport reaches them.
@@ -167,33 +165,36 @@ import os
             firstPendingParse = nil
             let source = textView.string, revision = self.revision
             let state = signposter.beginInterval("Parse")
-            guard let result = try? await parsingWorker.parse(source, revision: revision) else { return }
+            guard let (result, store) = try? await parsingWorker.parsePresentation(source, revision: revision) else { return }
             signposter.endInterval("Parse", state)
             guard !Task.isCancelled else { return }
-            applyParsedDocument(result)
+            applyParsedDocument(result, store: store)
         }
     }
-    @discardableResult func applyParsedDocument(_ result: ParsedDocument) -> Bool {
+    /// `store` is the presentation built from `result` off the main thread; tests may omit it.
+    @discardableResult func applyParsedDocument(_ result: ParsedDocument, store: PresentationStore? = nil) -> Bool {
         guard result.revision == revision, !textView.hasMarkedText() else { return false }
-        let old = presentation
-        // A distant reference definition can change an image's content without moving its span.
-        // Source coordinates alone do not identify a reusable artifact.
-        let reusable = Set(old.elements).intersection(Set(result.elements))
-        let spans = Set(reusable.map(\.span))
-        artifacts = artifacts.filter { spans.contains($0.key) }
-        parsed = result; presentation = result
-        let changed = Array(Set(old.styles).symmetricDifference(Set(result.styles))).map(\.span)
-        invalidatePresentation(spans: changed + old.elements.map(\.span) + result.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
+        EditorPhases.shared.measure(.applyParse) { installParse(result, store: store ?? PresentationStore(result)) }
         scheduleRenders()
         onParseApplied?()
         return true
+    }
+    private func installParse(_ result: ParsedDocument, store next: PresentationStore) {
+        let old = presentation
+        // A distant reference definition can change an image's content without moving its span.
+        // Source coordinates alone do not identify a reusable artifact.
+        let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
+        artifacts = artifacts.filter { spans.contains($0.key) }
+        parsed = result; presentation = next
+        let changed = old.changedStyleSpans(comparedTo: next)
+        invalidatePresentation(spans: changed + old.elements.map(\.span) + next.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
     }
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }
         let previous = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
         let replacement = textStorage.mutableString.substring(with: editedRange)
         let edit = PresentationEdit(range: previous, replacement: replacement)
-        presentation = presentation.rebased(for: edit)
+        EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
         artifacts = Dictionary(uniqueKeysWithValues: artifacts.compactMap { span, artifact in
             edit.unchanged(span).map { ($0, artifact) }
@@ -269,36 +270,12 @@ import os
         scheduleRenders()
     }
     public var pendingInvalidationCount: Int { pendingInvalidation.count }
-    private func rebuildStyleIndex() {
-        var end = 0
-        prefixEnd = presentation.styles.map { end = max(end, $0.span.end); return end }
-    }
-    /// Styles intersecting `range`, in document order. O(log n + k) plus any containers that start
-    /// earlier and reach past the range.
+    /// Styles intersecting `range`, in document order.
     private func styles(intersecting range: NSRange) -> [StyleRun] {
-        let styles = presentation.styles
-        guard !styles.isEmpty, prefixEnd.count == styles.count else { return styles.filter { $0.span.intersects(SourceSpan(range)) } }
-        var low = 0, high = styles.count
-        while low < high { let middle = (low + high) / 2; if prefixEnd[middle] > range.location { high = middle } else { low = middle + 1 } }
-        var result: [StyleRun] = []
-        var index = low
-        let end = NSMaxRange(range)
-        while index < styles.count, styles[index].span.location < end {
-            if styles[index].span.end > range.location { result.append(styles[index]) }
-            index += 1
-        }
-        return result
+        presentation.styles(intersecting: SourceSpan(range))
     }
-    /// Elements never nest, so their ends are monotonic as well.
-    private func elements(intersecting range: NSRange) -> [RenderElement] {
-        let elements = presentation.elements
-        var low = 0, high = elements.count
-        while low < high { let middle = (low + high) / 2; if elements[middle].span.end > range.location { high = middle } else { low = middle + 1 } }
-        var result: [RenderElement] = []
-        var index = low
-        let end = NSMaxRange(range)
-        while index < elements.count, elements[index].span.location < end { result.append(elements[index]); index += 1 }
-        return result
+    private func elements(intersecting range: NSRange) -> ArraySlice<RenderElement> {
+        presentation.elements(intersecting: SourceSpan(range))
     }
 
     private func invalidatePresentation(spans: [SourceSpan]? = nil) {
@@ -355,6 +332,9 @@ import os
     }
 
     public func textContentStorage(_ textContentStorage: NSTextContentStorage, textParagraphWith range: NSRange) -> NSTextParagraph? {
+        EditorPhases.shared.measure(.paragraph) { paragraph(textContentStorage, range: range) }
+    }
+    private func paragraph(_ textContentStorage: NSTextContentStorage, range: NSRange) -> NSTextParagraph? {
         guard let storage = textContentStorage.textStorage, NSMaxRange(range) <= storage.length else { return nil }
         if textView.hasMarkedText(), NSIntersectionRange(range, textView.markedRange()).length > 0 {
             // The input method owns both characters and attributes until composition commits.

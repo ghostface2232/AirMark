@@ -62,7 +62,7 @@ public final class DocumentSnapshot: @unchecked Sendable {
             guard let self, let editor = self.editor else { return }
             let old = snapshot.get()
             editor.fileURL = fileURL
-            snapshot.set(DocumentBytes(source: editor.source, hasBOM: old.hasBOM))
+            EditorPhases.shared.measure(.snapshot) { snapshot.set(DocumentBytes(source: editor.source, hasBOM: old.hasBOM)) }
             updateChangeCount(.changeDone)
             scheduleRecovery()
         }
