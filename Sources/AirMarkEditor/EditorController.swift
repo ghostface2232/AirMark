@@ -194,7 +194,13 @@ import os
         if dark != themeWasDark { themeWasDark = dark; artifacts.removeAll(); errors.removeAll(); symbolCache.removeAll(); invalidatePresentation(); scheduleRenders() }
     }
     private var environment: RenderEnvironment {
-        RenderEnvironment(width: Double(max(100, scrollView.contentSize.width - 2 * textView.textContainerInset.width)), fontSize: Double(fontSize), scale: Double(view.window?.backingScaleFactor ?? 2), dark: view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+        RenderEnvironment(width: Double(max(100, scrollView.contentSize.width - 2 * textView.textContainerInset.width)), fontSize: Double(fontSize), scale: Double(view.window?.backingScaleFactor ?? 2), dark: view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua, background: backgroundCSS)
+    }
+    /// The text background resolved in the view's current appearance, as a CSS hex color.
+    private var backgroundCSS: String {
+        var color = NSColor.textBackgroundColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { color = NSColor.textBackgroundColor.usingColorSpace(.sRGB) ?? color }
+        return String(format: "#%02x%02x%02x", Int(round(color.redComponent * 255)), Int(round(color.greenComponent * 255)), Int(round(color.blueComponent * 255)))
     }
     private func scheduleRenders() {
         guard isViewLoaded, view.window != nil, view.window?.isMiniaturized != true, parsed.revision == revision else { return }

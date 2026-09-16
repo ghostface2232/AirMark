@@ -8,8 +8,9 @@ let sequence=0;
 // KaTeX glyphs are invisible until their @font-face files load. The first formula
 // used to be captured before that happened, so load every bundled face up front.
 const fontsLoaded=Promise.all([...document.fonts].map(face=>face.load().catch(()=>null))).then(()=>document.fonts.ready);
-window.renderAirMark=async function(source,kind,display,fontSize,dark,width){
+window.renderAirMark=async function(source,kind,display,fontSize,dark,width,background){
  await fontsLoaded;
+ document.documentElement.style.background=background;document.body.style.background=background;
  const el=document.getElementById('output'); el.replaceChildren(); el.style.padding=kind==='math'&&!display?'2px 1px':'4px';
  el.style.fontSize=fontSize+'px';el.style.color=dark?'#e4e4e7':'#252528';
  if(kind==='math'){

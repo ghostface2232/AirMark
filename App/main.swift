@@ -36,6 +36,10 @@ import os
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // `--appearance dark|light` pins the appearance; used by screenshot tests, harmless otherwise.
+        if let flag = CommandLine.arguments.firstIndex(of: "--appearance"), CommandLine.arguments.indices.contains(flag + 1) {
+            NSApp.appearance = NSAppearance(named: CommandLine.arguments[flag + 1] == "dark" ? .darkAqua : .aqua)
+        }
         Task { @MainActor in
             if CommandLine.arguments.contains("--blank") { newDocument(nil); return }
             if let flag = CommandLine.arguments.firstIndex(of: "--open"), CommandLine.arguments.indices.contains(flag + 1) {

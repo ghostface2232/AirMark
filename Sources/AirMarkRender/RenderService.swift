@@ -9,8 +9,11 @@ public struct RenderEnvironment: Hashable, Sendable {
     public var fontSize: Double
     public var scale: Double
     public var dark: Bool
-    public init(width: Double, fontSize: Double, scale: Double, dark: Bool) {
-        self.width = width; self.fontSize = fontSize; self.scale = scale; self.dark = dark
+    /// CSS color painted behind WebKit snapshots. They cannot be captured transparent with public
+    /// API, so the editor passes its own text background and the two match exactly.
+    public var background: String
+    public init(width: Double, fontSize: Double, scale: Double, dark: Bool, background: String = "#ffffff") {
+        self.width = width; self.fontSize = fontSize; self.scale = scale; self.dark = dark; self.background = background
     }
 }
 public struct RenderArtifact: @unchecked Sendable {
@@ -173,7 +176,7 @@ public enum RenderFailure: LocalizedError {
             // Measure in a viewport wider than any result. A frame left small by the previous
             // snapshot let display-mode KaTeX report a box thousands of points wide.
             web.setFrameSize(NSSize(width: max(1024, ceil(environment.width) + 64), height: 2048))
-            let result = try await javascript(web, body: "return await window.renderAirMark(source, kind, display, fontSize, dark, width);", arguments: ["source": element.content, "kind": element.kind.rawValue, "display": !element.inline, "fontSize": environment.fontSize, "dark": environment.dark, "width": environment.width])
+            let result = try await javascript(web, body: "return await window.renderAirMark(source, kind, display, fontSize, dark, width, background);", arguments: ["source": element.content, "kind": element.kind.rawValue, "display": !element.inline, "fontSize": environment.fontSize, "dark": environment.dark, "width": environment.width, "background": environment.background])
             guard let metrics = try JSONSerialization.jsonObject(with: result) as? [String: Any], let width = metrics["width"] as? Double, let height = metrics["height"] as? Double,
                   width.isFinite, height.isFinite, width > 0, height > 0,
                   width * height * environment.scale * environment.scale <= 12_000_000 else { throw RenderFailure.invalid("Rendered content exceeds the display limit.") }

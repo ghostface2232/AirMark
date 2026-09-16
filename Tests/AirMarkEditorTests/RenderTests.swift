@@ -78,6 +78,25 @@ func inkCoverage(_ image: CGImage) -> Double {
         await #expect(throws: (any Error).self) { try await RenderService.shared.render(remote, environment: .init(width: 600, fontSize: 16, scale: 2, dark: false), baseURL: document, host: host) }
     }
 
+    /// Snapshots are painted on the editor's background so they blend in dark appearance.
+    @Test func snapshotsUseTheRequestedBackground() async throws {
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host; window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let dark = RenderEnvironment(width: 600, fontSize: 16, scale: 2, dark: true, background: "#1e1e1e")
+        let artifact = try await RenderService.shared.render(RenderElement(span: SourceSpan(0, 1), kind: .math, content: "a+b", inline: true), environment: dark, baseURL: nil, host: host)
+        let image = artifact.image
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let context = CGContext(data: &pixels, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        // The corner pixel is background: dark, not white.
+        #expect(pixels[0] < 60 && pixels[1] < 60 && pixels[2] < 60, "corner pixel \(pixels[0]),\(pixels[1]),\(pixels[2])")
+        var bright = 0
+        for index in stride(from: 0, to: pixels.count, by: 4) where pixels[index] > 150 && pixels[index + 1] > 150 { bright += 1 }
+        #expect(bright > 20, "light glyph pixels expected on a dark background")
+    }
+
     @Test func nativeTableHasContentAndDimensions() async throws {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let element = RenderElement(span: SourceSpan(0, 10), kind: .table, content: "[[\"이름\",\"Value\"],[\"한글\",\"42\"]]")

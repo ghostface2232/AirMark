@@ -75,6 +75,28 @@ import XCTest
         XCTAssertEqual(try String(contentsOf: copy, encoding: .utf8), try String(contentsOf: fixture, encoding: .utf8))
     }
 
+    /// The showcase document in dark appearance. No input is synthesized.
+    func testShowcaseDarkAppearanceScreenshot() throws {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkDark-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        for name in ["Showcase.md", "swatch.png"] {
+            try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent(name), to: output.appendingPathComponent(name))
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", output.appendingPathComponent("Showcase.md").path, "--appearance", "dark"]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5))
+        sleep(5)
+        for (name, key) in [("dark-top", nil), ("dark-bottom", XCUIKeyboardKey.downArrow)] {
+            if let key { app.textViews["markdown-editor"].click(); app.typeKey(key, modifierFlags: .command); sleep(3) }
+            let attachment = XCTAttachment(screenshot: window.screenshot())
+            attachment.name = name; attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
     /// Launches the app on a fixture and attaches one window capture. No input is synthesized.
     func testInlineMathFixtureScreenshot() throws {
         let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkInline-" + UUID().uuidString)
