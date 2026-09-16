@@ -114,8 +114,11 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     /// The file was deleted underneath the document. Keep the text as an untitled, edited document
     /// so Save asks where to put it; nothing is written back to the old path on its own.
+    /// The coordinator deletes the file as soon as `completionHandler` runs, so the handler is called
+    /// only after the document has detached from the path on the main actor.
     public nonisolated override func accommodatePresentedItemDeletion(completionHandler: @escaping @Sendable ((any Error)?) -> Void) {
         Task { @MainActor [weak self] in
+            defer { completionHandler(nil) }
             guard let self else { return }
             let name = fileURL?.lastPathComponent ?? displayName ?? "Untitled"
             fileURL = nil
@@ -126,7 +129,6 @@ public final class DocumentSnapshot: @unchecked Sendable {
             windowControllers.first?.window?.subtitle = "The file was deleted. Save As to keep this text."
             scheduleRecovery()
         }
-        completionHandler(nil)
     }
     public nonisolated override func presentedItemDidChange() {
         Task { @MainActor [weak self] in

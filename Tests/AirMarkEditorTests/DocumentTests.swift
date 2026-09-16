@@ -152,8 +152,17 @@ import AirMarkCore
     @Test func deletedFileKeepsTextAsUntitledDocument() async throws {
         let (document, url, directory) = try makeDocument(Data("keep me\n".utf8))
         defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        // The coordinator deletes the file once the completion handler runs, so the document must
+        // already have let go of the path by then.
+        // The handler is read on the main actor, where both the test and the document run.
+        nonisolated(unsafe) let observed = document
+        let urlAtCompletion: URL?? = await withCheckedContinuation { continuation in
+            document.accommodatePresentedItemDeletion { _ in
+                continuation.resume(returning: MainActor.assumeIsolated { observed.fileURL })
+            }
+        }
+        #expect(urlAtCompletion == .some(nil), "fileURL at completion: \(String(describing: urlAtCompletion))")
         try FileManager.default.removeItem(at: url)
-        document.accommodatePresentedItemDeletion { _ in }
         try await settle()
         #expect(document.fileURL == nil)
         #expect(document.isDocumentEdited)
