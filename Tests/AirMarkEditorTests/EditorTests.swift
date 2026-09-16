@@ -295,8 +295,8 @@ import AirMarkCore
         #expect(editor.source == "xx- [ ] a\n- [] b\n")
     }
 
-    /// Return continues a list item with the same kind of marker; a task item continues as an
-    /// unchecked task whether its marker is a bullet or a number.
+    /// Return continues a list item with the same kind of marker. Brackets after a marker carry
+    /// over empty: a bulleted task stays a task, and an ordered item keeps its bracket text.
     @Test func newlineContinuesTaskItems() async throws {
         for (source, expected) in [("1. [ ] task", "1. [ ] task\n2. [ ] "),
                                    ("  3) [x] done", "  3) [x] done\n  4) [ ] "),
@@ -307,6 +307,21 @@ import AirMarkCore
             editor.textView.insertNewline(nil)
             #expect(editor.source == expected, "from \(source.debugDescription)")
         }
+    }
+
+    /// An ordered item shows its number and literal brackets; clicking or Cmd-Return changes nothing.
+    @Test func orderedItemBracketsAreText() async throws {
+        let source = "1. [ ] task\n"
+        let editor = try await make(source)
+        let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        let shown = try #require(editor.textContentStorage(storage, textParagraphWith: NSRange(location: 0, length: source.utf16.count))).attributedString
+        #expect(shown.string == source)
+        #expect(!isConcealed(shown, "1. "))
+        #expect(shown.attribute(.attachment, at: 3, effectiveRange: nil) == nil)
+        #expect(!editor.toggleCheckbox(at: 3))
+        editor.textView.setSelectedRange(NSRange(location: 8, length: 0))
+        editor.toggleTask()
+        #expect(editor.source == source)
     }
 
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {

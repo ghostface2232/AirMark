@@ -119,7 +119,9 @@ public enum MarkdownParser {
                 if let regex = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?"),
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
                     let marker = m.range(at: 1), box = m.range(at: 2)
-                    if box.location != NSNotFound {
+                    // Only bulleted items are tasks. An ordered item keeps its number visible and
+                    // its brackets as text, so a number and a checkbox are never active together.
+                    if box.location != NSNotFound, marker.length == 1 {
                         // A task item shows only its checkbox; the list marker before it is hidden.
                         markers.append(SourceSpan(s.location + marker.location, box.location - marker.location))
                         let span = SourceSpan(s.location + box.location, box.length)

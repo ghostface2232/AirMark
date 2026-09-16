@@ -69,3 +69,16 @@ import Testing
     try await store.save(staleSelection)
     #expect(await store.records() == [current])
 }
+
+/// Only bulleted items become tasks. A number and a checkbox are never active on the same item:
+/// the number stays visible and "[ ]" is ordinary text.
+@Test func orderedItemsNeverBecomeTasks() {
+    for source in ["1. [ ] task\n", "2) [x] done\n", "10. [X] later\n"] {
+        let result = MarkdownParser.parse(source)
+        #expect(result.checkboxes.isEmpty, "\(source.debugDescription)")
+        #expect(!result.styles.contains { if case .checkbox = $0.kind { return true } else { return false } })
+        #expect(result.styles.first { $0.kind == .list }?.markers.isEmpty == true, "the number must not be hidden")
+    }
+    let bullet = MarkdownParser.parse("- [ ] task\n")
+    #expect(bullet.checkboxes.count == 1)
+}

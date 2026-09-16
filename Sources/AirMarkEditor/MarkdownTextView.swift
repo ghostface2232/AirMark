@@ -47,7 +47,8 @@ import AirMarkCore
             let marker = ns.substring(with: match.range(at: 2))
             if let number = Int(marker.dropLast()) {
                 prefix = ns.substring(with: match.range(at: 1)) + String(number + 1) + String(marker.suffix(1)) + " "
-                // An ordered task continues as an unchecked task, as a bulleted one does below.
+                // Ordered items are never tasks, but their brackets are text the writer typed; carry
+                // them to the next item empty, as a bulleted task's box is carried below.
                 if match.range(at: 4).location != NSNotFound { prefix += "[ ] " }
             } else { prefix = prefix.replacingOccurrences(of: "[x]", with: "[ ]").replacingOccurrences(of: "[X]", with: "[ ]") }
             let newline = string.contains("\r\n") ? "\r\n" : "\n"
