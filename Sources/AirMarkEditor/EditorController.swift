@@ -576,11 +576,12 @@ import os
         guard let checkbox = presentation.checkboxes.first(where: { $0.intersects(paragraph) }) else { return }
         _ = toggle(checkbox, selection: nil)
     }
-    /// A list marker followed by `[]`, `[ ]` or `[x]` right before the caret, alone on its line.
-    private static let taskShortcut = try! NSRegularExpression(pattern: "^([ \\t]*)(?:[-+*]|[0-9]+[.)])[ \\t]+\\[([ xX]?)\\]$")
-    /// Called when a space is typed at `location`. If the line so far is a list marker and brackets,
-    /// the most recent input wins: the marker, numbered or not, becomes a bulleted task `- [ ] `
-    /// (or `- [x] `), keeping the indentation. One undoable edit; returns false to type the space.
+    /// `[]`, `[ ]` or `[x]` right before the caret at the start of its line, optionally after a list marker.
+    private static let taskShortcut = try! NSRegularExpression(pattern: "^([ \\t]*)(?:(?:[-+*]|[0-9]+[.)])[ \\t]+)?\\[([ xX]?)\\]$")
+    /// Called when a space is typed at `location`. If the line so far is brackets, alone or after a
+    /// list marker, the most recent input wins: the line becomes a bulleted task `- [ ] ` (or `- [x] `),
+    /// replacing any number or other bullet and keeping the indentation. GFM needs the list marker for
+    /// a task, so bare brackets get one. One undoable edit; returns false to type the space.
     public func convertToTask(before location: Int) -> Bool {
         let text = self.text
         guard location <= text.length else { return false }
