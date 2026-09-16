@@ -23,6 +23,8 @@ public struct PresentationStore: Sendable {
     /// Prefix maximum of the last position at which each style is affected by an edit.
     private var reach: [Int] = []
     public private(set) var elements: [RenderElement] = []
+    /// GFM task boxes `[ ]` / `[x]`, sorted and disjoint. A box an edit touches is dropped.
+    public private(set) var checkboxes: [SourceSpan] = []
 
     public init() {}
 
@@ -44,6 +46,7 @@ public struct PresentationStore: Sendable {
             reach.append(running)
         }
         elements = document.elements
+        checkboxes = document.checkboxes.sorted { $0.location < $1.location }
     }
 
     /// Number of styles still present, excluding those removed by edits.
@@ -76,18 +79,24 @@ public struct PresentationStore: Sendable {
             running = max(running, ownReach(index))
             reach[index] = running
         }
-        applyToElements(edit)
+        Self.apply(edit, to: &elements, span: \.span)
+        Self.apply(edit, to: &checkboxes, span: \.self)
     }
 
-    /// Elements are sorted and never overlap, so the ones an edit removes are contiguous.
-    private mutating func applyToElements(_ edit: PresentationEdit) {
-        let first = firstIndex(in: elements) { $0.span.end > edit.range.location }
-        var last = first
-        while last < elements.count, elements[last].span.location < edit.range.end { last += 1 }
-        elements.removeSubrange(first..<last)
+    /// Moves sorted, disjoint spans exactly as `PresentationEdit.unchanged` does. The spans an edit
+    /// removes are contiguous, and only those after them move.
+    private static func apply<Item>(_ edit: PresentationEdit, to items: inout [Item], span: WritableKeyPath<Item, SourceSpan>) {
+        var low = 0, high = items.count
+        while low < high {
+            let middle = (low + high) / 2
+            if items[middle][keyPath: span].end > edit.range.location { high = middle } else { low = middle + 1 }
+        }
+        var last = low
+        while last < items.count, items[last][keyPath: span].location < edit.range.end { last += 1 }
+        items.removeSubrange(low..<last)
         let delta = edit.replacementLength - edit.range.length
         guard delta != 0 else { return }
-        for index in first..<elements.count { elements[index].span.location += delta }
+        for index in low..<items.count { items[index][keyPath: span].location += delta }
     }
 
     /// The last source position at which an edit still changes style `index`. A live style is

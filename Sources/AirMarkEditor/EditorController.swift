@@ -566,17 +566,26 @@ import os
     }
     /// Toggles the task box presented at `location` (the symbol occupies the first source character).
     public func toggleCheckbox(at location: Int) -> Bool {
-        guard !showsMarkers, parsed.revision == revision,
-              let checkbox = parsed.checkboxes.first(where: { $0.location <= location && location <= $0.location + 1 }) else { return false }
-        let old = text.substring(with: checkbox.nsRange)
-        performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]", selection: textView.selectedRange())
-        return true
+        guard !showsMarkers, let checkbox = presentation.checkboxes.first(where: { $0.location <= location && location <= $0.location + 1 }) else { return false }
+        return toggle(checkbox, selection: textView.selectedRange())
     }
+    /// Toggles the task box on the caret's paragraph. Boxes come from the presentation, which follows
+    /// edits made since the last parse; a box an edit touched is not toggled until the parse lands.
     public func toggleTask() {
         let paragraph = SourceSpan(text.paragraphRange(for: NSRange(location: textView.selectedRange().location, length: 0)))
-        guard let checkbox = parsed.checkboxes.first(where: { $0.intersects(paragraph) }) else { return }
-        let old = text.substring(with: checkbox.nsRange)
-        performEdit(range: checkbox.nsRange, replacement: old == "[ ]" ? "[x]" : "[ ]")
+        guard let checkbox = presentation.checkboxes.first(where: { $0.intersects(paragraph) }) else { return }
+        _ = toggle(checkbox, selection: nil)
+    }
+    private func toggle(_ checkbox: SourceSpan, selection: NSRange?) -> Bool {
+        guard checkbox.end <= text.length else { return false }
+        let replacement: String
+        switch text.substring(with: checkbox.nsRange) {
+        case "[ ]": replacement = "[x]"
+        case "[x]", "[X]": replacement = "[ ]"
+        default: return false
+        }
+        performEdit(range: checkbox.nsRange, replacement: replacement, selection: selection)
+        return true
     }
 }
 

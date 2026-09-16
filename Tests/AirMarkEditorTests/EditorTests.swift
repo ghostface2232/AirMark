@@ -279,6 +279,22 @@ import AirMarkCore
         editor.textView.unmarkText()
     }
 
+    /// Cmd-Return right after typing, before the next parse lands, must toggle the box on the
+    /// caret's line at its current position, never at the previous parse's coordinates.
+    @Test func toggleTaskBeforeReparseUsesCurrentCoordinates() async throws {
+        let editor = try await make("- [ ] a\n- [ ] b\n")
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "xx")
+        #expect(editor.parsed.revision != editor.revision, "the parse must still be pending")
+        editor.textView.setSelectedRange(NSRange(location: 14, length: 0))
+        editor.toggleTask()
+        #expect(editor.source == "xx- [ ] a\n- [x] b\n")
+        // A box the edit itself touched has no trustworthy position until the parse; leave it alone.
+        editor.performEdit(range: NSRange(location: 13, length: 1), replacement: "")
+        editor.textView.setSelectedRange(NSRange(location: 15, length: 0))
+        editor.toggleTask()
+        #expect(editor.source == "xx- [ ] a\n- [] b\n")
+    }
+
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
         let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = "![picture][id]\n\n[id]: swatch.png\n"

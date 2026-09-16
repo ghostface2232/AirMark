@@ -39,6 +39,7 @@ struct PresentationStoreTests {
                 store.apply(edit)
                 #expect(store.styles == reference.styles, "round \(round) step \(step)")
                 #expect(store.elements == reference.elements, "round \(round) step \(step)")
+                #expect(store.checkboxes == reference.checkboxes.sorted { $0.location < $1.location }, "round \(round) step \(step)")
                 let probe = Self.randomSpan(&generator, length: text.length)
                 #expect(store.styles(intersecting: probe) == reference.styles.filter { $0.span.end > probe.location && $0.span.location < probe.end },
                         "round \(round) step \(step) probe \(probe)")
