@@ -576,6 +576,24 @@ import os
         guard let checkbox = presentation.checkboxes.first(where: { $0.intersects(paragraph) }) else { return }
         _ = toggle(checkbox, selection: nil)
     }
+    /// A list marker followed by `[]`, `[ ]` or `[x]` right before the caret, alone on its line.
+    private static let taskShortcut = try! NSRegularExpression(pattern: "^([ \\t]*)(?:[-+*]|[0-9]+[.)])[ \\t]+\\[([ xX]?)\\]$")
+    /// Called when a space is typed at `location`. If the line so far is a list marker and brackets,
+    /// the most recent input wins: the marker, numbered or not, becomes a bulleted task `- [ ] `
+    /// (or `- [x] `), keeping the indentation. One undoable edit; returns false to type the space.
+    public func convertToTask(before location: Int) -> Bool {
+        let text = self.text
+        guard location <= text.length else { return false }
+        let line = text.paragraphRange(for: NSRange(location: location, length: 0)).location
+        let before = NSRange(location: line, length: location - line)
+        guard before.length <= 64,
+              !styles(intersecting: NSRange(location: location, length: 0)).contains(where: { $0.kind == .codeBlock || $0.kind == .code }),
+              let match = Self.taskShortcut.firstMatch(in: text as String, range: before) else { return false }
+        let indent = text.substring(with: match.range(at: 1))
+        let mark = text.substring(with: match.range(at: 2))
+        performEdit(range: before, replacement: indent + "- [" + (mark.isEmpty ? " " : mark) + "] ")
+        return true
+    }
     private func toggle(_ checkbox: SourceSpan, selection: NSRange?) -> Bool {
         guard checkbox.end <= text.length else { return false }
         let replacement: String

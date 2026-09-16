@@ -34,6 +34,12 @@ import AirMarkCore
         if !hasMarkedText(), selected.length == 0, editor?.deleteForwardAcrossMarkers(at: selected.location) == true { return }
         super.deleteForward(sender)
     }
+    /// A typed space may finish a task shortcut; see `EditorController.convertToTask(before:)`.
+    public override func insertText(_ string: Any, replacementRange: NSRange) {
+        if string as? String == " ", !hasMarkedText(), replacementRange.location == NSNotFound, selectedRange().length == 0,
+           editor?.convertToTask(before: selectedRange().location) == true { return }
+        super.insertText(string, replacementRange: replacementRange)
+    }
     public override func insertNewline(_ sender: Any?) {
         guard !hasMarkedText(), selectedRange().length == 0 else { super.insertNewline(sender); return }
         let selected = selectedRange(), paragraph = (string as NSString).paragraphRange(for: selected)

@@ -324,6 +324,34 @@ import AirMarkCore
         #expect(editor.source == source)
     }
 
+    /// Typing brackets after a list marker and then a space makes the line a task; the latest input
+    /// wins, so a number or another bullet character is replaced by "- [ ] ".
+    @Test func bracketsThenSpaceAfterListMarkerMakeATask() async throws {
+        let none = NSRange(location: NSNotFound, length: 0)
+        for (typed, expected) in [("1. []", "- [ ] "), ("12) [ ]", "- [ ] "), ("* []", "- [ ] "), ("- []", "- [ ] "),
+                                  ("+ [x]", "- [x] "), ("  3. []", "  - [ ] "), ("para\n\n1. []", "para\n\n- [ ] ")] {
+            let editor = try await make(typed)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentViewController = editor
+            window.makeFirstResponder(editor.textView)
+            defer { window.orderOut(nil) }
+            editor.textView.setSelectedRange(NSRange(location: typed.utf16.count, length: 0))
+            editor.textView.insertText(" ", replacementRange: none)
+            #expect(editor.source == expected, "from \(typed.debugDescription)")
+            #expect(editor.textView.selectedRange() == NSRange(location: expected.utf16.count, length: 0))
+            editor.textView.undoManager?.undo()
+            #expect(editor.source == typed, "undo from \(typed.debugDescription)")
+        }
+        // Not a list marker, not at the brackets, or inside code: the space is only a space.
+        for (typed, caret) in [("a []", 4), ("1.[]", 4), ("1. [] x", 7), ("```\n- []\n```\n", 8)] {
+            let editor = try await make(typed)
+            editor.textView.setSelectedRange(NSRange(location: caret, length: 0))
+            editor.textView.insertText(" ", replacementRange: none)
+            let expected = (typed as NSString).replacingCharacters(in: NSRange(location: caret, length: 0), with: " ")
+            #expect(editor.source == expected, "from \(typed.debugDescription)")
+        }
+    }
+
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
         let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = "![picture][id]\n\n[id]: swatch.png\n"
