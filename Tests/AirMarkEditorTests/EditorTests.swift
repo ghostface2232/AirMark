@@ -158,6 +158,45 @@ import AirMarkCore
         view.undoManager?.undo()
         #expect(editor.source == "Heading\n\n**bol**more\n- [ ] task\n")
     }
+    /// A two-set Korean composition inside a bold run: syllables grow through marked text, commit,
+    /// and the next composition starts. Source, caret and concealment must survive every step.
+    @Test func koreanCompositionSequenceInsideBold() async throws {
+        let editor = try await make("**굵게**\n")
+        let view = editor.textView
+        let storage = try #require(view.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        func paragraph() throws -> NSAttributedString {
+            try #require(editor.textContentStorage(storage, textParagraphWith: NSRange(location: 0, length: editor.source.utf16.count))).attributedString
+        }
+        let none = NSRange(location: NSNotFound, length: 0)
+        view.setSelectedRange(NSRange(location: 4, length: 0))
+        for (step, syllable) in ["ㅎ", "하", "한"].enumerated() {
+            view.setMarkedText(syllable, selectedRange: NSRange(location: 1, length: 0), replacementRange: none)
+            #expect(view.hasMarkedText())
+            #expect(editor.source == "**굵게\(syllable)**\n", "step \(step)")
+            let shown = try paragraph()
+            #expect(shown.length == editor.source.utf16.count)
+            #expect((shown.string as NSString).substring(with: view.markedRange()) == syllable)
+        }
+        view.insertText("한", replacementRange: none)
+        #expect(!view.hasMarkedText())
+        #expect(editor.source == "**굵게한**\n")
+        #expect(view.selectedRange() == NSRange(location: 5, length: 0))
+        for syllable in ["ㄱ", "글"] { view.setMarkedText(syllable, selectedRange: NSRange(location: 1, length: 0), replacementRange: none) }
+        #expect(editor.source == "**굵게한ㄱ**\n".replacingOccurrences(of: "ㄱ", with: "글"))
+        view.insertText("글", replacementRange: none)
+        #expect(editor.source == "**굵게한글**\n")
+        #expect(view.selectedRange() == NSRange(location: 6, length: 0))
+        for _ in 0..<100 where editor.parsed.source != editor.source { try await Task.sleep(for: .milliseconds(20)) }
+        let final = try paragraph()
+        #expect(isConcealed(final, "**"))
+        let font = try #require(final.attribute(.font, at: 5, effectiveRange: nil) as? NSFont)
+        #expect(font.fontDescriptor.symbolicTraits.contains(.bold))
+        // Moving left from after 글 stays inside the run; moving right steps over the hidden closing marker.
+        view.moveRight(nil)
+        #expect(view.selectedRange().location == 8)
+        view.moveLeft(nil)
+        #expect(view.selectedRange().location == 6)
+    }
     @Test func markedTextIsNotConcealed() async throws {
         let editor = try await make("**hello**\n")
         editor.textView.setSelectedRange(NSRange(location: 2, length: 0))
