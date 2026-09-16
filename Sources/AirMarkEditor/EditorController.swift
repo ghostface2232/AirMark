@@ -170,7 +170,7 @@ import os
     }
     private func appearanceChanged() {
         let dark = view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        if dark != themeWasDark { themeWasDark = dark; artifacts.removeAll(); errors.removeAll(); invalidatePresentation(); scheduleRenders() }
+        if dark != themeWasDark { themeWasDark = dark; artifacts.removeAll(); errors.removeAll(); symbolCache.removeAll(); invalidatePresentation(); scheduleRenders() }
     }
     private var environment: RenderEnvironment {
         RenderEnvironment(width: Double(max(100, scrollView.contentSize.width - 2 * textView.textContainerInset.width)), fontSize: Double(fontSize), scale: Double(view.window?.backingScaleFactor ?? 2), dark: view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
@@ -272,8 +272,11 @@ import os
                 if !showsMarkers && local.length == 1 && marked?.intersects(run.span) != true { result.replaceCharacters(in: local, with: "\u{2022}") }
             case .checkbox(let checked):
                 if !showsMarkers && local.length == 3 && marked?.intersects(run.span) != true {
-                    result.replaceCharacters(in: NSRange(location: local.location, length: 1), with: checked ? "\u{2611}" : "\u{2610}")
-                    result.addAttribute(.foregroundColor, value: checked ? NSColor.controlAccentColor : NSColor.secondaryLabelColor, range: NSRange(location: local.location, length: 1))
+                    let attachment = ArtifactAttachment(image: taskSymbol(checked: checked), label: checked ? "Completed task" : "Task")
+                    let side = taskSymbolSide
+                    attachment.bounds = NSRect(x: 0, y: -(side - NSFont.systemFont(ofSize: fontSize).capHeight) / 2, width: side, height: side)
+                    result.replaceCharacters(in: NSRange(location: local.location, length: 1), with: "\u{FFFC}")
+                    result.addAttribute(.attachment, value: attachment, range: NSRange(location: local.location, length: 1))
                     conceal(SourceSpan(run.span.location + 1, 2), in: result, paragraphRange: range)
                 }
             case .link(let target): result.addAttributes([.foregroundColor: NSColor.controlAccentColor, .link: target], range: local)
@@ -306,6 +309,32 @@ import os
         }
         assert(result.length == range.length)
         return NSTextParagraph(attributedString: result)
+    }
+    private var symbolCache: [String: NSImage] = [:]
+    private var taskSymbolSide: CGFloat { ceil(fontSize * 1.05) }
+    /// Task boxes are SF Symbols so both states share one shape; the completed box uses the accent color.
+    private func taskSymbol(checked: Bool) -> NSImage {
+        let key = "\(checked)|\(fontSize)|\(themeWasDark)"
+        if let cached = symbolCache[key] { return cached }
+        let side = taskSymbolSide
+        let name = checked ? "checkmark.square.fill" : "square"
+        let color: NSColor = checked ? .controlAccentColor : .secondaryLabelColor
+        let configuration = NSImage.SymbolConfiguration(pointSize: fontSize, weight: .regular)
+        let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration)
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            guard let symbol else { return false }
+            let scale = min(rect.width / symbol.size.width, rect.height / symbol.size.height)
+            let drawn = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
+            let origin = NSPoint(x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2)
+            symbol.draw(in: NSRect(origin: origin, size: drawn), from: .zero, operation: .sourceOver, fraction: 1)
+            // Keep only the symbol's alpha and replace its color, so translucent tints stay light.
+            color.setFill()
+            rect.fill(using: .sourceIn)
+            return true
+        }
+        image.accessibilityDescription = checked ? "Completed task" : "Task"
+        symbolCache[key] = image
+        return image
     }
     private func conceal(_ span: SourceSpan, in result: NSMutableAttributedString, paragraphRange: NSRange) {
         let overlap = NSIntersectionRange(span.nsRange, paragraphRange)

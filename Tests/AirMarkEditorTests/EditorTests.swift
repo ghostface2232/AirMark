@@ -83,7 +83,12 @@ import AirMarkCore
             return try #require(editor.textContentStorage(storage, textParagraphWith: range)).attributedString
         }
         #expect(try paragraph(0).string == "\u{2022} item\n")
-        #expect(try paragraph(7).string.hasPrefix("- \u{2610}"))
+        func taskLabel() throws -> String? {
+            let shown = try paragraph(7)
+            #expect(shown.string.hasPrefix("- \u{FFFC}"))
+            return (shown.attribute(.attachment, at: 2, effectiveRange: nil) as? NSTextAttachment)?.image?.accessibilityDescription
+        }
+        #expect(try taskLabel() == "Task")
         #expect(isConcealed(try paragraph(7), "- "))
         #expect(isConcealed(try paragraph(7), " ] todo") == false)
         let fence = try paragraph(19)
@@ -95,7 +100,7 @@ import AirMarkCore
         #expect(editor.toggleCheckbox(at: 9))
         #expect(editor.source == "- item\n- [x] todo\n\n```swift\nlet x = 1\n```\n")
         for _ in 0..<100 where editor.parsed.source != editor.source { try await Task.sleep(for: .milliseconds(20)) }
-        #expect(try paragraph(7).string.hasPrefix("- \u{2611}"))
+        #expect(try taskLabel() == "Completed task")
         #expect(!editor.toggleCheckbox(at: 0))
     }
     @Test func caretStaysOutsideConcealedMarkers() async throws {
