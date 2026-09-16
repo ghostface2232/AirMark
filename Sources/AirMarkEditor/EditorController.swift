@@ -291,10 +291,15 @@ import os
         pendingInvalidation = Self.merge(pendingInvalidation + merged)
         applyPendingInvalidation()
     }
-    private static func merge(_ ranges: [NSRange]) -> [NSRange] {
+    /// Ranges closer than this are merged. Invalidated ranges are whole paragraphs, so the gap
+    /// between two of them is whole paragraphs too; regenerating those few extra paragraphs is cheap,
+    /// while keeping every styled paragraph separate left hundreds of thousands of ranges after the
+    /// first parse of a 10MB document, all moved on each keystroke.
+    static let invalidationMergeGap = 1024
+    static func merge(_ ranges: [NSRange]) -> [NSRange] {
         var merged: [NSRange] = []
         for range in ranges.sorted(by: { $0.location < $1.location }) {
-            if let last = merged.last, NSMaxRange(last) >= range.location { merged[merged.count - 1] = NSUnionRange(last, range) } else { merged.append(range) }
+            if let last = merged.last, NSMaxRange(last) + invalidationMergeGap >= range.location { merged[merged.count - 1] = NSUnionRange(last, range) } else { merged.append(range) }
         }
         return merged
     }

@@ -44,6 +44,8 @@ import AirMarkCore
         let parsed = clock.now
         // Presentation for the far paragraph is deferred until the viewport reaches it.
         #expect(editor.pendingInvalidationCount > 0)
+        // Every keystroke moves the pending ranges, so they must stay few rather than one per paragraph.
+        #expect(editor.pendingInvalidationCount < 100, "pending ranges: \(editor.pendingInvalidationCount)")
         #expect(materialized()?.pointSize == 16)
         // Layout heights are estimates until laid out, so scroll by range rather than by frame height.
         editor.textView.scrollRangeToVisible(lastParagraph)
