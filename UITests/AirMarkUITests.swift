@@ -136,6 +136,34 @@ import Carbon
         XCTAssertFalse(recovery.filter { $0.hasSuffix(".json") }.isEmpty, "quit should leave a recovery record")
     }
 
+    /// A document open at a Cmd-Q is recorded as `.quit`, not `.closed`. AppKit closes the documents
+    /// around the quit, and `MarkdownDocument.close()` writes a `.closed` record for a document the user
+    /// put away; `isTerminating` is what tells the two apart. It used to be cleared on the next turn of
+    /// the run loop, so whether the session survived a quit depended on which ran first. Nothing but a
+    /// real quit exercises that ordering, so this is a UI test. No input beyond Cmd-Q is synthesized.
+    func testQuitRecordsAnOpenDocumentAsQuitNotClosed() throws {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkQuit-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let copy = output.appendingPathComponent("InlineMath.md")
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("InlineMath.md"), to: copy)
+        let recovery = output.appendingPathComponent("Recovery")
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", copy.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+        app.typeKey("q", modifierFlags: .command)
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
+
+        let names = try FileManager.default.contentsOfDirectory(atPath: recovery.path).filter { $0.hasSuffix(".json") }
+        XCTAssertEqual(names.count, 1, "one document was open: \(names)")
+        let name = try XCTUnwrap(names.first)
+        let stored = try XCTUnwrap(JSONSerialization.jsonObject(with: try Data(contentsOf: recovery.appendingPathComponent(name))) as? [String: Any])
+        XCTAssertEqual(stored["state"] as? String, "quit", "the quit record was overwritten by a close record")
+        XCTAssertEqual(stored["filePath"] as? String, copy.path)
+        XCTAssertNotNil(stored["sessionID"] as? String, "the record does not name the run that wrote it")
+    }
+
     /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
     func testTypingUndoAndReplaceAll() {
         let app = XCUIApplication()

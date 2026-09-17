@@ -120,3 +120,68 @@ In one of five full-suite runs, `repeatedSavesPreserveBytesWithoutFalseConflicts
 close its undo group, and the run was on a machine at load average 3.3 with the other suites running in
 parallel. It passed in the three isolated `--filter DocumentTests` runs and in both full runs after,
 and nothing in this change touches the edit, undo or change-count path. Recorded rather than dropped.
+
+## 3. `isTerminating` for the whole quit
+
+### Problem
+
+`applicationShouldTerminate` set `MarkdownDocument.isTerminating = true` and then enqueued
+`Task { @MainActor in MarkdownDocument.isTerminating = false }` to clear it on the next turn of the run
+loop. The flag is what stops the closes AppKit performs around the quit from writing `.closed` over the
+`.quit` records the quit just wrote, so whether a session survived a quit depended on which of the two
+ran first — something the quit does not decide. Task 2 makes the close write synchronous, so losing
+that race would no longer be a maybe.
+
+### The flag is load-bearing — measured
+
+`testQuitRecordsAnOpenDocumentAsQuitNotClosed` launches the app on a fixture with `--open`, presses
+Cmd-Q, waits for the process to end, and reads the recovery JSON off disk. With
+`isTerminating` never set at all (`quit-without-the-flag.txt`):
+
+```
+XCTAssertEqual failed: ("Optional("closed")") is not equal to ("Optional("quit")")
+  - the quit record was overwritten by a close record
+```
+
+So AppKit does call `MarkdownDocument.close()` during the quit, after `applicationShouldTerminate` has
+written the `.quit` records and before the process exits, and the flag is the only thing standing
+between that and a launch that restores nothing.
+
+### Change
+
+The clearing `Task` is gone. The flag stays set for the rest of a quit that goes through, and the only
+path that clears it is the one that actually cancels the quit — the `catch` that returns
+`.terminateCancel` when a record cannot be written.
+
+What is left unhandled, and deliberately: a quit stopped after `applicationShouldTerminate` returns, by
+another app during a logout, leaves the flag set on a process that keeps running. A document closed
+after that keeps its `.quit` record and comes back at the next launch — a window to close again,
+against a session that never came back at all. No AppKit callback reports that cancellation, and every
+way of guessing at it (a timer, app activation) is another race on the same flag.
+
+### Result
+
+| | before | after |
+|---|---|---|
+| `testQuitRecordsAnOpenDocumentAsQuitNotClosed`, flag never set | fails, record is `closed` | — |
+| `testQuitRecordsAnOpenDocumentAsQuitNotClosed`, auto-clear `Task` present | passes 5/5 (`quit-with-autoclear.txt`) | — |
+| `testQuitRecordsAnOpenDocumentAsQuitNotClosed`, auto-clear removed | — | passes, Debug and Release |
+| `closeDuringTerminationKeepsTheQuitRecord` (new unit test) | — | pass |
+
+**The race was not reproduced.** With the auto-clear `Task` in place the quit test passed all five
+runs: on this path, on this machine and OS, AppKit's closes and the process exit happen without the
+main actor draining that Task. The change removes a dependence on that scheduling, it does not fix an
+observed failure, and it is recorded that way. What is measured is that the flag itself is required
+(the run above) and that the invariant holds at the document level: the new
+`closeDuringTerminationKeepsTheQuitRecord` closes a document with the flag set and finds the `.quit`
+record intact, then closes one with it clear and finds `.closed`, which is exactly the overwrite the
+quit must never reach.
+
+Full suite after (`term-after.txt`): 99 tests in 15 suites, 52 in 4 suites, all passing.
+Release UI tests, the four that synthesize no typing (`ui-release-after.txt`): all passing.
+
+### Not run
+
+The two UI tests that type — `testRepeatedAsynchronousSavesPreserveSource` and
+`testTypingUndoAndReplaceAll` — were not run. They need an idle machine and send keys through the
+active input source; nothing in these three changes touches typing, saving or undo.

@@ -281,6 +281,38 @@ import AirMarkCore
         #expect(plans == [.openFile(path: url.path, record: record)], "the last document still reopens when nothing was left open")
     }
 
+    /// The quit writes `.quit` for every open document and AppKit then closes them. `isTerminating` is
+    /// what stops those closes from writing `.closed` over it — measured: with the flag never set, a real
+    /// Cmd-Q leaves a `.closed` record (`UITests.testQuitRecordsAnOpenDocumentAsQuitNotClosed`). It must
+    /// therefore stay set for the whole quit, which is why nothing clears it on a later turn any more.
+    @Test func closeDuringTerminationKeepsTheQuitRecord() async throws {
+        let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try #require(MarkdownDocument.recoveryStore)
+        let identity = document.identity
+        _ = try #require(try await recoveryRecord(document) { $0.state == .open })
+        try store.saveImmediately(document.record(state: .quit))
+        #expect(await store.records().first { $0.id == identity }?.state == .quit)
+
+        MarkdownDocument.isTerminating = true
+        defer { MarkdownDocument.isTerminating = false }
+        document.close()
+        #expect(await store.records().first { $0.id == identity }?.state == .quit,
+                "the close after the quit overwrote the quit record")
+
+        // The same close with the flag clear is what the quit must never reach: it is the state the
+        // launch reads as "the user put this document away" and restores nothing from.
+        let (other, _, otherDirectory) = try makeDocument(Data("saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: otherDirectory) }
+        let otherStore = try #require(MarkdownDocument.recoveryStore)
+        let otherIdentity = other.identity
+        _ = try #require(try await recoveryRecord(other) { $0.state == .open })
+        try otherStore.saveImmediately(other.record(state: .quit))
+        MarkdownDocument.isTerminating = false
+        other.close()
+        #expect(await otherStore.records().first { $0.id == otherIdentity }?.state == .closed)
+    }
+
     /// The closed record is on disk before `close()` returns. It used to be written from a detached
     /// Task, so closing a document and quitting straight after left the record saying the document was
     /// open, and the next launch brought back a window the user had put away.

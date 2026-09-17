@@ -1,0 +1,10 @@
+=== run 1 ===
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (2.129 seconds).
+=== run 2 ===
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (1.936 seconds).
+=== run 3 ===
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (2.005 seconds).
+=== run 4 ===
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (2.049 seconds).
+=== run 5 ===
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (2.048 seconds).
