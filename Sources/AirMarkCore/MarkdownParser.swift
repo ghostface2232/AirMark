@@ -66,6 +66,12 @@ public actor MarkdownParsingWorker {
             return (document, PresentationStore(document))
         }
     }
+    /// A parse that skips the nesting limit, for tests that compare the estimate with real depth.
+    func parseIgnoringLimit(_ source: String) async throws -> ParsedDocument {
+        try await takeTurn()
+        defer { endTurn() }
+        return await onLargeStack { MarkdownParser.parse(source, revision: 0, enforcingLimit: false) }
+    }
     private func takeTurn() async throws {
         try Task.checkCancellation()
         guard busy else { busy = true; return }
@@ -114,53 +120,110 @@ public enum MarkdownParser {
     /// stay far below it; it exists so a short hostile line cannot exhaust the parser's stack, which
     /// on an 8MB main thread lasts to about 890 nested list items.
     public static let nestingLimit = 256
+    /// The same for inline nesting (emphasis inside emphasis, brackets inside brackets). swift-markdown
+    /// crashed a 16MB thread at about 2,050 nested emphasis levels.
+    public static let inlineNestingLimit = 1_000
 
     /// An upper bound on container nesting: for each line, the block quote and list markers at its start
     /// plus half its leading whitespace in columns. A line stays inside a block quote only with its `>`
     /// and inside a list item only when indented at least two columns per item, so both are counted;
-    /// separators after markers are counted too, which only overestimates. A lazy continuation line
-    /// cannot open containers, so the line that opened them bounds the depth. Linear; no parse.
+    /// separators after markers are counted too, which only overestimates. Tabs expand to the next stop
+    /// from the line's real column, markers included. A lazy continuation line cannot open containers,
+    /// so the line that opened them bounds the depth. Byte order marks at the start are skipped, as the
+    /// parser skips them. Linear; no parse.
     public static func nestingEstimate(_ source: String) -> Int {
-        var deepest = 0, depth = 0, columns = 0, atLineStart = true
-        var utf8 = source.utf8.makeIterator()
-        var pending: UInt8? = nil
-        func next() -> UInt8? { if let byte = pending { pending = nil; return byte }; return utf8.next() }
-        while let byte = next() {
-            if byte == 10 || byte == 13 {
-                deepest = max(deepest, depth + columns / 2)
-                depth = 0; columns = 0; atLineStart = true
-                continue
+        withBytes(source) { bytes in
+            var deepest = 0, depth = 0, whitespace = 0, column = 0, atLineStart = true
+            var index = leadingByteOrderMarks(bytes)
+            func endsMarker(_ position: Int) -> Bool {
+                position >= bytes.count || bytes[position] == 32 || bytes[position] == 9 || bytes[position] == 10 || bytes[position] == 13
             }
-            guard atLineStart else { continue }
-            switch byte {
-            case 32: columns += 1
-            case 9: columns += 4 - columns % 4
-            case 62: depth += 1                                   // ">"
-            case 45, 43, 42:                                      // "-", "+", "*" then a space or the line's end
-                let following = next()
-                if Self.endsMarker(following) { depth += 1; pending = following } else { atLineStart = false; pending = following }
-            case 48...57:                                         // digits, then "." or ")", then a space
-                var digit: UInt8? = byte
-                while let current = digit, (48...57).contains(current) { digit = next() }
-                if digit == 46 || digit == 41 {
-                    let following = next()
-                    if Self.endsMarker(following) { depth += 1; pending = following } else { atLineStart = false; pending = following }
-                } else { atLineStart = false; pending = digit }
-            default: atLineStart = false
+            while index < bytes.count {
+                let byte = bytes[index]
+                if byte == 10 || byte == 13 {
+                    deepest = max(deepest, depth + whitespace / 2)
+                    depth = 0; whitespace = 0; column = 0; atLineStart = true
+                    index += 1
+                    continue
+                }
+                guard atLineStart else { index += 1; continue }
+                switch byte {
+                case 32: column += 1; whitespace += 1
+                case 9: let width = 4 - column % 4; column += width; whitespace += width
+                case 62: depth += 1; column += 1                                      // ">"
+                case 45, 43, 42:                                                     // "-", "+", "*"
+                    if endsMarker(index + 1) { depth += 1; column += 1 } else { atLineStart = false }
+                case 48...57:                                                        // "1." or "1)"
+                    var end = index
+                    while end < bytes.count, (48...57).contains(bytes[end]) { end += 1 }
+                    if end < bytes.count, bytes[end] == 46 || bytes[end] == 41, endsMarker(end + 1) {
+                        depth += 1; column += end + 1 - index; index = end
+                    } else { atLineStart = false }
+                default: atLineStart = false
+                }
+                index += 1
             }
+            return max(deepest, depth + whitespace / 2)
         }
-        return max(deepest, depth + columns / 2)
     }
 
-    /// A list marker counts when a space, a tab, a line break or the end of the source follows it;
-    /// an empty item (`-` alone on a line) is still a list item.
-    private static func endsMarker(_ byte: UInt8?) -> Bool {
-        guard let byte else { return true }
-        return byte == 32 || byte == 9 || byte == 10 || byte == 13
+    /// An upper bound on inline nesting within a paragraph: the open emphasis delimiters plus the open
+    /// brackets, counted separately and added. Every run of `*`, `_` or `~` that could open emphasis (not
+    /// followed by whitespace) adds its length, and a run that can only close subtracts it; treating runs
+    /// that could both open and close as openers only overestimates. `[` and `]` add and subtract one. A
+    /// backslash makes the next character literal. Counts restart at blank lines, which end paragraphs.
+    /// Linear; no parse.
+    public static func inlineNestingEstimate(_ source: String) -> Int {
+        withBytes(source) { bytes in
+            var deepest = 0, emphasis = 0, brackets = 0, lineBlank = true, index = 0
+            func isSpace(_ byte: UInt8) -> Bool { byte == 32 || byte == 9 || byte == 10 || byte == 13 }
+            while index < bytes.count {
+                let byte = bytes[index]
+                switch byte {
+                case 10, 13:
+                    if lineBlank { emphasis = 0; brackets = 0 }
+                    lineBlank = true
+                    index += 1
+                case 92:                                                             // "\" escapes the next character
+                    lineBlank = false
+                    index += index + 1 < bytes.count && !isSpace(bytes[index + 1]) ? 2 : 1
+                case 42, 95, 126:                                                    // "*", "_", "~"
+                    var end = index
+                    while end < bytes.count, bytes[end] == byte { end += 1 }
+                    let length = end - index
+                    let spaceBefore = index == 0 || isSpace(bytes[index - 1])
+                    let spaceAfter = end >= bytes.count || isSpace(bytes[end])
+                    if !spaceAfter { emphasis += length } else if !spaceBefore { emphasis = max(0, emphasis - length) }
+                    lineBlank = false
+                    index = end
+                case 91: brackets += 1; lineBlank = false; index += 1                  // "["
+                case 93: brackets = max(0, brackets - 1); lineBlank = false; index += 1  // "]"
+                case 32, 9: index += 1
+                default: lineBlank = false; index += 1
+                }
+                deepest = max(deepest, emphasis + brackets)
+            }
+            return deepest
+        }
+    }
+
+    private static func withBytes<Result>(_ source: String, _ body: ([UInt8]) -> Result) -> Result {
+        body(Array(source.utf8))
+    }
+
+    private static func leadingByteOrderMarks(_ bytes: [UInt8]) -> Int {
+        var index = 0
+        while index + 2 < bytes.count, bytes[index] == 0xEF, bytes[index + 1] == 0xBB, bytes[index + 2] == 0xBF { index += 3 }
+        return index
     }
 
     public static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
-        guard nestingEstimate(source) <= nestingLimit else { return ParsedDocument(source: source, revision: revision) }
+        parse(source, revision: revision, enforcingLimit: true)
+    }
+    static func parse(_ source: String, revision: UInt64, enforcingLimit: Bool) -> ParsedDocument {
+        if enforcingLimit, nestingEstimate(source) > nestingLimit || inlineNestingEstimate(source) > inlineNestingLimit {
+            return ParsedDocument(source: source, revision: revision)
+        }
         let index = SourceIndex(source)
         var output = ParsedDocument(source: source, revision: revision)
         let document = Document(parsing: source)

@@ -80,3 +80,7 @@ Each has its reproduction test in the commit; they changed no measured path.
 - Before, an edit a few units before the end of a document that is one long block quote cost as much as the whole quote (exponent 0.97–1.07; 77.1 ms per 200 edits at 1MB), because the store walked every style after the first one reaching the edit, which is the quote itself. After: 0.084 ms, exponents 0.11–0.18.
 - Head and middle edits still move every later style (exponent near 1 by design) and are 26–38% faster (normal document at 1MB: head 100.9 → 74.6 ms, middle 50.8 → 36.7 ms per 200 edits).
 - The randomized store test fails under three deliberate mutations of the new path (marker search bound, suffix boundary, reach threshold).
+
+### Nesting limit, second pass
+
+Review of 86c3a9d crashed the worker three more ways: an 8KB run of `*` or 2,050 levels of nested emphasis (inline nesting was not estimated), a byte order mark before 3,000 `>` (the estimate skipped the first line), and tabs after `>` (a real depth of 336 estimated as 255). Inline nesting now has its own estimate and a limit of 1,000; leading byte order marks are skipped; tabs expand from the real column. Property tests compare each estimate with the depth the parser builds on 20,000 random inputs; the inline one failed twice during development (shared counters, escaped delimiters). At 1MB the block estimate costs 0.43 ms and the inline one 1.09 ms, against a 341 ms parse (load average 5.7); the showcase fixture estimates 2 and 4.

@@ -158,3 +158,46 @@ import Testing
     // Only a parse that had already started may keep its caller waiting.
     #expect(slow <= 1)
 }
+
+/// Inputs that nest inline structure or hide block nesting from the estimate. Each crashed the
+/// parse worker (SIGBUS) when found in review.
+@Test func inlineNestingAndHiddenBlockNestingDoNotCrash() async throws {
+    let worker = MarkdownParsingWorker()
+    let hostile = [
+        "x" + String(repeating: "*", count: 5_000) + "a" + String(repeating: "*", count: 5_000),
+        "x " + String(repeating: "*a ", count: 2_600) + "b" + String(repeating: " c*", count: 2_600),
+        String(repeating: "![", count: 25_000) + "a" + String(repeating: "](u)", count: 25_000),
+        "\u{FEFF}" + String(repeating: ">", count: 3_000) + " x",
+        "\u{FEFF}\u{FEFF}" + String(repeating: ">", count: 3_000) + " x",
+    ]
+    for source in hostile {
+        let result = try await worker.parse(source, revision: 1)
+        #expect(result.source == source)
+    }
+}
+
+/// Tabs after a block quote marker expand from the real column, which includes the marker.
+@Test func tabsAfterQuoteMarkersAreNotUndercounted() async throws {
+    let source = (0..<84).map { String(repeating: ">   \t", count: $0) + "> - - - x\n" }.joined()
+    // Parse without the limit, on the worker's large stack: the test thread's stack is too small.
+    let containers = try await MarkdownParsingWorker().parseIgnoringLimit(source).styles.filter { $0.kind == .quote || $0.kind == .list }.map(\.span)
+    let depth = containers.map { inner in containers.filter { $0.location <= inner.location && inner.end <= $0.end }.count }.max() ?? 0
+    #expect(MarkdownParser.nestingEstimate(source) >= depth, "estimate \(MarkdownParser.nestingEstimate(source)) depth \(depth)")
+}
+
+/// The inline limit is only safe if the estimate never falls below the inline nesting the parser builds.
+@Test func inlineNestingEstimateIsNotBelowParsedDepth() async throws {
+    let worker = MarkdownParsingWorker()
+    let pieces = ["*", "**", "***", "_", "__", "~~", "[", "]", "![", "](u)", "a", "b ", " ", ".", "\n", "\n\n", "\\", "`", "*a", "a*", "_a_"]
+    var state: UInt64 = 17
+    func next(_ bound: Int) -> Int { state = state &* 6364136223846793005 &+ 1442695040888963407; return Int((state >> 33) % UInt64(bound)) }
+    let inline: Set<String> = ["strong", "emphasis", "strike", "link"]
+    for round in 0..<20_000 {
+        let source = (0..<(1 + next(40))).map { _ in pieces[next(pieces.count)] }.joined()
+        let spans = try await worker.parseIgnoringLimit(source).styles.filter { inline.contains(String(describing: $0.kind).components(separatedBy: "(").first!) }.map(\.span)
+        let depth = spans.map { inner in spans.filter { $0.location <= inner.location && inner.end <= $0.end }.count }.max() ?? 0
+        let estimate = MarkdownParser.inlineNestingEstimate(source)
+        #expect(estimate >= depth, "round \(round): \(source.debugDescription) estimate \(estimate) depth \(depth)")
+        if estimate < depth { return }
+    }
+}
