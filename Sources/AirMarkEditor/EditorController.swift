@@ -237,13 +237,17 @@ import os
     private func installParse(_ result: ParsedDocument, store next: PresentationStore) {
         let old = presentation
         // A distant reference definition can change an image's content without moving its span.
-        // Source coordinates alone do not identify a reusable artifact.
-        let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
-        artifacts.retain(spans)
-        _ = errors.removeAll(where: { !spans.contains($0) })
+        // Source coordinates alone do not identify a reusable artifact, so elements are compared by
+        // value; the ones equal at the same span keep their artifact and their recorded failure,
+        // and present exactly as they did, so only the rest are drawn again. Invalidating every
+        // element instead made applying a parse cost as much as the document is long, whether or
+        // not anything changed.
+        let difference = old.elementDiff(comparedTo: next)
+        artifacts.retain(difference.unchanged)
+        _ = errors.retainAll(in: difference.unchanged)
         parsed = result; presentation = next
         let changed = old.changedStyleSpans(comparedTo: next)
-        invalidatePresentation(spans: changed + old.elements.map(\.span) + next.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
+        invalidatePresentation(spans: changed + difference.changed + [SourceSpan(textView.selectedRange())])
     }
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }

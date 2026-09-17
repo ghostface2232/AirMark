@@ -177,15 +177,16 @@ import AirMarkCore
                     let budget = random(3) == 0 ? random(budget + 1) : nil
                     store.releasePixels(protecting: protected, budget: budget); reference.releasePixels(protecting: protected, budget: budget)
                 case 8:
-                    // A new parse keeps some unchanged elements.
-                    let kept = Set(elements.filter { _ in random(4) != 0 })
-                    store.retain(kept); reference.retain(kept)
+                    // A new parse keeps some unchanged elements. The store merges the sorted list;
+                    // the reference still hashes it.
+                    let kept = elements.filter { _ in random(4) != 0 }
+                    store.retain(kept); reference.retain(Set(kept))
                     reparse()
                     elements = Array(Set(elements).union(kept)).sorted { $0.location < $1.location }
                     var disjoint: [SourceSpan] = []
                     for span in elements where disjoint.last.map({ $0.end <= span.location }) ?? true { disjoint.append(span) }
                     elements = disjoint
-                    let dropped = kept.subtracting(elements)
+                    let dropped = Set(kept).subtracting(elements)
                     for span in dropped { store.remove(span); reference.remove(span) }
                 default:
                     if let span = elements.randomElementDeterministic(random) { store.remove(span); reference.remove(span) }

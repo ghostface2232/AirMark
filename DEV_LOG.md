@@ -98,6 +98,16 @@ be produced on the development host. Nothing below is a measured result.
   changes may stay unparsed for `max(4 × lastParseCost, 150 ms)` before one parse starts anyway.
   At 100KB both are today's values. No parser change; block or incremental parsing stays the long
   answer.
+- **Applying a parse.** `installParse` hashed the spans of every unchanged element into a set and
+  invalidated every render element of both parses, so applying a parse cost as much as the document
+  is long whether or not anything changed (about 49 ms on 50,000 formulas, recorded in
+  `Validation/2026-09-17-artifacts-mermaid-tables/` and left alone then).
+  `PresentationStore.elementDiff(comparedTo:)` replaces `unchangedElements`: one merge walk returns
+  the spans that differ and the spans equal in both. Only the first are invalidated; artifacts and
+  render failures are retained by the second through `SpanList.retainAll(in:)`, a merge of two sorted
+  lists rather than a set. The randomized `PresentationStoreTests` now checks the diff against the
+  set operations it replaces, and `ArtifactStoreDifferentialTests` keeps the hashing store as the
+  reference for the merge.
 - **Render failures per keystroke.** `errors` was a dictionary rebuilt in full on every keystroke,
   the shape the artifact store had before it moved to sorted span lists. It is now a
   `SpanList<RenderIssue>`, so an edit shifts the entries after it as integers and a parse drops the

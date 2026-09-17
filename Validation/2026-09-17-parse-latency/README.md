@@ -79,6 +79,34 @@ Expected from the code, to be confirmed or refuted by the run:
 If the 1MB or 10MB settle time does not fall, the pacing is not the cause and the next step is
 block/incremental parsing, not a larger debounce. Record whichever the run shows.
 
+## 2. Applying a parse (`previous_applyParse`)
+
+`installParse` was document-sized whatever the parse changed. It built a `Set` of the spans of every
+unchanged element (hashing all of them), then invalidated
+`old.elements.map(\.span) + next.elements.map(\.span)` — every render element of both parses, each
+of which becomes an `NSString.paragraphRange` call and a merge entry. `2026-09-17-artifacts-…`
+recorded `applyParse` at about 49 ms on a 50,000-formula document with and without a render history,
+and left it deliberately.
+
+`PresentationStore.elementDiff(comparedTo:)` replaces `unchangedElements`: one merge walk over both
+stores in start order returns the spans present in exactly one of them (or differing at the same
+span) and the spans equal in both. The editor invalidates only `changed`, retains artifacts and
+render failures by `unchanged`, and `ArtifactStore.retain` now merges the two sorted lists instead
+of hashing a set (`SpanList.retainAll(in:)`). An element equal at the same span keeps its artifact
+and its recorded failure and presents exactly as it did, so there is nothing to draw again.
+
+Correctness is the existing randomized differential test: `PresentationStoreTests` now checks
+`elementDiff` against `Set(…).intersection` and `Set(…).symmetricDifference` after 400 rounds of 40
+random edits each, plus that both lists are in source order and `unchanged` is disjoint, which the
+merges depend on. `ArtifactStoreDifferentialTests` keeps the hashing store as the reference and
+passes the sorted list to `ArtifactStore`, so the merge is checked against the set on random
+operations.
+
+Expected from the code: `applyParse` on the 50,000-formula document falls from about 49 ms to the
+size of what actually changed — for a keystroke that changes one paragraph, a handful of spans.
+`ScaleTests/artifactHistoryKeystrokeAndScrollCosts` and `ScaleTests/renderFailureKeystrokeCosts`
+both print `previous_applyParse`; take it before and after.
+
 ## 3. Render failures per keystroke (`FAILURES_…`)
 
 `errors` was a `[SourceSpan: RenderIssue]` dictionary rebuilt in full on every keystroke

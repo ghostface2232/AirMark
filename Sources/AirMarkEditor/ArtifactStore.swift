@@ -130,9 +130,11 @@ struct ArtifactMetrics: Equatable {
         _ = resident.apply(edit)
     }
 
-    /// Keeps only entries whose spans are in `spans`.
-    func retain(_ spans: Set<SourceSpan>) {
-        for (span, record) in measured.removeAll(where: { !spans.contains($0) }) { forget(record.id, at: span) }
+    /// Keeps only entries whose spans are in `spans`, which must be sorted and disjoint as the
+    /// elements of a parse are. One merge pass over both lists: the set this took before hashed
+    /// every element of the document on every parse.
+    func retain(_ spans: [SourceSpan]) {
+        for (span, record) in measured.retainAll(in: spans) { forget(record.id, at: span) }
     }
 
     func remove(_ span: SourceSpan) {
@@ -209,7 +211,18 @@ struct SpanList<Payload> {
 
     mutating func removeAll() { spans.removeAll(); payloads.removeAll() }
 
+    /// Removes the entries whose spans are not in `keep`, which is sorted and disjoint like this
+    /// list's own spans, and returns them. One merge pass; nothing is hashed and no set is built.
+    mutating func retainAll(in keep: [SourceSpan]) -> [(SourceSpan, Payload)] {
+        var next = 0
+        return removeAll(where: { span in
+            while next < keep.count, keep[next].location < span.location { next += 1 }
+            return !(next < keep.count && keep[next] == span)
+        })
+    }
+
     /// Removes the entries whose spans satisfy `predicate`, keeping order, and returns them.
+    /// `predicate` sees the spans in source order, once each.
     mutating func removeAll(where predicate: (SourceSpan) -> Bool) -> [(SourceSpan, Payload)] {
         var removed: [(SourceSpan, Payload)] = []
         var kept = 0

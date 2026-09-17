@@ -56,7 +56,13 @@ struct PresentationStoreTests {
             let next = PresentationStore(latest)
             let expectedSpans = Set(Set(reference.styles).symmetricDifference(Set(latest.styles)).map(\.span))
             #expect(Set(store.changedStyleSpans(comparedTo: next)) == expectedSpans, "round \(round)")
-            #expect(Set(store.unchangedElements(comparedTo: next)) == Set(reference.elements).intersection(Set(latest.elements)), "round \(round)")
+            let difference = store.elementDiff(comparedTo: next)
+            #expect(Set(difference.unchanged) == Set(Set(reference.elements).intersection(Set(latest.elements)).map(\.span)), "round \(round)")
+            #expect(Set(difference.changed) == Set(Set(reference.elements).symmetricDifference(Set(latest.elements)).map(\.span)), "round \(round)")
+            // The editor merges both lists against other sorted span lists, and retains artifacts
+            // and render failures by walking `unchanged`, which must also be disjoint.
+            #expect(zip(difference.changed, difference.changed.dropFirst()).allSatisfy { $0.location <= $1.location }, "round \(round)")
+            #expect(zip(difference.unchanged, difference.unchanged.dropFirst()).allSatisfy { $0.end <= $1.location }, "round \(round)")
         }
     }
 
