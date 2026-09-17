@@ -1,0 +1,41 @@
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite ScaleTests started.
+◇ Test renderFailureKeystrokeCosts() started.
+FAILURES_SCALE failures=none elements=50000 bytes=6500000 errors=0
+FAILURES_SCALE failures=none position=head samples=30 p50=2.787ms p95=3.227ms max=5.195ms previous_applyParse=0.00ms errors=0
+FAILURES_SCALE failures=none_PHASES position=head rebase p50=2.20 p95=2.32 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+FAILURES_SCALE failures=none position=middle samples=30 p50=1.339ms p95=1.557ms max=1.861ms previous_applyParse=50.48ms errors=0
+FAILURES_SCALE failures=none_PHASES position=middle rebase p50=1.07 p95=1.13 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+FAILURES_SCALE failures=none position=tail samples=30 p50=0.122ms p95=0.157ms max=0.503ms previous_applyParse=49.63ms errors=0
+FAILURES_SCALE failures=none_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+FAILURES_SCALE failures=all elements=50000 bytes=6500000 errors=50000
+FAILURES_SCALE failures=all position=head samples=30 p50=7.725ms p95=8.034ms max=10.173ms previous_applyParse=0.00ms errors=50000
+FAILURES_SCALE failures=all_PHASES position=head rebase p50=2.18 p95=2.35 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+FAILURES_SCALE failures=all position=middle samples=30 p50=6.436ms p95=6.695ms max=7.048ms previous_applyParse=51.33ms errors=50000
+FAILURES_SCALE failures=all_PHASES position=middle rebase p50=1.09 p95=1.16 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+FAILURES_SCALE failures=all position=tail samples=30 p50=5.128ms p95=5.441ms max=5.507ms previous_applyParse=52.20ms errors=50000
+FAILURES_SCALE failures=all_PHASES position=tail rebase p50=0.00 p95=0.01 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test renderFailureKeystrokeCosts() passed after 13.277 seconds.
+◇ Test artifactHistoryKeystrokeAndScrollCosts() started.
+HISTORY_SCALE history=none elements=50000 bytes=6500000 measured=0 resident=0 pixels=0
+HISTORY_SCALE history=none position=head samples=30 p50=2.78ms p95=3.00ms max=4.50ms layout p50=0.10ms p95=0.13ms previous_applyParse=0.00ms measured=0
+HISTORY_SCALE history=none_PHASES position=head rebase p50=2.21 p95=2.38 | paragraph p50=0.04 p95=0.05 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none position=middle samples=30 p50=1.40ms p95=1.58ms max=1.80ms layout p50=0.20ms p95=0.28ms previous_applyParse=49.98ms measured=0
+HISTORY_SCALE history=none_PHASES position=middle rebase p50=1.09 p95=1.21 | paragraph p50=0.07 p95=0.10 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none position=tail samples=30 p50=0.13ms p95=0.19ms max=0.52ms layout p50=0.15ms p95=0.17ms previous_applyParse=49.57ms measured=0
+HISTORY_SCALE history=none_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.07 p95=0.07 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none scroll steps=20 p50=16.15ms p95=23.49ms max=24.25ms (scrollRangeToVisible p50=11.72ms, paragraphs p50=5.56ms) release calls=1168 p50=0.0001ms p95=0.0003ms max=0.0067ms measured=554 resident=554 errors=0
+HISTORY_SCALE history=all seed=24.8ms
+HISTORY_SCALE history=all elements=50000 bytes=6500000 measured=50000 resident=6553 pixels=67102720
+HISTORY_SCALE history=all position=head samples=30 p50=2.59ms p95=2.85ms max=7.91ms layout p50=0.09ms p95=0.13ms previous_applyParse=0.00ms measured=50000
+HISTORY_SCALE history=all_PHASES position=head rebase p50=2.21 p95=2.36 | paragraph p50=0.04 p95=0.06 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.02 p95=0.02
+HISTORY_SCALE history=all position=middle samples=30 p50=1.48ms p95=1.73ms max=2.00ms layout p50=0.23ms p95=0.30ms previous_applyParse=49.16ms measured=50000
+HISTORY_SCALE history=all_PHASES position=middle rebase p50=1.16 p95=1.24 | paragraph p50=0.09 p95=0.11 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.01 p95=0.01
+HISTORY_SCALE history=all position=tail samples=30 p50=0.15ms p95=0.23ms max=0.53ms layout p50=0.19ms p95=0.24ms previous_applyParse=50.46ms measured=50000
+HISTORY_SCALE history=all_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.08 p95=0.10 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=all scroll steps=20 p50=19.35ms p95=23.11ms max=27.47ms (scrollRangeToVisible p50=13.48ms, paragraphs p50=5.97ms) release calls=708 p50=0.0003ms p95=0.0035ms max=0.0114ms measured=50000 resident=6472 errors=0
+✔ Test artifactHistoryKeystrokeAndScrollCosts() passed after 19.266 seconds.
+✔ Suite ScaleTests passed after 32.543 seconds.
+✔ Test run with 2 tests in 1 suite passed after 32.543 seconds.

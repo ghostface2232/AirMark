@@ -1,137 +1,111 @@
 # Parse latency, parse application and render failures
 
-**No measurement in this directory was executed.** The work in these three commits was written in a
-Linux container with no Swift toolchain and no macOS: `swift`, `xcodebuild` and the Xcode SDKs are
-absent, `AirMarkEditor` and `AirMarkRender` need AppKit and WebKit, and the network policy of this
-environment refuses `download.swift.org`, so no toolchain could be installed either. Nothing here
-was built, no test was run, and no before/after number is recorded. The benchmarks and tests below
-are the ones to run on the development host; until they are run, the reasoning in each section is a
-code argument, not an observation.
+The three original commits (`aeaf008`, `8a5da84`, `1a06e31`) were written without a toolchain and
+not run. Everything below was measured afterwards on the development host.
 
-Everything under the other `Validation/` directories was measured on Mac17,3, 24 GiB, macOS 27.0,
-Release. Keep that host and the measurement rules of `PLAN-2026-09-17.md` §5 when producing the
-numbers for this directory: three independent runs for any tail claim, nearest-rank percentiles,
-and the same fixtures and repetition counts before and after.
+Host: Mac17,3 (Apple M5), 24 GiB RAM, macOS 27.0, Xcode 27.0 (27A266a), Swift 6.4. Release builds
+(`swift test -c release --disable-sandbox`). OS cache state uncontrolled. A background
+`mediaanalysisd` used about half a core; load averages (1.6–2.7) are in `progress.log`. Branches were
+built in separate worktrees and run alternately (A B B A …), one test process per run. These are
+observations on this machine, not PLAN.md budget certifications.
 
-## Reproduction
+## Harness
+
+`Tests/AirMarkEditorTests/ParsePacingBench.swift`, enabled by `PACING_BYTES`:
 
 ```sh
-# 1. Settle time after typing stops (100KB, 1MB)
-swift test -c release --disable-sandbox --filter 'ScaleTests/typingSettleTimes'
-# ... and at 10MB
-AIRMARK_SCALE_10MB=1 swift test -c release --disable-sandbox --filter 'ScaleTests/tenMegabyteTypingSettleTime'
-
-# 2. Keystrokes with 50,000 failed elements, and the parse application that follows them
-AIRMARK_SCALE_HISTORY=1 swift test -c release --disable-sandbox --filter 'ScaleTests/renderFailureKeystrokeCosts'
-
-# 3. Parse application with a full render history
-AIRMARK_SCALE_HISTORY=1 swift test -c release --disable-sandbox --filter 'ScaleTests/artifactHistoryKeystrokeAndScrollCosts'
-
-# Correctness of the two new differential paths
-swift test -c release --disable-sandbox --filter 'PresentationStoreTests'
-swift test -c release --disable-sandbox --filter 'ArtifactStoreDifferentialTests'
-
-# Whole suite
-swift test -c release --disable-sandbox
+PACING_BYTES=1000000 PACING_LABEL=pr-1000000-r1 PACING_OUT=pr-1000000-r1.json \
+  swift test -c release --disable-sandbox --filter ParsePacingBench
+python3 Validation/2026-09-17-parse-latency/summarize.py <directory with the JSON files>
 ```
 
-Take the `before` runs at `cb8c3df` (the commit these three sit on) and the `after` runs at each
-commit. `ScaleTests/typingSettleTimes` prints `SETTLE_…`, the failure benchmark prints
-`FAILURES_…`, and both print the `EditorPhases` split per keystroke.
+The W1 block (`ScaleTests.source`) at 100KB, 1MB and 10MB, in a `MarkdownDocument` whose window is on
+screen. Every key is `performEdit` of one character in the middle paragraph, so the document
+snapshot, rebasing, viewport restyle and parse application all run as in the app; it is not HID
+input and not IME. A key's **latency** is the time from the key until a parse whose source includes
+it is installed (`onParseApplied`), polled on the main actor at 1 ms. It is not key-to-pixel time.
 
-## 1. Settle time after typing stops (`SETTLE_…`)
+- `idle`: one key after the editor has held a current parse for 1 s (1.5 s at 10MB); 20 samples (10).
+- `slow`: 35 s of keys with a deterministic 200–400 ms gap (117 keys, same sequence every run).
+- `bursts`: 15 keys 80 ms apart, 12 bursts (6 at 10MB); settle is last key → current parse.
+- `sustained`: 35 s of keys 80 ms apart (438 keys).
+- `parses`/`stale`: parses that finished during the scenario, and those whose text had changed by then.
 
-`MarkdownParsingWorker` still cannot stop a running parse; only a waiter that has not started
-leaves the queue. So a parse begun while typing continues runs to the end and the parse of the
-final text waits behind it, and the user's "typing stopped → formatting caught up" delay can be two
-parses. At the parser costs already recorded here (`2026-09-16-review`: 33.6 ms at 100KB, 342.8 ms
-at 1MB, 3,534.8 ms at 10MB) that is up to about 7 s at 10MB.
+The benchmark reads `parseCompletedCount`/`staleParseCount`. `main` has no such counters, so the
+`main` worktree added exactly the two lines `aeaf008` adds to `scheduleParse`; nothing else differed.
 
-`ScaleTests/typingSettleTimes` measures it directly: 15 keystrokes 80 ms apart in the middle of the
-document, then the wait until `editor.parsed.revision == editor.revision`, repeated three times.
-It also reports how many parses each burst started (`parses=`) and how many of those were already
-stale when they finished (`stale=`). Polling is every 2 ms, so the resolution is 2 ms, and this is
-the time until the editor holds a current parse — not key-to-display latency, which needs W6's
-Instruments path.
+## 1. Parse pacing in `aeaf008`: measured, then reverted
 
-The change is the first step only, not a new parser: the wait before a parse and the limit on
-unparsed time now follow the measured cost of a parse of this document.
+`pr-original/`: `main` (`cb8c3df`) against `1a06e31`, three runs each. p50 / p95 / max in ms, pooled
+over the three runs.
 
-- `parseDelay = clamp(lastParseCost, 45 ms, 250 ms)`: at 100KB it stays at today's 45 ms, and at
-  1MB and above it is 250 ms, longer than a fast typist's gap between keys, so a burst starts no
-  parse that the next key will make stale.
-- `parseStalenessLimit = max(4 × lastParseCost, 150 ms)`: unchanged at 100KB. It replaces the fixed
-  150 ms, which on a large document forced a refresh parse that was certain to be stale and that
-  the next parse then had to wait behind. Continuous typing still refreshes, but a refresh may
-  occupy at most a fifth of the burst instead of running back to back.
+| scenario | size | main | aeaf008 pacing |
+|---|---|---|---|
+| idle key → current parse | 100KB | 111 / 114 / 116 | 119 / 124 / 125 |
+| | 1MB | 386 / 391 / 393 | **584 / 591 / 608** |
+| | 10MB | 3,182 / 3,210 / 3,220 | 3,324 / 3,377 / 3,384 |
+| slow typing, per key | 1MB | 2,341 / 11,089 / 13,617 (11–14 parses installed) | **18,426 / 34,305 / 35,777 (1 installed)** |
+| | 10MB | 22,320 / 38,043 / 39,688 | 22,474 / 38,354 / 40,543 |
+| burst settle | 100KB | 87 / 88 / 88 | 82 / 84 / 84 |
+| | 1MB | 505 / 511 / 538 | 583 / 599 / 625 |
+| | 10MB | 5,115 / 5,196 / 5,196 | **3,329 / 3,373 / 3,373** |
+| parses (stale) per burst | 100KB | 15 (13.1) | 15 (13.4) |
+| | 1MB | 5 (4) | 1 (0) |
+| | 10MB | 2 (1) | 1 (0) |
+| sustained 80 ms, max latency | 100KB | 3,756 / 5,758 / 3,839 per run | 5,198 / 3,599 / 4,959 per run |
+| | 1MB | 35,5xx every run; 111 parses, 110 stale, 1 installed | 35,2xx–35,5xx; 25–26 parses, 24–25 stale, 1 installed |
+| | 10MB | 39,5xx–39,8xx; 13 parses, 12 stale | 38,2xx; 3 parses, 2 stale |
 
-`lastParseCost` is what the parse itself took, reported by `MarkdownParsingWorker`; it excludes
-time spent waiting for an earlier parse, so a queue does not inflate the pacing.
+Standalone parse + `PresentationStore` of the fixture: 27 ms (100KB), 277 ms (1MB), 2,834 ms (10MB).
 
-Expected from the code, to be confirmed or refuted by the run:
+What this shows:
 
-| | before | after |
+- `parseDelay = clamp(lastParseCost, 45, 250 ms)` saved one parse of waiting on a 10MB burst
+  (−1.8 s), but made a single keystroke about 200 ms slower at 1MB (+142 ms at 10MB), made a 1MB
+  burst settle 78 ms later, and on 1MB slow typing — 200–400 ms gaps, shorter than 250 ms plus a
+  280 ms parse — no parse was installed for the whole 35 s.
+- `parseStalenessLimit = max(4 × lastParseCost, 150 ms)` cut wasted parses (111 → 25 at 1MB,
+  13 → 3 at 10MB), but every refresh parse it started was stale when it finished, so it bought no
+  freshness.
+- On both branches, when a parse outlasts the gap between keys, continuous typing installs no parse
+  until typing stops: 35 s at 1MB and 10MB, and up to 5.8 s at 100KB where the in-app parse and
+  application (~67 ms after the 45 ms wait) exceed 80 ms. The editor drops any parse whose revision
+  is not current, and no delay can change that.
+
+Step 1 restores the fixed 45 ms / 150 ms and keeps the worker's cost report. `step1-fixed-pacing/`
+(one run per size, labels `main` and `pr` = step 1) confirms it behaves as `main`: idle 381 vs 388 ms
+at 1MB and 3,128 vs 3,225 ms at 10MB, with identical parse and stale counts in every scenario.
+
+## 2. Applying a parse (`1a06e31`)
+
+`installParse` hashed the spans of every unchanged element into a set and invalidated every render
+element of both parses. `PresentationStore.elementDiff(comparedTo:)` replaces it with one merge walk
+that returns the spans that differ and the spans equal in both; only the first are invalidated, and
+artifacts and failures are retained by merging sorted lists.
+
+`AIRMARK_SCALE_HISTORY=1 swift test -c release --disable-sandbox --filter 'ScaleTests/renderFailureKeystrokeCosts|ScaleTests/artifactHistoryKeystrokeAndScrollCosts'`,
+50,000 formulas (6.5MB), three alternating runs (`step1-fixed-pacing/history-*.log`). The `before`
+side is `main` with `renderFailureKeystrokeCosts` and `seedRenderFailures` ported to its dictionary.
+
+`previous_applyParse`, middle/tail, per run: `main` 47–54 ms, after 23–25 ms (one run 37.9 ms), with
+and without a render history or failures. Applying a parse is halved, not reduced to what changed:
+`changedStyleSpans` and `elementDiff` still walk every style and element.
+
+## 3. Render failures per keystroke (`8a5da84`)
+
+Same runs. Keystroke p50 per run, 50,000 failed elements:
+
+| position | main | after |
 |---|---|---|
-| 100KB | unchanged | unchanged (delay 45 ms, limit 150 ms) |
-| 1MB | several parses per burst, most stale | at most one refresh parse per burst; settle ≈ 250 ms + one parse |
-| 10MB | settle up to two parses (≈ 7 s) | settle ≈ 250 ms + one parse |
+| head | 7.98 / 7.81 / 7.73 ms | 2.79 / 2.88 / 2.78 ms |
+| middle | 6.53 / 6.47 / 6.44 ms | 1.34 / 1.36 / 1.37 ms |
+| tail | 5.23 / 5.13 / 5.13 ms | 0.124 / 0.121 / 0.121 ms |
 
-If the 1MB or 10MB settle time does not fall, the pacing is not the cause and the next step is
-block/incremental parsing, not a larger debounce. Record whichever the run shows.
+With no failures both are 2.8–3.1 / 1.3–1.4 / 0.12–0.13 ms, so a failure history no longer costs a
+keystroke anything measurable; what remains at the head and middle is the style rebase.
 
-## 2. Applying a parse (`previous_applyParse`)
+## Tests
 
-`installParse` was document-sized whatever the parse changed. It built a `Set` of the spans of every
-unchanged element (hashing all of them), then invalidated
-`old.elements.map(\.span) + next.elements.map(\.span)` — every render element of both parses, each
-of which becomes an `NSString.paragraphRange` call and a merge entry. `2026-09-17-artifacts-…`
-recorded `applyParse` at about 49 ms on a 50,000-formula document with and without a render history,
-and left it deliberately.
-
-`PresentationStore.elementDiff(comparedTo:)` replaces `unchangedElements`: one merge walk over both
-stores in start order returns the spans present in exactly one of them (or differing at the same
-span) and the spans equal in both. The editor invalidates only `changed`, retains artifacts and
-render failures by `unchanged`, and `ArtifactStore.retain` now merges the two sorted lists instead
-of hashing a set (`SpanList.retainAll(in:)`). An element equal at the same span keeps its artifact
-and its recorded failure and presents exactly as it did, so there is nothing to draw again.
-
-Correctness is the existing randomized differential test: `PresentationStoreTests` now checks
-`elementDiff` against `Set(…).intersection` and `Set(…).symmetricDifference` after 400 rounds of 40
-random edits each, plus that both lists are in source order and `unchanged` is disjoint, which the
-merges depend on. `ArtifactStoreDifferentialTests` keeps the hashing store as the reference and
-passes the sorted list to `ArtifactStore`, so the merge is checked against the set on random
-operations.
-
-Expected from the code: `applyParse` on the 50,000-formula document falls from about 49 ms to the
-size of what actually changed — for a keystroke that changes one paragraph, a handful of spans.
-`ScaleTests/artifactHistoryKeystrokeAndScrollCosts` and `ScaleTests/renderFailureKeystrokeCosts`
-both print `previous_applyParse`; take it before and after.
-
-## 3. Render failures per keystroke (`FAILURES_…`)
-
-`errors` was a `[SourceSpan: RenderIssue]` dictionary rebuilt in full on every keystroke
-(`Dictionary(uniqueKeysWithValues: errors.compactMap …)`), the same shape the old dictionary-backed
-`ArtifactStore` had before `2026-09-17-artifacts-mermaid-tables`. A normal document has almost no
-failures, so nothing shows; a document scrolled through with thousands of broken images, invalid
-formulas or rejected diagrams keeps one entry each, and the keystroke cost becomes proportional to
-the failures visited so far — the same "allocation per keystroke proportional to browsing history"
-the artifact store had.
-
-`ScaleTests/renderFailureKeystrokeCosts` is the benchmark: 50,000 formulas, every one of them
-recorded as permanently failed through the new `EditorController.seedRenderFailures()` hook, then
-30 keystrokes at the head, the middle and the tail, against the same document with no failures.
-It prints the per-keystroke `EditorPhases` split; failures now move inside the `artifacts` phase,
-which already covers the artifact spans moved by the same edit.
-
-`errors` is now a `SpanList<RenderIssue>`, the sorted span list the artifact store uses: an edit
-shifts the entries after it as integers with no allocation, a lookup is a binary search, and a
-parse drops the records of changed elements in one pass. The semantics are unchanged — a record is
-kept exactly when `PresentationEdit.unchanged` keeps its span, which is what `SpanList.apply` does.
-
-`EditorTests/renderFailuresFollowEdits` covers the behaviour without a renderer: an edit before
-every failure moves the records, an edit inside a failed element drops its record.
-`RenderLifecycleTests/failedElementIsNotRetriedByUnrelatedEdits` still covers the same through a
-real WebKit failure.
-
-Expected from the code: keystroke cost with 50,000 failures becomes indistinguishable from the
-no-failure document, as it did for artifacts (3.89 ms → 0.13 ms p50 there). Record the actual pair.
+Step 1: `swift test -c release --disable-sandbox` passed, 86 editor/integration and 38 core tests
+(environment-gated scale benchmarks skipped). `PresentationStoreTests`, `ArtifactStoreDifferentialTests`,
+`EditorTests` and `RenderLifecycleTests` also passed on `1a06e31` before the revert.

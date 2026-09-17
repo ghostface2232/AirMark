@@ -115,3 +115,12 @@ be produced on the development host. Nothing below is a measured result.
   keeps its span, as before. `ScaleTests/renderFailureKeystrokeCosts` (50,000 formulas, all failed,
   against the same document with none) is the benchmark, and `EditorTests/renderFailuresFollowEdits`
   covers the move-and-drop rule without a renderer.
+
+## 2026-09-17 — Parse pacing measured on the development host
+
+Host and raw output: `Validation/2026-09-17-parse-latency/` (Release, Mac17,3, macOS 27.0; not the PLAN.md reference machine).
+
+- **The pacing above, measured.** `ParsePacingBench` types into an on-screen document at 100KB, 1MB and 10MB: single keys after idle, 35 s at 200–400 ms gaps, 15-key bursts at 80 ms, and 35 s at 80 ms, three alternating runs against `main`. `clamp(lastParseCost, 45 ms, 250 ms)` made a single keystroke's parse land about 200 ms later at 1MB (386 → 584 ms p50) and 142 ms later at 10MB, made 1MB bursts settle later (505 → 583 ms), and left 1MB slow typing with no parse installed for 35 s (main installed 11–14). It helped only 10MB bursts (5.1 → 3.3 s). `max(4 × lastParseCost, 150 ms)` cut wasted parses (111 → 25 at 1MB) but every refresh it started was stale on arrival. Both are reverted to the fixed 45 ms and 150 ms; the worker's cost report and the parse counters stay. With them reverted, 1MB and 10MB runs match `main` in every scenario.
+- **Stale presentation during typing is not a pacing problem.** On `main` and with either pacing, a parse that outlasts the gap between keys is dropped, so continuous 80 ms typing installed no parse until typing stopped: 35 s at 1MB and 10MB, and up to 5.8 s at 100KB, where the in-app parse and its application take about 67 ms after the wait.
+- **Parse application and render failures, measured.** On 50,000 formulas, `previous_applyParse` fell from 47–54 ms to 23–25 ms, not to the size of the change, because the style and element diffs still walk the document. With 50,000 recorded failures, keystrokes fell from 8.0/6.5/5.1 ms to 2.8/1.3/0.12 ms at head/middle/tail, the same as the document without failures.
+- Tests: `swift test -c release --disable-sandbox` passed (86 editor/integration, 38 core).

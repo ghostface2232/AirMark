@@ -126,10 +126,7 @@ import AirMarkRender
     /// types at 80ms, near a fast typist's cadence.
     @Test func typingSettleTimes() async throws {
         _ = try await measureTypingSettle(bytes: 100_000, label: "SETTLE_100KB")
-        let large = try await measureTypingSettle(bytes: 1_000_000, label: "SETTLE_1MB")
-        // A parse of this document takes longer than the gap between keys, so the burst starts at
-        // most one refresh parse, and the parse after the last key waits behind nothing or it.
-        #expect((large.parses.max() ?? 0) <= 2, "parses per burst: \(large.parses)")
+        _ = try await measureTypingSettle(bytes: 1_000_000, label: "SETTLE_1MB")
     }
 
     /// The same measurement at 10MB, where a parse takes seconds. Slow to set up, so it runs only

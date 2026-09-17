@@ -61,17 +61,15 @@ import os
     var caretDirection = CaretDirection.none
     private var firstPendingParse: ContinuousClock.Instant?
     /// What the last completed parse of this document cost, excluding any wait for the parse before
-    /// it. A running parse cannot be stopped, so one started while typing continues runs to the end
-    /// and the parse of the final text waits behind it: a wasted parse costs the reader a parse.
-    private var lastParseCost: Duration = .zero
-    /// How long a keystroke waits before parsing. Enough to outlast a typing cadence where a wasted
-    /// parse is expensive, and capped so that after a pause the wait stays a small part of what the
-    /// parse itself takes.
-    var parseDelay: Duration { min(max(lastParseCost, .milliseconds(45)), .milliseconds(250)) }
+    /// it. Recorded for measurement; pacing does not follow it. Measured on 1MB and 10MB documents,
+    /// a wait of `clamp(lastParseCost, 45ms, 250ms)` delayed a single keystroke's parse by about 200ms
+    /// and left slow typing (200–400ms between keys) with no parse applied for the whole burst, while
+    /// continuous typing stayed unrefreshed either way (Validation/2026-09-17-parse-latency).
+    private(set) var lastParseCost: Duration = .zero
+    /// How long a keystroke waits before parsing.
+    let parseDelay: Duration = .milliseconds(45)
     /// How long changes may stay unparsed while typing continues before one parse starts anyway.
-    /// Such a parse is stale before it ends, so it is allowed only every four parses' worth of
-    /// time: it then occupies under a fifth of a long burst instead of running back to back.
-    var parseStalenessLimit: Duration { max(lastParseCost * 4, .milliseconds(150)) }
+    let parseStalenessLimit: Duration = .milliseconds(150)
     /// Parses that finished, and those whose source was already stale when they did; test hooks.
     public private(set) var parseCompletedCount = 0
     public private(set) var staleParseCount = 0
@@ -204,7 +202,7 @@ import os
     /// Waits `parseDelay` after the last change and then parses the current source. A keystroke
     /// within the wait replaces the pending parse, and one waiting its turn at the worker leaves
     /// the queue, so at most one parse runs and at most one waits. Changes that stay unparsed for
-    /// `parseStalenessLimit` start a parse without waiting, so continuous typing still refreshes.
+    /// `parseStalenessLimit` start a parse without waiting.
     private func scheduleParse(immediate: Bool = false) {
         parseTask?.cancel()
         let clock = ContinuousClock()
