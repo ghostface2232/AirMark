@@ -36,7 +36,10 @@ import os
         var retryAt: ContinuousClock.Instant?
     }
     /// Keyed like `artifacts` and moved with edits, so typing elsewhere does not resubmit failures.
-    private var errors: [SourceSpan: RenderIssue] = [:]
+    /// A sorted span list rather than a dictionary: a document scrolled through with thousands of
+    /// broken images or invalid formulas kept one entry each, and rebuilding that dictionary on
+    /// every keystroke made a keystroke cost as much as the failures visited so far.
+    private var errors = SpanList<RenderIssue>()
     private var editingElement: SourceSpan?
     /// What paragraphs are drawn from. Follows each edit in place until the next parse replaces it.
     private var presentation = PresentationStore()
@@ -158,7 +161,7 @@ import os
     public func fileLocationChanged(to url: URL?) {
         fileURL = url
         let images = Set(parsed.elements.filter { $0.kind == .image }.map(\.span))
-        for span in images { artifacts.remove(span); errors[span] = nil; renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
+        for span in images { artifacts.remove(span); setIssue(nil, at: span); renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
         invalidatePresentation(spans: Array(images))
         scheduleRenders()
     }
@@ -237,7 +240,7 @@ import os
         // Source coordinates alone do not identify a reusable artifact.
         let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
         artifacts.retain(spans)
-        errors = errors.filter { spans.contains($0.key) }
+        _ = errors.removeAll(where: { !spans.contains($0) })
         parsed = result; presentation = next
         let changed = old.changedStyleSpans(comparedTo: next)
         invalidatePresentation(spans: changed + old.elements.map(\.span) + next.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
@@ -249,11 +252,21 @@ import os
         let edit = PresentationEdit(range: previous, replacement: replacement)
         EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
-        EditorPhases.shared.measure(.artifacts) { artifacts.apply(edit) }
-        errors = Dictionary(uniqueKeysWithValues: errors.compactMap { span, issue in
-            edit.unchanged(span).map { ($0, issue) }
-        })
+        EditorPhases.shared.measure(.artifacts) { artifacts.apply(edit); _ = errors.apply(edit) }
         editingElement = editingElement.flatMap(edit.enclosing)
+    }
+    /// The recorded failure of the element at `span`, if there is one.
+    private func issue(at span: SourceSpan) -> RenderIssue? {
+        errors.index(of: span).map { errors.payloads[$0] }
+    }
+    /// Records or clears the failure of the element at `span`. Elements never overlap, so the entry
+    /// is found, replaced or inserted by a binary search.
+    private func setIssue(_ issue: RenderIssue?, at span: SourceSpan) {
+        if let index = errors.index(of: span) {
+            if let issue { errors.payloads[index] = issue } else { _ = errors.remove(at: index) }
+        } else if let issue {
+            _ = errors.insert(issue, at: span)
+        }
     }
     private func isEditing(_ span: SourceSpan) -> Bool {
         showsMarkers || editingElement.map { $0.intersects(span) } == true
@@ -290,7 +303,7 @@ import os
         }
         let now = ContinuousClock.now
         for element in candidates where !isEditing(element.span) && artifacts.needsPixels(at: element.span, environment: environment) && renderTasks[element.span] == nil
-                && errors[element.span].map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
+                && issue(at: element.span).map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
             guard renderTasks.count < 12 else { break }
             let token = UUID(); renderTokens[element.span] = token
             renderRequestCount += 1
@@ -305,7 +318,7 @@ import os
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
                     guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
                     artifacts.store(artifact, at: element.span, environment: environment)
-                    errors[element.span] = nil
+                    setIssue(nil, at: element.span)
                     releaseDistantPixels()
                     if let onFirstRender { self.onFirstRender = nil; onFirstRender() }
                 } catch {
@@ -313,14 +326,14 @@ import os
                     // Not a failure of the element: the window is hidden or the request was dropped.
                     // Rendering resumes when the window returns or the viewport asks again.
                     if error is CancellationError || error as? RenderFailure == .suspended { return }
-                    if (error as? RenderFailure)?.isTransient == true, errors[element.span] == nil {
-                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1))
+                    if (error as? RenderFailure)?.isTransient == true, issue(at: element.span) == nil {
+                        setIssue(RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1)), at: element.span)
                         Task { [weak self] in
                             try? await Task.sleep(for: .seconds(1))
                             self?.scheduleRenders()
                         }
                     } else {
-                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: nil)
+                        setIssue(RenderIssue(message: error.localizedDescription, retryAt: nil), at: element.span)
                         // A render is requested only when the element has no pixels here, so metrics left
                         // from a released render would draw an empty space of the old size for good. Show
                         // the source and the failure, as for an element that never rendered. A first
@@ -398,6 +411,13 @@ import os
     }
     /// Requests renders for elements near the viewport that lack pixels; for tests.
     func requestRenders() { scheduleRenders() }
+    /// Records a permanent failure for every parsed element, as scrolling through a document whose
+    /// images are all missing or whose formulas are all invalid leaves behind; for tests of a long
+    /// failure history. Elements are in source order, so each entry appends.
+    func seedRenderFailures(message: String = "Invalid formula") {
+        errors.removeAll()
+        for element in parsed.elements { setIssue(RenderIssue(message: message, retryAt: nil), at: element.span) }
+    }
     /// Records `artifact` for every parsed element, as if each had been rendered once while scrolling
     /// through the document, then releases pixels beyond the budget; for tests of a long render history.
     func seedArtifactHistory(_ artifact: RenderArtifact) {
@@ -560,7 +580,7 @@ import os
                     let collapsed = NSMutableParagraphStyle(); collapsed.minimumLineHeight = 0.01; collapsed.maximumLineHeight = 0.01
                     result.addAttribute(.paragraphStyle, value: collapsed, range: entire)
                 }
-            } else if let message = errors[element.span]?.message {
+            } else if let message = issue(at: element.span)?.message {
                 result.addAttributes([.foregroundColor: NSColor.secondaryLabelColor, .toolTip: message], range: entire)
             }
         }

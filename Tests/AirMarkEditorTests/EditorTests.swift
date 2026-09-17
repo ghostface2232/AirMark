@@ -444,4 +444,24 @@ import AirMarkCore
         #expect(editor.parsed.elements.first?.span == span)
         #expect(editor.renderedElementCount == 0, "old pixels must not survive a changed reference target")
     }
+    /// Recorded render failures follow edits: one before a failed element keeps its record, so
+    /// typing elsewhere does not resubmit it, and one inside the element drops the record so the
+    /// changed source is tried again. The records live in a span list; this is its behaviour at the
+    /// editor's level, without a renderer.
+    @Test func renderFailuresFollowEdits() async throws {
+        let source = "text\n\n$a$ and $b$ and $c$\n"
+        let editor = try await make(source)
+        try #require(editor.parsed.elements.count == 3)
+        let spans = editor.parsed.elements.map(\.span)
+        editor.seedRenderFailures()
+        #expect(editor.renderErrorCount == 3)
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "more ")
+        #expect(editor.renderErrorCount == 3, "an edit before every failure must move the records, not drop them")
+        // The records moved with the elements, so the middle one is found at its new span.
+        editor.performEdit(range: NSRange(location: spans[1].location + 5 + 1, length: 0), replacement: "x")
+        #expect(editor.renderErrorCount == 2, "an edit inside a failed element must drop its record")
+        editor.performEdit(range: NSRange(location: spans[2].location + 5 + 1, length: 1), replacement: "")
+        #expect(editor.renderErrorCount == 1)
+        #expect(editor.source.hasPrefix("more text"))
+    }
 }

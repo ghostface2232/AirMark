@@ -98,3 +98,10 @@ be produced on the development host. Nothing below is a measured result.
   changes may stay unparsed for `max(4 × lastParseCost, 150 ms)` before one parse starts anyway.
   At 100KB both are today's values. No parser change; block or incremental parsing stays the long
   answer.
+- **Render failures per keystroke.** `errors` was a dictionary rebuilt in full on every keystroke,
+  the shape the artifact store had before it moved to sorted span lists. It is now a
+  `SpanList<RenderIssue>`, so an edit shifts the entries after it as integers and a parse drops the
+  records of changed elements in one pass; a record is kept exactly when `PresentationEdit.unchanged`
+  keeps its span, as before. `ScaleTests/renderFailureKeystrokeCosts` (50,000 formulas, all failed,
+  against the same document with none) is the benchmark, and `EditorTests/renderFailuresFollowEdits`
+  covers the move-and-drop rule without a renderer.

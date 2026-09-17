@@ -78,3 +78,32 @@ Expected from the code, to be confirmed or refuted by the run:
 
 If the 1MB or 10MB settle time does not fall, the pacing is not the cause and the next step is
 block/incremental parsing, not a larger debounce. Record whichever the run shows.
+
+## 3. Render failures per keystroke (`FAILURES_…`)
+
+`errors` was a `[SourceSpan: RenderIssue]` dictionary rebuilt in full on every keystroke
+(`Dictionary(uniqueKeysWithValues: errors.compactMap …)`), the same shape the old dictionary-backed
+`ArtifactStore` had before `2026-09-17-artifacts-mermaid-tables`. A normal document has almost no
+failures, so nothing shows; a document scrolled through with thousands of broken images, invalid
+formulas or rejected diagrams keeps one entry each, and the keystroke cost becomes proportional to
+the failures visited so far — the same "allocation per keystroke proportional to browsing history"
+the artifact store had.
+
+`ScaleTests/renderFailureKeystrokeCosts` is the benchmark: 50,000 formulas, every one of them
+recorded as permanently failed through the new `EditorController.seedRenderFailures()` hook, then
+30 keystrokes at the head, the middle and the tail, against the same document with no failures.
+It prints the per-keystroke `EditorPhases` split; failures now move inside the `artifacts` phase,
+which already covers the artifact spans moved by the same edit.
+
+`errors` is now a `SpanList<RenderIssue>`, the sorted span list the artifact store uses: an edit
+shifts the entries after it as integers with no allocation, a lookup is a binary search, and a
+parse drops the records of changed elements in one pass. The semantics are unchanged — a record is
+kept exactly when `PresentationEdit.unchanged` keeps its span, which is what `SpanList.apply` does.
+
+`EditorTests/renderFailuresFollowEdits` covers the behaviour without a renderer: an edit before
+every failure moves the records, an edit inside a failed element drops its record.
+`RenderLifecycleTests/failedElementIsNotRetriedByUnrelatedEdits` still covers the same through a
+real WebKit failure.
+
+Expected from the code: keystroke cost with 50,000 failures becomes indistinguishable from the
+no-failure document, as it did for artifacts (3.89 ms → 0.13 ms p50 there). Record the actual pair.
