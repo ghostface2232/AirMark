@@ -45,3 +45,27 @@ step.
 
 Not measured: the frame time of a drag, the number of WebKit page loads during one, and whether 150 ms
 is the right settling delay. The delay was taken from PLAN-2026-09-17 §W8; nothing here measured it.
+
+## Task 3 — table raster
+
+`RenderService.drawTable` read the raster scale and color space from `NSScreen.main`
+(`Sources/AirMarkRender/RenderService.swift` at `cb8c3df`), while every other element on the page —
+images, formulas, diagrams — followed `environment.scale`, which is the host window's backing scale.
+A window on a 1× display beside a Retina main display therefore got its tables at 2× and everything
+else at 1×, and the reverse in the other direction. The 2026-09-17 entry in DEV_LOG.md says as much:
+"Right-to-left locales and multi-screen scale selection are unverified."
+
+Worse, the scale went into the cache key while the bitmap it produced did not follow it, so a table
+cached under a 1× key could hold 2× pixels.
+
+| Test | Assertion that fails before the change |
+|---|---|
+| `TableRenderTests.tableRasterFollowsTheRequestingWindow` | Both scales rasterized at the main screen's, so the two bitmaps had the same pixel dimensions. On a 2× host `one.image.width == ceil(one.size.width)` fails; on a 1× host the 3× assertion fails. Either way the previous code cannot pass it. |
+| `TableRenderTests.tableColorSpaceComesFromTheHostWindowsScreen` | Passes before and after on a single-screen machine; it pins where the value is read from and that the bitmap's scale is the environment's. |
+| `TableRenderTests.matchesTheAppKitReference` | Kept, with the same corpus and the same three environments, but it now compares the two drawings inside one raster — the main screen's, which is what `NSImage` rasterized into — instead of routing one side through `RenderService`. Without that the test would compare a bitmap at the environment's scale with one at the screen's and fail for a reason that is the point of this change. |
+
+Deliberately unchanged: cell text still aligns by the user's language direction
+(`NSParagraphStyle.defaultWritingDirection`), not the host view's layout direction. That is the second
+half of the unverified note above and is not what this task is about. Right-to-left locales remain
+unverified, and so does an actual two-screen machine — which is the only place the first test's premise
+can be observed rather than simulated by two scales.

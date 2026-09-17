@@ -120,6 +120,12 @@ import os
             let window = notification.object as? NSWindow
             MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
         })
+        // The window moved to another screen, or that screen's scale or color space changed. Nothing
+        // else asks for a layout, so the renders for the new raster start from here.
+        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeBackingPropertiesNotification, object: nil, queue: .main) { [weak self] notification in
+            let window = notification.object as? NSWindow
+            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
+        })
         // The drag is over: the environment can settle now rather than waiting for the next layout.
         observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: nil, queue: .main) { [weak self] notification in
             let window = notification.object as? NSWindow
