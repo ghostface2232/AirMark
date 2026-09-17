@@ -181,6 +181,24 @@ import AirMarkCore
         #expect(service.cached(key) == nil, "the dropped render ran anyway")
     }
 
+    /// A caller arriving just after an earlier request for the same content was cancelled must get a
+    /// render, not the earlier caller's cancellation.
+    @Test func requestAfterACancelledShareStillRenders() async throws {
+        let (window, host) = Self.window()
+        defer { window.close() }
+        let service = RenderService()
+        let blocker = Task { @MainActor in try await service.render(Self.slowDiagram(200, salt: 21), environment: Self.environment, baseURL: nil, host: host) }
+        let shared = RenderElement(span: SourceSpan(0, 1), kind: .mermaid, content: "graph LR\nLate-->Joiner")
+        let early = Task { @MainActor in try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
+        try await Task.sleep(for: .milliseconds(20))
+        early.cancel()
+        await Task.yield()
+        let late = await Self.within(20) { try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
+        _ = await blocker.result
+        print("LIFECYCLE late joiner: \(String(describing: late.map { $0.map(\.size) }))")
+        guard case .success = late else { Issue.record("the later request failed: \(String(describing: late))"); return }
+    }
+
     /// Many distinct formulas at once, as a long document scrolled quickly produces.
     @Test func manyConcurrentRequestsAllComplete() async throws {
         let (window, host) = Self.window()

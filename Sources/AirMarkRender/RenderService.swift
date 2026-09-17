@@ -68,6 +68,9 @@ public enum RenderFailure: LocalizedError, Equatable {
         let task: Task<RenderArtifact, any Error>
         private var waiters: [UUID: CheckedContinuation<RenderArtifact, any Error>] = [:]
         private var outcome: Result<RenderArtifact, any Error>?
+        /// Every caller left before the work ended, and the work was cancelled. The entry stays in
+        /// `pending` until its watcher settles, but new callers must not join it.
+        private(set) var abandoned = false
         init(_ task: Task<RenderArtifact, any Error>) { self.task = task }
 
         func wait() async throws -> RenderArtifact {
@@ -85,7 +88,7 @@ public enum RenderFailure: LocalizedError, Equatable {
         private func cancel(_ id: UUID) {
             guard let continuation = waiters.removeValue(forKey: id) else { return }
             continuation.resume(throwing: CancellationError())
-            if waiters.isEmpty && outcome == nil { task.cancel() }
+            if waiters.isEmpty && outcome == nil { abandoned = true; task.cancel() }
         }
         func finish(_ outcome: Result<RenderArtifact, any Error>) {
             self.outcome = outcome
@@ -116,7 +119,7 @@ public enum RenderFailure: LocalizedError, Equatable {
         let identifier = key(element, environment: environment, baseURL: baseURL)
         if let result = cache[identifier] { touch(identifier); return labeled(result, for: element, baseURL: baseURL) }
         let entry: Pending
-        if let shared = pending[identifier] {
+        if let shared = pending[identifier], !shared.abandoned {
             entry = shared
         } else {
             let task = Task<RenderArtifact, any Error> { [self] in
@@ -140,7 +143,8 @@ public enum RenderFailure: LocalizedError, Equatable {
         guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
         return labeled(result, for: element, baseURL: baseURL)
     }
-    /// Removes a finished entry and caches its result.
+    /// Removes a finished entry and caches its result. An abandoned entry may already have been replaced
+    /// by a newer one for the same key, which this leaves alone.
     private func settle(_ identifier: String, _ entry: Pending, _ result: RenderArtifact?) {
         guard pending[identifier] === entry else { return }
         pending[identifier] = nil
