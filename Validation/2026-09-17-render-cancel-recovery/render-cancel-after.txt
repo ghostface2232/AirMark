@@ -1,0 +1,14 @@
+CANCEL_MEASURE page mermaid first=p50=130ms max=274ms all=274,128,127,130,131 warm=p50=9ms max=11ms all=9,9,11,9,9
+CANCEL_MEASURE mermaid-100 alone=p50=77ms max=95ms all=95,79,77,75,76 next_idle=p50=8ms max=8ms all=8,8,8,8,8 next_after_obsolete=p50=41ms max=44ms all=42,44,36,38,41 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE mermaid-250 alone=p50=213ms max=213ms all=211,211,213,213,213 next_idle=p50=9ms max=10ms all=9,9,9,9,10 next_after_obsolete=p50=234ms max=246ms all=234,230,244,228,246 obsolete_finished=0/5 page_loads=5
+CANCEL_MEASURE mermaid-480 alone=p50=446ms max=457ms all=424,439,446,446,457 next_idle=p50=12ms max=14ms all=13,11,12,12,14 next_after_obsolete=p50=250ms max=257ms all=250,257,255,241,245 obsolete_finished=0/5 page_loads=5
+CANCEL_MEASURE mermaid-dense alone=p50=1235ms max=1260ms all=1136,1235,1225,1235,1260 next_idle=p50=14ms max=14ms all=13,14,14,14,14 next_after_obsolete=p50=250ms max=256ms all=256,250,246,240,252 obsolete_finished=0/5 page_loads=5
+CANCEL_MEASURE katex-12 alone=p50=24ms max=33ms all=33,25,24,20,22 next_idle=p50=4ms max=7ms all=7,4,3,5,3 next_after_obsolete=p50=21ms max=22ms all=20,21,21,21,22 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE katex-30 alone=p50=143ms max=167ms all=167,147,133,119,143 next_idle=p50=14ms max=15ms all=15,13,13,14,14 next_after_obsolete=p50=136ms max=142ms all=142,138,136,129,130 obsolete_finished=5/5 page_loads=0
+✔ Test obsoleteRunningJobDelaysTheNextRender() passed after 18.286 seconds.
+CANCEL_MEASURE editor diagram=lr-250 edit_diagram=p50=447ms max=485ms all=485,447,440,450,443 loads=5 | type_elsewhere_100ms=p50=161ms max=162ms all=161,160,161,162,158 loads=0 | type_elsewhere_30ms=p50=172ms max=174ms all=171,172,174,171,173 loads=0
+CANCEL_MEASURE editor diagram=lr-480 edit_diagram=p50=689ms max=698ms all=684,692,698,681,689 loads=5 | type_elsewhere_100ms=p50=374ms max=375ms all=373,372,375,375,374 loads=0 | type_elsewhere_30ms=p50=371ms max=378ms all=378,376,370,368,371 loads=0
+CANCEL_MEASURE editor diagram=dense edit_diagram=p50=1490ms max=1499ms all=1466,1497,1499,1469,1490 loads=5 | type_elsewhere_100ms=p50=1024ms max=1031ms all=1011,1024,1021,1031,1027 loads=0 | type_elsewhere_30ms=p50=1149ms max=1154ms all=1149,1127,1152,1154,1146 loads=0
+✔ Test editorEditsDuringARunningRender() passed after 33.302 seconds.
+✔ Suite RenderCancellationTests passed after 51.589 seconds.
+✔ Test run with 2 tests in 1 suite passed after 51.589 seconds.

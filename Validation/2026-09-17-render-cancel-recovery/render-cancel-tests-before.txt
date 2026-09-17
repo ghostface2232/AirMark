@@ -1,0 +1,12 @@
+CANCEL obsolete yields: wanted after 0.936507458 seconds, loads 0, obsolete cached true
+✘ Test obsoleteRunningRenderYieldsToAWaitingJob() recorded an issue at RenderCancellationTests.swift:76:9: Expectation failed: service.cached(service.key(obsolete, environment: Self.environment, baseURL: nil)) == nil
+✘ Test obsoleteRunningRenderYieldsToAWaitingJob() recorded an issue at RenderCancellationTests.swift:77:9: Expectation failed: service.mermaid.loadCount == loads + 1
+✘ Test obsoleteRunningRenderYieldsToAWaitingJob() failed after 1.494 seconds with 2 issues.
+CANCEL shared: staying Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 370.0))), behind Optional(Swift.Result<__C.CGSize, Swift.Error>.success((300.0, 78.0))), loads 0
+✔ Test runningRenderSharedWithAnotherCallerKeepsRunning() passed after 1.306 seconds.
+CANCEL rejoined: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 370.0))), other Optional(Swift.Result<__C.CGSize, Swift.Error>.success((300.0, 78.0))), loads 0
+✔ Test runningRenderRejoinedBeforeAnotherJobKeepsRunning() passed after 1.305 seconds.
+CANCEL brief: loads 0, cached true
+✔ Test briefRunningRenderFinishes() passed after 0.149 seconds.
+✘ Suite RenderCancellationTests failed after 4.256 seconds with 2 issues.
+✘ Test run with 6 tests in 1 suite failed after 4.256 seconds with 2 issues.

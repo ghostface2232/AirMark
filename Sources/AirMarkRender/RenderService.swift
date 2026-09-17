@@ -63,13 +63,14 @@ public enum RenderFailure: LocalizedError, Equatable {
     private let memoryLimit = 48 * 1024 * 1024
     /// An in-flight render shared by every caller asking for the same key. Each caller waits on its own
     /// continuation, so a cancelled caller stops waiting at once; when no caller is left the work is
-    /// cancelled, which drops it from the renderer's queue if it has not started.
+    /// cancelled, which drops it from the renderer's queue if it has not started. A render that has
+    /// started asks `isWanted` instead, so a caller joining after the others left keeps it running.
     @MainActor private final class Pending {
-        let task: Task<RenderArtifact, any Error>
+        var task: Task<RenderArtifact, any Error>?
         private var waiters: [UUID: CheckedContinuation<RenderArtifact, any Error>] = [:]
         private var outcome: Result<RenderArtifact, any Error>?
-        init(_ task: Task<RenderArtifact, any Error>) { self.task = task }
         var waiterCount: Int { waiters.count }
+        var isWanted: Bool { !waiters.isEmpty }
 
         func wait() async throws -> RenderArtifact {
             let id = UUID()
@@ -87,7 +88,7 @@ public enum RenderFailure: LocalizedError, Equatable {
         private func cancel(_ id: UUID) {
             guard let continuation = waiters.removeValue(forKey: id) else { return }
             continuation.resume(throwing: CancellationError())
-            if waiters.isEmpty && outcome == nil { task.cancel() }
+            if waiters.isEmpty && outcome == nil { task?.cancel() }
         }
         func finish(_ outcome: Result<RenderArtifact, any Error>) {
             self.outcome = outcome
@@ -137,13 +138,15 @@ public enum RenderFailure: LocalizedError, Equatable {
         if let shared = pending[identifier] {
             entry = shared
         } else {
+            let created = Pending()
             let task = Task<RenderArtifact, any Error> { [self] in
                 if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
                 if element.kind == .table { return try await drawTable(element, environment: environment) }
                 let renderer = element.kind == .math ? math : mermaid
-                return try await renderer.render(element, environment: environment, host: host)
+                return try await renderer.render(element, environment: environment, host: host, isWanted: { [weak created] in created?.isWanted ?? false })
             }
-            entry = Pending(task)
+            created.task = task
+            entry = created
             pending[identifier] = entry
             // When the work ends, even if every caller stopped waiting: cache a result, drop the entry so
             // a failure is never handed to a later caller, then wake whoever is still waiting.

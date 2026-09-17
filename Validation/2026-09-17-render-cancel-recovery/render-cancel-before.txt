@@ -1,0 +1,16 @@
+ [0;36m74 |[0;0m         print("CANCEL_MEASURE page mermaid first=\(Self.summary(fresh)) warm=\(Self.summary(warm))")
+[0;36m104 |[0;0m                 guard case .success = outcome else { Issue.record("\(label) wanted render: \(String(describing: outcome))"); return }
+CANCEL_MEASURE page mermaid first=p50=125ms max=272ms all=272,129,124,125,124 warm=p50=9ms max=11ms all=11,8,8,9,9
+CANCEL_MEASURE mermaid-100 alone=p50=76ms max=95ms all=95,79,76,76,74 next_idle=p50=8ms max=11ms all=11,7,8,8,8 next_after_obsolete=p50=38ms max=41ms all=41,38,36,38,35 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE mermaid-250 alone=p50=182ms max=218ms all=218,189,182,175,175 next_idle=p50=9ms max=12ms all=9,9,10,12,8 next_after_obsolete=p50=140ms max=152ms all=152,145,140,138,140 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE mermaid-480 alone=p50=378ms max=434ms all=434,378,360,356,418 next_idle=p50=11ms max=13ms all=13,13,11,10,11 next_after_obsolete=p50=342ms max=385ms all=353,334,321,385,342 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE mermaid-dense alone=p50=1075ms max=1158ms all=1158,1128,1068,1054,1075 next_idle=p50=13ms max=26ms all=15,26,11,13,11 next_after_obsolete=p50=1035ms max=1101ms all=1048,1101,1023,1028,1035 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE katex-12 alone=p50=20ms max=30ms all=30,19,22,19,20 next_idle=p50=3ms max=5ms all=3,5,3,3,3 next_after_obsolete=p50=18ms max=23ms all=23,16,18,19,16 obsolete_finished=5/5 page_loads=0
+CANCEL_MEASURE katex-30 alone=p50=122ms max=139ms all=139,132,122,119,120 next_idle=p50=15ms max=17ms all=17,15,15,15,15 next_after_obsolete=p50=143ms max=145ms all=145,143,143,144,131 obsolete_finished=5/5 page_loads=0
+✔ Test obsoleteRunningJobDelaysTheNextRender() passed after 21.161 seconds.
+CANCEL_MEASURE editor diagram=lr-250 edit_diagram=p50=355ms max=515ms all=515,319,311,355,429 loads=0 | type_elsewhere_100ms=p50=161ms max=204ms all=160,160,161,204,168 loads=0 | type_elsewhere_30ms=p50=175ms max=374ms all=175,173,174,371,374 loads=0
+CANCEL_MEASURE editor diagram=lr-480 edit_diagram=p50=866ms max=873ms all=868,873,866,864,853 loads=0 | type_elsewhere_100ms=p50=398ms max=401ms all=396,394,399,398,401 loads=0 | type_elsewhere_30ms=p50=569ms max=572ms all=569,568,571,572,569 loads=0
+CANCEL_MEASURE editor diagram=dense edit_diagram=p50=2270ms max=2274ms all=2274,2270,2248,2258,2273 loads=0 | type_elsewhere_100ms=p50=1085ms max=1087ms all=1087,1083,1079,1085,1086 loads=0 | type_elsewhere_30ms=p50=1146ms max=1156ms all=1145,1146,1156,1147,1145 loads=0
+✔ Test editorEditsDuringARunningRender() passed after 39.404 seconds.
+✔ Suite RenderCancellationTests passed after 60.566 seconds.
+✔ Test run with 2 tests in 1 suite passed after 60.566 seconds.

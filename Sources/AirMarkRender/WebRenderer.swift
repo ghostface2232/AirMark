@@ -7,13 +7,19 @@ import AirMarkCore
 /// Every wait on WebKit (page load, script, snapshot) has a budget. A page that exceeds one, or whose
 /// content process dies, is discarded: its generation ends, every wait on it fails at once, and
 /// callbacks that still arrive from it are ignored because they name a web view that is no longer
-/// current. Jobs run in arrival order; a queued job whose caller is cancelled is removed, while a
-/// running job finishes so its result can still be cached.
+/// current. Jobs run in arrival order; a queued job whose caller is cancelled is removed. A running job
+/// that no caller wants any more finishes so its result can still be cached, unless another job is
+/// waiting and it has already run for `Budget.obsolete`: then its page is discarded and the waiting job
+/// starts. JavaScript cannot be interrupted, so discarding the page is the only way to stop it.
 @MainActor final class WebRenderer: NSObject, WKNavigationDelegate {
     struct Budget: Sendable {
         var load: Duration = .seconds(10)
         var script: Duration = .seconds(8)
         var snapshot: Duration = .seconds(5)
+        /// How long an unwanted running job keeps the page while another job waits. About what a fresh
+        /// page's first render costs (125–135 ms measured), so a job that would finish sooner than a
+        /// replacement page could load is left to finish.
+        var obsolete: Duration = .milliseconds(150)
     }
     let budget: Budget
     private var web: WKWebView?
@@ -25,8 +31,12 @@ import AirMarkCore
     private var waits: [UUID: (RenderFailure) -> Void] = [:]
     private var queue: [Job] = []
     private var running = false
+    /// The job being performed.
+    private(set) var current: Job?
     /// Page loads started; a test hook for telling a reused page from a replaced one.
     private(set) var loadCount = 0
+    /// Running jobs abandoned for a waiting job; a test hook.
+    private(set) var abandonedCount = 0
 
     init(budget: Budget = Budget()) { self.budget = budget }
 
@@ -35,8 +45,13 @@ import AirMarkCore
         let environment: RenderEnvironment
         weak var host: NSView?
         var continuation: CheckedContinuation<RenderArtifact, any Error>?
-        init(element: RenderElement, environment: RenderEnvironment, host: NSView) {
-            self.element = element; self.environment = environment; self.host = host
+        /// Whether a caller still waits for the result. Asked each time abandoning the job is considered,
+        /// so a caller that rejoins a render others left keeps it running.
+        let isWanted: @MainActor () -> Bool
+        var started: ContinuousClock.Instant?
+        var abandoned = false
+        init(element: RenderElement, environment: RenderEnvironment, host: NSView, isWanted: @escaping @MainActor () -> Bool) {
+            self.element = element; self.environment = environment; self.host = host; self.isWanted = isWanted
         }
         func finish(_ result: Result<RenderArtifact, any Error>) {
             let pending = continuation
@@ -45,24 +60,33 @@ import AirMarkCore
         }
     }
 
-    func render(_ element: RenderElement, environment: RenderEnvironment, host: NSView) async throws -> RenderArtifact {
+    /// `isWanted` reports whether anyone still waits for this render when the caller shares it with
+    /// others; by default the job is wanted until this call is cancelled.
+    func render(_ element: RenderElement, environment: RenderEnvironment, host: NSView, isWanted: (@MainActor () -> Bool)? = nil) async throws -> RenderArtifact {
         try Task.checkCancellation()
-        let job = Job(element: element, environment: environment, host: host)
+        let cancelled = CancellationFlag()
+        let job = Job(element: element, environment: environment, host: host, isWanted: isWanted ?? { !cancelled.value })
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 job.continuation = continuation
                 queue.append(job)
                 pump()
+                // A job now waits; the running one may be obsolete. Decided on a later turn, after callers
+                // started in this one have had the chance to rejoin it.
+                if current != nil { considerAbandoningLater() }
             }
         } onCancel: {
-            Task { @MainActor [weak self] in self?.cancel(job) }
+            Task { @MainActor [weak self] in cancelled.value = true; self?.cancel(job) }
         }
     }
 
     private func cancel(_ job: Job) {
-        guard let index = queue.firstIndex(where: { $0 === job }) else { return }
-        queue.remove(at: index)
-        job.finish(.failure(CancellationError()))
+        if let index = queue.firstIndex(where: { $0 === job }) {
+            queue.remove(at: index)
+            job.finish(.failure(CancellationError()))
+        } else if job === current {
+            considerAbandoningLater()
+        }
     }
 
     private func pump() {
@@ -71,25 +95,52 @@ import AirMarkCore
         Task { @MainActor in
             while !queue.isEmpty {
                 let job = queue.removeFirst()
+                current = job; job.started = .now
+                let deadline = Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    try? await Task.sleep(for: budget.obsolete)
+                    if !Task.isCancelled { abandonIfObsolete() }
+                }
                 do { job.finish(.success(try await performRetryingOnce(job))) }
                 catch { job.finish(.failure(error)) }
+                deadline.cancel()
+                current = nil
             }
             running = false
         }
     }
 
-    /// A page lost to its process or to a WebKit failure is replaced and the job tried once more.
+    private func considerAbandoningLater() {
+        Task { @MainActor [weak self] in self?.abandonIfObsolete() }
+    }
+
+    /// Ends the running job and discards its page when no one wants its result, another job waits, and
+    /// it has run for `budget.obsolete`. Its callers, if any are left, see a cancellation.
+    private func abandonIfObsolete() {
+        guard let job = current, !job.abandoned, !queue.isEmpty, let started = job.started,
+              started.duration(to: .now) >= budget.obsolete, !job.isWanted() else { return }
+        job.abandoned = true
+        abandonedCount += 1
+        job.finish(.failure(CancellationError()))
+        discard(.unavailable)
+    }
+
+    /// A page lost to its process or to a WebKit failure is replaced and the job tried once more. An
+    /// abandoned job's page was discarded on purpose; it is not tried again.
     private func performRetryingOnce(_ job: Job) async throws -> RenderArtifact {
         do { return try await perform(job) }
-        catch RenderFailure.processTerminated { return try await perform(job) }
-        catch RenderFailure.unavailable { return try await perform(job) }
+        catch let failure as RenderFailure where !job.abandoned && (failure == .processTerminated || failure == .unavailable) {
+            return try await perform(job)
+        }
     }
 
     private func perform(_ job: Job) async throws -> RenderArtifact {
+        guard !job.abandoned else { throw CancellationError() }
         // The requester's window is gone, closed or minimized; nothing is wrong with the element.
         guard let host = job.host, Self.isShowing(host) else { throw RenderFailure.suspended }
         let environment = job.environment, element = job.element
         let web = try await prepare(host: host)
+        guard !job.abandoned else { throw CancellationError() }
         // Measure in a viewport wider than any result. A frame left small by the previous
         // snapshot let display-mode KaTeX report a box thousands of points wide.
         web.setFrameSize(NSSize(width: max(1024, ceil(environment.width) + 64), height: 2048))
@@ -243,6 +294,8 @@ import AirMarkCore
         navigationAction.request.url?.isFileURL == true ? .allow : .cancel
     }
 }
+
+@MainActor final class CancellationFlag { var value = false }
 
 /// A continuation that can be resumed at most once, by whichever of a callback, a timer or a
 /// discarded page gets there first.
