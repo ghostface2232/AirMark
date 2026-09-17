@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import Markdown
 @testable import AirMarkCore
 
 /// `MarkdownParser.reparse` must produce exactly the whole-document parse after any sequence of edits.
@@ -75,6 +76,23 @@ struct BlockReparseTests {
         // The generated blocks are dense with fences, HTML and lists, which widen windows; enough of them
         // must still stay under half the document, or the test says little about the partial path.
         #expect(reparsed > whole * 4 && partial > 2_000, "reparsed \(reparsed), under half the document \(partial), whole \(whole)")
+    }
+
+    /// The recorded block spans are the source ranges of the document's top-level blocks.
+    @Test func blockSpansAreTheTopLevelBlocks() {
+        var generator = Generator(state: 91)
+        for _ in 0..<200 {
+            let source = Self.document(&generator)
+            let index = SourceIndex(source)
+            let children = Document(parsing: source).children.map { child -> SourceSpan? in
+                guard let range = child.range,
+                      let start = index.offset(line: range.lowerBound.line, utf8Column: range.lowerBound.column),
+                      let end = index.offset(line: range.upperBound.line, utf8Column: range.upperBound.column), end >= start else { return nil }
+                return SourceSpan(start, end - start)
+            }
+            let parsed = MarkdownParser.parse(source)
+            #expect(parsed.blocks == (children.contains(where: { $0 == nil }) ? [] : children.map { $0! }), "\(source.debugDescription)")
+        }
     }
 
     /// Outside the returned window, the new parse is the previous one moved by the edit.

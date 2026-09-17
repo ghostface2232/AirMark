@@ -35,7 +35,8 @@ import AirMarkCore
         _ = NSApplication.shared
         let bytes = Env.bytes
         let large = bytes >= 5_000_000
-        let source = ScaleTests.source(bytes: bytes)
+        // PACING_REFERENCE=1 appends a link reference definition, which keeps every parse whole.
+        let source = ScaleTests.source(bytes: bytes) + (Env.values["PACING_REFERENCE"] == "1" ? "[id]: https://example.org\n" : "")
         let clock = ContinuousClock()
 
         // Standalone parse + presentation cost of this fixture, off the main actor.

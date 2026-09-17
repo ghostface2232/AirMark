@@ -384,8 +384,14 @@ public enum MarkdownParser {
             if node is SoftBreak || node is LineBreak { return " " }
             return node.children.map { plain($0) }.joined()
         }
-        func walk(_ node: any Markup) {
+        // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
+        // anyway, except for a paragraph, whose own span it has no other use for.
+        var blockSpansComplete = true
+        func walk(_ node: any Markup, topLevel: Bool = false) {
             if let paragraph = node as? Paragraph {
+                if topLevel {
+                    if let span = span(paragraph) { output.blocks.append(span) } else { blockSpansComplete = false }
+                }
                 let outer = inlineColumnShift
                 inlineColumnShift = continuationShifts(paragraph)
                 for child in node.children { walk(child) }
@@ -395,7 +401,12 @@ public enum MarkdownParser {
             // Plain text and line breaks are most nodes and add no style; their spans have no side
             // effects (no delimiters to match), so skip computing them and the casts below.
             if node is Text || node is SoftBreak || node is LineBreak { return }
-            guard let s = span(node) else { for child in node.children { walk(child) }; return }
+            guard let s = span(node) else {
+                if topLevel { blockSpansComplete = false }
+                for child in node.children { walk(child) }
+                return
+            }
+            if topLevel { output.blocks.append(s) }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch node {
@@ -487,9 +498,8 @@ public enum MarkdownParser {
             }
             for child in node.children { walk(child) }
         }
-        walk(document)
-        let blocks = document.children.compactMap { $0.range.flatMap { offsets($0, shift: 0, 0) } }
-        output.blocks = blocks.count == document.childCount ? blocks : []
+        for child in document.children { walk(child, topLevel: true) }
+        if !blockSpansComplete { output.blocks.removeAll() }
         output.mayDefineReferences = mayDefineReferences(source)
         // Sorted by start, containers before their contents, so presentation can binary-search.
         output.styles.sort { $0.span.location != $1.span.location ? $0.span.location < $1.span.location : $0.span.length > $1.span.length }
