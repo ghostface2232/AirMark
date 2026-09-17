@@ -39,43 +39,51 @@ if CommandLine.arguments.contains("--long-lines") {
     exit(0)
 }
 // Inputs chosen to defeat the index and the math scanner rather than to look like real notes.
-// Each prints parse time and, for the presentation store, the time of caret-sized style queries.
+// Each corpus is measured at doubling sizes; the exponent between neighbours (log2 of the time ratio)
+// is about 1 for linear work and about 2 for quadratic work, whatever the absolute times are.
+// `query` is 2,000 caret-sized style queries on the presentation store, so its exponent is the
+// growth of one query's cost with document size (0 for logarithmic work).
 if CommandLine.arguments.contains("--adversarial") {
     func repeated(_ piece: String, bytes: Int) -> String { String(repeating: piece, count: max(1, bytes / piece.utf8.count)) }
-    let megabyte = 1_000_000
-    var corpora: [(String, String)] = [
-        ("normal", repeated(fixture, bytes: megabyte)),
-        ("long-quote", repeated("> quoted line with **bold** and *em* text\n", bytes: megabyte)),
-        ("nested-containers", repeated("> - > - > item with **bold**\n", bytes: megabyte)),
-        ("long-list", repeated("- item with **bold** and *em*\n", bytes: megabyte)),
-        ("currency-lines", repeated(String(repeating: "$1 ", count: 300) + "\n", bytes: megabyte)),
-        ("escaped-dollars", repeated("\\$a \\$$ ", bytes: megabyte)),
-        ("unclosed-display", repeated("$$ a `c` ", bytes: megabyte)),
+    let documentSizes = [125_000, 250_000, 500_000, 1_000_000]
+    let corpora: [(name: String, sizes: [Int], make: (Int) -> String)] = [
+        ("normal", documentSizes, { repeated(fixture, bytes: $0) }),
+        ("long-quote", documentSizes, { repeated("> quoted line with **bold** and *em* text\n", bytes: $0) }),
+        ("nested-containers", documentSizes, { repeated("> - > - > item with **bold**\n", bytes: $0) }),
+        ("long-list", documentSizes, { repeated("- item with **bold** and *em*\n", bytes: $0) }),
+        ("currency-lines", documentSizes, { repeated(String(repeating: "$1 ", count: 300) + "\n", bytes: $0) }),
+        ("escaped-dollars", documentSizes, { repeated("\\$a \\$$ ", bytes: $0) }),
+        ("unclosed-display", documentSizes, { repeated("$$ a `c` ", bytes: $0) }),
+        ("currency-one-line", [5_000, 10_000, 20_000, 40_000, 80_000], { repeated("$1 ", bytes: $0) }),
+        ("dollar-letters-one-line", [5_000, 10_000, 20_000, 40_000, 80_000], { repeated("$a ", bytes: $0) }),
     ]
-    for length in [5_000, 20_000, 80_000] {
-        corpora.append(("currency-one-line-\(length / 1000)k", String(repeating: "$1 ", count: length / 3)))
-    }
     var generator: UInt64 = 1
-    for (name, source) in corpora {
-        let samples = source.utf8.count > 50_000 ? 5 : 20
-        var parses: [Double] = []
-        var document = ParsedDocument(source: "")
-        for _ in 0..<samples { parses.append(measure { document = MarkdownParser.parse(source) }) }
-        let store = PresentationStore(document)
-        let length = source.utf16.count
-        var queries: [Double] = []
-        for _ in 0..<5 {
-            queries.append(measure {
-                for _ in 0..<2_000 {
-                    generator = generator &* 6364136223846793005 &+ 1442695040888963407
-                    let location = Int((generator >> 33) % UInt64(max(1, length)))
-                    _ = store.styles(intersecting: SourceSpan(max(0, location - 2), 6))
-                }
-            })
+    for corpus in corpora {
+        var previous: (parse: Double, query: Double)?
+        for size in corpus.sizes {
+            let source = corpus.make(size)
+            let samples = size >= 500_000 ? 5 : 9
+            var parses: [Double] = []
+            var document = ParsedDocument(source: "")
+            for _ in 0..<samples { parses.append(measure { document = MarkdownParser.parse(source) }) }
+            let store = PresentationStore(document)
+            let length = source.utf16.count
+            var queries: [Double] = []
+            for _ in 0..<5 {
+                queries.append(measure {
+                    for _ in 0..<2_000 {
+                        generator = generator &* 6364136223846793005 &+ 1442695040888963407
+                        let location = Int((generator >> 33) % UInt64(max(1, length)))
+                        _ = store.styles(intersecting: SourceSpan(max(0, location - 2), 6))
+                    }
+                })
+            }
+            let parse = percentile(parses, 0.5), query = percentile(queries, 0.5)
+            let exponents = previous.map { String(format: " parse_exponent=%.2f query_exponent=%.2f", log2(parse / $0.parse), log2(query / $0.query)) } ?? ""
+            print(String(format: "ADVERSARIAL %@ bytes=%d styles=%d elements=%d parse_p50=%.3fms query2000_p50=%.3fms%@",
+                         corpus.name, source.utf8.count, document.styles.count, document.elements.count, parse, query, exponents))
+            previous = (parse, query)
         }
-        print(String(format: "ADVERSARIAL %@ bytes=%d styles=%d elements=%d parse_p50=%.3fms parse_p95=%.3fms query2000_p50=%.3fms",
-                     name, source.utf8.count, document.styles.count, document.elements.count,
-                     percentile(parses, 0.5), percentile(parses, 0.95), percentile(queries, 0.5)))
     }
     exit(0)
 }

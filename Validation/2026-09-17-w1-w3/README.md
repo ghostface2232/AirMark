@@ -22,3 +22,14 @@ Keystroke durations are synchronous main-thread time of one `performEdit`. The d
 Two corrections to the before run. Its slow diagram was top-to-bottom, which on its own exceeds the 12-megapixel display limit, so the "exceeds the display limit" failures after killing the process and closing the window came from the diagram, not from those events. The final tests use a left-to-right diagram that is scaled to the column (0.31 s alone; the kill at 0.15 s lands mid-render). The before run also counted attempts on the shared render service, which other suites use in parallel; the final test counts requests on its own editor.
 
 What the before run did establish: 8 of 40 concurrent formulas failed permanently as "Renderer unavailable"; a render in a minimized window was a permanent failure; a failed formula was resubmitted on every unrelated edit (3 attempts for 3 edits); and a termination callback naming another web view discarded the current page (2 loads instead of 1). No indefinite wait was reproduced in any scenario, before or after.
+
+## W3 — scaling curves
+
+- `adversarial-scaling-before.txt`: `swift run -c release --disable-sandbox AirMarkBench --adversarial` at `92eb8a7`. Each corpus is measured at doubling sizes; `parse_exponent` and `query_exponent` are log2 of the time ratio to the previous size.
+
+Only paths whose curve is superlinear are changed. Every parse exponent over document-sized corpora is 0.93–1.08, including nested containers, which are slow but linear, so the parser's walk is left alone. Two curves are not:
+
+- A caret-sized query inside a long block quote or nested containers has an exponent of 1.00 per query: one query scans the container. A normal document stays at 0.11–0.23.
+- Parsing one line of `$1 ` or `$a ` repeated has an exponent of 1.95–2.02: each unclosed `$` rescans the rest of the line.
+
+The long-list and unclosed-display query exponents move between 0.08 and 0.76 without a trend, at 0.3–0.7 ms for 2,000 queries; that is not treated as evidence.
