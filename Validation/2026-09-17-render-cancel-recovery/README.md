@@ -53,3 +53,43 @@ A running job is abandoned only when all of these hold: no caller still waits fo
 - `render-cancel-tests-after.txt`: the four tests and `RenderLifecycleTests` after the change. The wanted element takes 0.15 s. The guards still pass without page loads.
 - The four tests are in an extension of the serialized `RenderLifecycleTests`. As a separate suite, they started WebContent processes in parallel with `killedContentProcessEndsTheRenderAndRecovers`, which counts new processes, and made it fail during a full run.
 - `task1-swift-release-tests.txt`: full `swift test -c release --disable-sandbox`, 78 editor/integration and 33 core tests passed.
+
+## 2. Recovery write amplification
+
+### Problem
+
+`MarkdownDocument` schedules a recovery save 600 ms after any edit, selection change or scroll, including a scroll that only moves the viewport. Each save JSON-encoded the whole `RecoveryRecord`, source included, and atomically replaced `<id>.json`. With a 10 MB document, moving the caret or pausing while reading rewrote the whole document.
+
+### Measurement
+
+`AIRMARK_RECOVERY_IO=1 swift test -c release --disable-sandbox --filter RecoveryIOTests`. A `MarkdownDocument` with a 9.54 MB source (`ScaleTests.source`, formulas included) in a visible window, after its first parse. Bytes are this process's disk writes from `proc_pid_rusage` (`ri_diskio_byteswritten`), taken from the action until recovery files have been stable for 1.2 s. "Files replaced" counts recovery files whose identity or size changed. Store timings call `RecoveryStore.save` directly: `document_record` uses `document.record()`, whose source is bridged from the text view, and `native` uses a record whose source is a Swift string.
+
+| | before (`recovery-io-before.txt`) | after (`recovery-io-after.txt`) |
+|---|---:|---:|
+| one edit, then pause (×5) | 10.12 MB each, 1 file | 9.54 MB each, 2 files (source + record) |
+| one caret move, then pause (×5) | 10.12 MB each | about 4 KB each (0.02 MB for five), 1 file |
+| one scroll by 900 pt, then pause (×5) | 10.12 MB each | about 4 KB each (0.02 MB for five), 1 file |
+| 60 scroll steps, then pause | 10.12 MB | 0.00 MB, 1 file |
+| 10 screens scrolled 1.5 s apart | 101.25 MB | 0.04 MB |
+| idle 5 s | 0 | 0 |
+| save `document.record()`: source changed / selection only | 163.8 / 166.5 ms | 17.5 / 0.3 ms |
+| save native record: source changed / selection only | 17.4 / 17.6 ms | 2.0 / 0.2 ms |
+| `records()` | 33.4 ms | 3.6 ms |
+| recovery directory | 10.12 MB | 9.54 MB |
+
+Nothing was written while idle before or after, so idle needed no change. An edit still writes the whole source; this change leaves that alone.
+
+### Change
+
+- **Two files per record.** `<id>.json` holds the metadata and the name of `<id>.<token>.source`, which holds the source as raw UTF-8. A save whose revision equals the last one this store wrote for that id, and whose source file still exists, replaces only the JSON file. `RecoveryRecord`, `RecoveryStore`'s API and `LaunchPlan` are unchanged.
+- **Crash ordering.** A new source is written atomically to a new file, then the JSON naming it, and only then are the id's other source files removed. A crash at any point leaves a JSON file naming a complete source. If the JSON write fails, the new source file is removed. A JSON file naming a missing source is skipped when reading, and `records()` reads each record a second time if its source was replaced between the two reads.
+- **Old records.** Records with the source inline in the JSON, as written before, still load. The next save converts them.
+- **Revision.** `RecoveryRecord.revision` was the editor's revision, which does not change when a document without an editor reads its file again. Deduplicating on it would have kept a stale source (`rereadSourceWithoutEditorReachesRecovery` fails with it). The revision is now a version kept by `DocumentSnapshot` and bumped whenever its bytes are replaced (`set`, `didRead`), and read together with the bytes. The only code that reads a record's revision is the store's in-process ordering gate. A new store instance, as after a relaunch, knows nothing and writes the source it is given.
+- Raw UTF-8 instead of a JSON string also removes escaping, which is most of the 164 → 17.5 ms for a bridged source.
+
+### Tests
+
+- `recovery-store-tests-before.txt`: the new `RecoveryStoreTests` and `DocumentTests` against the old store. Two fail: a position-only save rewrote the 140 KB record, and a source left by an interrupted save was not removed. The others pass before and after: reading back after a position-only save, a new revision, a fresh store with a repeated revision, a record with its source inline, a record naming a missing source, caret moves after edits in a real document, and a document without an editor reading its file again.
+- `recovery-store-tests-after.txt`: all pass, together with `recoveryRejectsOldWrites`, `terminationRecoveryCannotBeOverwrittenByPendingSave`, `launchPlanPrefersRecoveryThenRecent`, and the existing `forceQuitRecoveryReopensUnsavedEdits` and `recoveryRecordFollowsEditsAndClose`.
+- `task2-swift-release-tests.txt`: full `swift test -c release --disable-sandbox`, 81 editor/integration and 38 core tests passed.
+- `ui-release.txt`: `Scripts/test-ui.sh` (xcodebuild, Debug app). `testInlineMathFixtureScreenshot` passed; it presses Cmd-Q and checks that a recovery record exists. The dark-appearance and showcase tests passed. `testRepeatedAsynchronousSavesPreserveSource` and `testTypingUndoAndReplaceAll` failed because synthesized keys arrived through the Korean input method ("Save" became "ㄴㅁㅍㄷ"), although selecting the ASCII-capable source returned `noErr`. They failed the same way on rerun (`ui-release-typing-rerun.txt`), and `testTypingUndoAndReplaceAll` failed identically at `6aef17b`, before either change, in a separate worktree. This is an environment failure that these changes neither cause nor fix. Those two tests did not validate typing on this run.

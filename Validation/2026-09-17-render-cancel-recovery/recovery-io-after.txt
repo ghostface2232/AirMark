@@ -1,0 +1,12 @@
+RECOVERY_IO source=9.54MB recovery_dir=9.54MB files=["C0675A3E-4C78-49E9-9483-567576959E1A.69B6FCBC-4655-4121-AE0C-667C08DF5497.source", "C0675A3E-4C78-49E9-9483-567576959E1A.json"]
+RECOVERY_IO edit per_step_bytes p50=9.54MB max=9.54MB total=47.71MB files_replaced=2,2,2,2,2
+RECOVERY_IO caret per_step_bytes p50=0.00MB max=0.00MB total=0.02MB files_replaced=1,1,1,1,1
+RECOVERY_IO scroll_pause per_step_bytes p50=0.00MB max=0.00MB total=0.02MB files_replaced=1,1,1,1,1
+RECOVERY_IO scroll_continuous_60_steps per_step_bytes p50=0.00MB max=0.00MB total=0.00MB files_replaced=1
+RECOVERY_IO reading_10_scrolls_1500ms_apart per_step_bytes p50=0.04MB max=0.04MB total=0.04MB files_replaced=1
+RECOVERY_IO idle_5s per_step_bytes p50=0.00MB max=0.00MB total=0.00MB files_replaced=0
+RECOVERY_IO store_save document_record source_changed p50=17.5ms max=33.7ms selection_only p50=0.3ms max=0.4ms
+RECOVERY_IO store_save native source_changed p50=2.0ms max=2.2ms selection_only p50=0.2ms max=0.2ms records_load=3.6ms
+✔ Test tenMegabyteRecoveryWrites() passed after 57.368 seconds.
+✔ Suite RecoveryIOTests passed after 57.368 seconds.
+✔ Test run with 1 test in 1 suite passed after 57.368 seconds.

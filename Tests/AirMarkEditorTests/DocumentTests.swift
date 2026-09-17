@@ -225,6 +225,48 @@ import AirMarkCore
         document.close()
     }
 
+    /// Waits for this document's recovery record to satisfy `condition`.
+    func recoveryRecord(_ document: MarkdownDocument, where condition: (RecoveryRecord) -> Bool) async throws -> RecoveryRecord? {
+        for _ in 0..<100 {
+            if let record = await MarkdownDocument.recoveryStore!.records().first(where: { $0.id == document.identity }), condition(record) { return record }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        return nil
+    }
+
+    /// Moving the caret after an edit records the new position with the edited source.
+    @Test func caretMoveAfterEditKeepsRecoveredSource() async throws {
+        let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        append(document, "한글😀\r\n")
+        let edited = try #require(try await recoveryRecord(document) { $0.source == "saved\n한글😀\r\n" })
+        document.editor?.textView.setSelectedRange(NSRange(location: 2, length: 3))
+        let moved = try #require(try await recoveryRecord(document) { $0.selection == SourceSpan(2, 3) })
+        #expect(moved.source == edited.source)
+        #expect(moved.hasBOM == edited.hasBOM)
+        append(document, "more")
+        let later = try #require(try await recoveryRecord(document) { $0.source.hasSuffix("more") })
+        #expect(later.source == "saved\n한글😀\r\nmore")
+    }
+
+    /// The source can change without an editor revision: a document with no window reads its file again.
+    /// Its record must carry the new source even when nothing else about the record changed.
+    @Test func rereadSourceWithoutEditorReachesRecovery() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkDocumentTests-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Note.md")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("first\n".utf8).write(to: url)
+        let store = RecoveryStore(directory: directory.appendingPathComponent("Recovery"))
+        let document = try MarkdownDocument(contentsOf: url, ofType: Self.type)
+        try await store.save(document.record())
+        try document.read(from: Data("second\n".utf8), ofType: Self.type)
+        var reread = document.record()
+        reread.date = Date().addingTimeInterval(1)
+        try await store.save(reread)
+        #expect(await store.records().first?.source == "second\n")
+    }
+
     @Test func recoveryRecordFollowsEditsAndClose() async throws {
         let (document, _, directory) = try makeDocument(Data("draft\n".utf8))
         defer { try? FileManager.default.removeItem(at: directory) }

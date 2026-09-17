@@ -1,0 +1,25 @@
+Test Case '-[AirMarkUITests.AirMarkUITests testInlineMathFixtureScreenshot]' started.
+Test Case '-[AirMarkUITests.AirMarkUITests testInlineMathFixtureScreenshot]' passed (7.306 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource]' started.
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:41: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : Asynchronous wait failed: Exceeded timeout of 10 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x748489e5e0)`".
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:41: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : Asynchronous wait failed: Exceeded timeout of 10 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x74845bd440)`".
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:41: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : Asynchronous wait failed: Exceeded timeout of 10 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x74845bd410)`".
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:41: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : Asynchronous wait failed: Exceeded timeout of 10 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x74845bd7a0)`".
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:41: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : Asynchronous wait failed: Exceeded timeout of 10 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x74845bd620)`".
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:55: error: -[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource] : XCTAssertEqual failed: ("Optional("## Heading\r\n\r\n**bold** and 한글\nㄴㅁㅍㄷ 1. ㄴㅁㅍㄷ 2. ㄴㅁㅍㄷ 3. ㄴㅁㅍㄷ 4. ㄴㅁㅍㄷ 5. ")") is not equal to ("Optional("## Heading\r\n\r\n**bold** and 한글\nSave 1. Save 2. Save 3. Save 4. Save 5. ")")
+Test Case '-[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource]' failed (58.027 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseDarkAppearanceScreenshot]' started.
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseDarkAppearanceScreenshot]' passed (11.878 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseRendersSpecialContent]' started.
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseRendersSpecialContent]' passed (15.800 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll]' started.
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:150: error: -[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll] : XCTAssertTrue failed
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:156: error: -[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll] : XCTAssertTrue failed - # ㅁ ㅜ샏
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:158: error: -[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll] : XCTAssertTrue failed
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:163: error: -[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll] : XCTAssertEqual failed: ("Optional("# ㅁ ㅜ샏\n\n미ㅔ모 *듓ㅁ* 미ㅔ모\n")") is not equal to ("Optional("# A note\n\nalpha **beta** alpha\n")")
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:177: error: -[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll] : Asynchronous wait failed: Exceeded timeout of 5 seconds, with unfulfilled expectations: "Expect predicate `BLOCKPREDICATE(0x74845be340)`".
+Test Case '-[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll]' failed (16.625 seconds).
+	 Executed 5 tests, with 11 failures (0 unexpected) in 109.637 (109.639) seconds
+	 Executed 5 tests, with 11 failures (0 unexpected) in 109.637 (109.640) seconds
+	 Executed 5 tests, with 11 failures (0 unexpected) in 109.637 (109.641) seconds
+** TEST FAILED **

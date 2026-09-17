@@ -1,0 +1,22 @@
+Test Suite 'All tests' passed at 2026-09-17 16:23:21.760.
+Test Suite 'All tests' passed at 2026-09-17 16:23:21.818.
+✔ Suite RecoveryIOTests passed after 0.001 seconds.
+✔ Suite MemoryTests passed after 0.001 seconds.
+✔ Suite RenderCancellationTests passed after 0.001 seconds.
+✔ Suite ArtifactStoreDifferentialTests passed after 1.935 seconds.
+✔ Suite ArtifactResidencyTests passed after 3.388 seconds.
+✔ Suite LayoutTests passed after 3.574 seconds.
+✔ Suite RenderTests passed after 3.964 seconds.
+✔ Suite TableRenderTests passed after 4.555 seconds.
+✔ Suite EditorTests passed after 5.656 seconds.
+✔ Suite MermaidCorpusTests passed after 5.988 seconds.
+✔ Test runningRenderSharedWithAnotherCallerKeepsRunning() passed after 1.376 seconds.
+✔ Test runningRenderRejoinedBeforeAnotherJobKeepsRunning() passed after 1.351 seconds.
+✔ Suite ScaleTests passed after 8.686 seconds.
+✔ Suite DocumentTests passed after 12.606 seconds.
+✔ Suite RenderLifecycleTests passed after 16.281 seconds.
+✔ Test run with 81 tests in 13 suites passed after 16.281 seconds.
+✔ Suite RecoveryStoreTests passed after 0.011 seconds.
+✔ Suite MathScannerTests passed after 0.017 seconds.
+✔ Suite PresentationStoreTests passed after 0.828 seconds.
+✔ Test run with 38 tests in 3 suites passed after 2.016 seconds.

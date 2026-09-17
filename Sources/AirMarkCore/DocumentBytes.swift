@@ -17,6 +17,7 @@ public struct DocumentBytes: Sendable, Equatable {
     }
 }
 
+/// A document's recovery state. Records of one document with the same `revision` carry the same source.
 public struct RecoveryRecord: Codable, Sendable, Equatable {
     public var id: UUID
     public var filePath: String?
@@ -47,8 +48,8 @@ public actor RecoveryStore {
     public func records() -> [RecoveryRecord] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
         return urls.filter { $0.pathExtension == "json" }.compactMap { url in
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? JSONDecoder().decode(RecoveryRecord.self, from: data)
+            // A save can replace the source between reading the record and its source; read once more.
+            RecoveryWriter.load(url, from: directory) ?? RecoveryWriter.load(url, from: directory)
         }.sorted { $0.date > $1.date }
     }
     public func remove(_ id: UUID) throws {
@@ -58,26 +59,90 @@ public actor RecoveryStore {
 
 /// The termination path and actor tasks share one ordering gate. Atomic file replacement alone
 /// prevents torn JSON, but does not stop an older asynchronous save replacing a newer quit record.
+///
+/// A record is two files. `<id>.json` holds everything but the source and names `<id>.<token>.source`,
+/// which holds the source's UTF-8 bytes. When a save has the revision this writer last wrote for the id,
+/// the source is the same and only the small JSON file is replaced, so moving the caret or scrolling a
+/// large document does not write the document again. A new source goes to a new file first, then the
+/// JSON naming it, then the previous source files are removed: a crash at any point leaves a JSON file
+/// naming a complete source. Records from before this layout carry the source inline and still load.
 private final class RecoveryWriter: @unchecked Sendable {
+    private struct Stored: Codable {
+        var id: UUID
+        var filePath: String?
+        /// Inline in records written before sources had their own file.
+        var source: String?
+        var sourceFile: String?
+        var hasBOM: Bool
+        var revision: UInt64
+        var selection: SourceSpan
+        var scrollY: Double
+        var date: Date
+    }
     private let lock = NSLock()
-    private var latest: [UUID: (revision: UInt64, date: Date)] = [:]
+    /// What this writer last wrote per id. A new writer, as after a relaunch, knows nothing and writes the
+    /// source it is given.
+    private var latest: [UUID: (revision: UInt64, date: Date, sourceFile: String)] = [:]
     func save(_ record: RecoveryRecord, to directory: URL) throws {
         try lock.withLock {
-            if let saved = latest[record.id] {
+            let saved = latest[record.id]
+            if let saved {
                 guard record.revision > saved.revision ||
                         (record.revision == saved.revision && record.date >= saved.date) else { return }
             }
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(record)
-            try data.write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
-            latest[record.id] = (record.revision, record.date)
+            let files = FileManager.default
+            try files.createDirectory(at: directory, withIntermediateDirectories: true)
+            let sourceFile: String
+            var wroteSource = false
+            if let saved, saved.revision == record.revision, files.fileExists(atPath: directory.appendingPathComponent(saved.sourceFile).path) {
+                sourceFile = saved.sourceFile
+            } else {
+                sourceFile = "\(record.id.uuidString).\(UUID().uuidString).source"
+                try Data(record.source.utf8).write(to: directory.appendingPathComponent(sourceFile), options: .atomic)
+                wroteSource = true
+            }
+            let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
+                                revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date)
+            do {
+                try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
+            } catch {
+                if wroteSource { try? files.removeItem(at: directory.appendingPathComponent(sourceFile)) }
+                throw error
+            }
+            latest[record.id] = (record.revision, record.date, sourceFile)
+            // Sources no record names any more, including one left by a save that stopped before its JSON.
+            if wroteSource { removeSources(of: record.id, in: directory, keeping: sourceFile) }
         }
     }
     func remove(_ id: UUID, from directory: URL) throws {
         try lock.withLock {
             let url = directory.appendingPathComponent(id.uuidString + ".json")
             if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            removeSources(of: id, in: directory, keeping: nil)
             latest.removeValue(forKey: id)
         }
+    }
+    private func removeSources(of id: UUID, in directory: URL, keeping kept: String?) {
+        let prefix = id.uuidString + "."
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix(prefix) && name.hasSuffix(".source") && name != kept {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+    /// The record in `url`, or nil when it cannot be read or names a source that is missing.
+    static func load(_ url: URL, from directory: URL) -> RecoveryRecord? {
+        guard let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let source: String
+        if let inline = stored.source {
+            source = inline
+        } else if let name = stored.sourceFile, !name.contains("/"),
+                  let bytes = try? Data(contentsOf: directory.appendingPathComponent(name)), let text = String(data: bytes, encoding: .utf8) {
+            source = text
+        } else {
+            return nil
+        }
+        var record = RecoveryRecord(id: stored.id, filePath: stored.filePath, source: source, hasBOM: stored.hasBOM, revision: stored.revision, selection: stored.selection, scrollY: stored.scrollY)
+        record.date = stored.date
+        return record
     }
 }

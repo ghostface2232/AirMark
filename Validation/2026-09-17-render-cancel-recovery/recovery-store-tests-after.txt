@@ -1,0 +1,25 @@
+✔ Test repeatedSavesPreserveBytesWithoutFalseConflicts() passed after 2.846 seconds.
+✔ Test externalChangeWhileEditedBlocksOverwriteAndKeepsEdits() passed after 0.325 seconds.
+✔ Test externalRestoreOfPreviouslySavedBytesIsNotIgnored() passed after 0.561 seconds.
+✔ Test failedSaveDoesNotAdvancePersistedSnapshot() passed after 0.303 seconds.
+✔ Test exportingCopyDoesNotChangeOriginalSaveBaseline() passed after 0.300 seconds.
+✔ Test externalChangeWhileCleanReloads() passed after 0.280 seconds.
+✔ Test movedFileUpdatesEditorPathAndRecovery() passed after 0.994 seconds.
+✔ Test deletedFileKeepsTextAsUntitledDocument() passed after 1.073 seconds.
+✔ Test saveAsResolvesRelativeImagesFromTheNewLocation() passed after 0.072 seconds.
+✔ Test forceQuitRecoveryReopensUnsavedEdits() passed after 0.666 seconds.
+✔ Test caretMoveAfterEditKeepsRecoveredSource() passed after 1.913 seconds.
+✔ Test rereadSourceWithoutEditorReachesRecovery() passed after 0.013 seconds.
+✔ Test recoveryRecordFollowsEditsAndClose() passed after 0.946 seconds.
+✔ Test run with 13 tests in 1 suite passed after 10.299 seconds.
+✔ Test launchPlanPrefersRecoveryThenRecent() passed after 0.001 seconds.
+✔ Test recoveryRejectsOldWrites() passed after 0.003 seconds.
+✔ Test terminationRecoveryCannotBeOverwrittenByPendingSave() passed after 0.003 seconds.
+RECOVERY_STORE position-only save: files before ["1F5C7345-38AD-45D0-8BFD-066F097294FB.json": 269, "1F5C7345-38AD-45D0-8BFD-066F097294FB.E3FCAD5F-741B-4FB2-B45F-F9768E323CFB.source": 120000] after ["1F5C7345-38AD-45D0-8BFD-066F097294FB.E3FCAD5F-741B-4FB2-B45F-F9768E323CFB.source": 120000, "1F5C7345-38AD-45D0-8BFD-066F097294FB.json": 272]
+✔ Test freshStoreWritesTheSourceForARepeatedRevision() passed after 0.004 seconds.
+✔ Test positionOnlySaveKeepsTheSourceWithoutRewritingIt() passed after 0.004 seconds.
+✔ Test recordWithInlineSourceStillLoads() passed after 0.004 seconds.
+✔ Test interruptedSavesLeaveCompleteRecords() passed after 0.005 seconds.
+RECOVERY_STORE files after two ids: ["5767EC58-3601-4EF0-991C-8761A784E8FE.71083210-AD56-4E22-ADB7-7C65BD9C83E4.source", "5767EC58-3601-4EF0-991C-8761A784E8FE.json", "95F1DFBE-82F0-4B94-820D-BCE26B685318.12A715F3-1E5A-4A19-9B49-5FE9C8C880E2.source", "95F1DFBE-82F0-4B94-820D-BCE26B685318.json"]
+✔ Test newRevisionReplacesTheSource() passed after 0.005 seconds.
+✔ Test run with 8 tests in 1 suite passed after 0.006 seconds.

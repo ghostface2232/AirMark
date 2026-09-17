@@ -1,0 +1,27 @@
+✔ Test recoveryRejectsOldWrites() passed after 0.002 seconds.
+✔ Test terminationRecoveryCannotBeOverwrittenByPendingSave() passed after 0.002 seconds.
+✔ Test freshStoreWritesTheSourceForARepeatedRevision() passed after 0.002 seconds.
+✔ Test recordWithInlineSourceStillLoads() passed after 0.003 seconds.
+RECOVERY_STORE files after two ids: ["DC5E42EA-700C-4691-8639-90C9599470C1.json", "F8F5FF2B-0D5E-44EE-A122-1C305F01ADA7.json"]
+✘ Test interruptedSavesLeaveCompleteRecords() recorded an issue at RecoveryStoreTests.swift:110:9: Expectation failed: !FileManager.default.fileExists(atPath: orphan.path)
+✔ Test newRevisionReplacesTheSource() passed after 0.003 seconds.
+✘ Test interruptedSavesLeaveCompleteRecords() failed after 0.004 seconds with 1 issue.
+RECOVERY_STORE position-only save: files before ["F10562A1-40A4-40DF-A65E-EA6BE7F918DF.json": 140185] after ["F10562A1-40A4-40DF-A65E-EA6BE7F918DF.json": 140188]
+✘ Test positionOnlySaveKeepsTheSourceWithoutRewritingIt() recorded an issue at RecoveryStoreTests.swift:38:9: Expectation failed: changed.values.allSatisfy { $0 < 4_096 }
+✘ Test positionOnlySaveKeepsTheSourceWithoutRewritingIt() failed after 0.004 seconds with 1 issue.
+✘ Suite RecoveryStoreTests failed after 0.004 seconds with 2 issues.
+✘ Test run with 7 tests in 1 suite failed after 0.005 seconds with 2 issues.
+✔ Test repeatedSavesPreserveBytesWithoutFalseConflicts() passed after 2.822 seconds.
+✔ Test externalChangeWhileEditedBlocksOverwriteAndKeepsEdits() passed after 0.334 seconds.
+✔ Test externalRestoreOfPreviouslySavedBytesIsNotIgnored() passed after 0.567 seconds.
+✔ Test failedSaveDoesNotAdvancePersistedSnapshot() passed after 0.303 seconds.
+✔ Test exportingCopyDoesNotChangeOriginalSaveBaseline() passed after 0.314 seconds.
+✔ Test externalChangeWhileCleanReloads() passed after 0.276 seconds.
+✔ Test movedFileUpdatesEditorPathAndRecovery() passed after 1.031 seconds.
+✔ Test deletedFileKeepsTextAsUntitledDocument() passed after 1.005 seconds.
+✔ Test saveAsResolvesRelativeImagesFromTheNewLocation() passed after 0.073 seconds.
+✔ Test forceQuitRecoveryReopensUnsavedEdits() passed after 0.662 seconds.
+✔ Test caretMoveAfterEditKeepsRecoveredSource() passed after 2.006 seconds.
+✔ Test rereadSourceWithoutEditorReachesRecovery() passed after 0.010 seconds.
+✔ Test recoveryRecordFollowsEditsAndClose() passed after 0.972 seconds.
+✔ Test run with 13 tests in 1 suite passed after 10.384 seconds.

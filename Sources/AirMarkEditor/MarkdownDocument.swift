@@ -4,14 +4,18 @@ import AirMarkCore
 public final class DocumentSnapshot: @unchecked Sendable {
     private let lock = NSLock()
     private var value = DocumentBytes()
+    /// Incremented whenever `value` is replaced, so equal versions mean equal bytes.
+    private var version: UInt64 = 0
     private var conflict = false
     private var diskData: Data?
     private var writingData: Data?
     public func get() -> DocumentBytes { lock.withLock { value } }
-    public func set(_ value: DocumentBytes) { lock.withLock { self.value = value } }
+    /// The bytes together with their version, read at once.
+    public func versioned() -> (bytes: DocumentBytes, version: UInt64) { lock.withLock { (value, version) } }
+    public func set(_ value: DocumentBytes) { lock.withLock { self.value = value; version += 1 } }
     public func hasConflict() -> Bool { lock.withLock { conflict } }
     public func setConflict(_ value: Bool) { lock.withLock { conflict = value } }
-    public func didRead(_ value: DocumentBytes) { lock.withLock { self.value = value; diskData = value.data } }
+    public func didRead(_ value: DocumentBytes) { lock.withLock { self.value = value; version += 1; diskData = value.data } }
     public func persistedData() -> Data? { lock.withLock { diskData } }
     public func dataForWriting() -> Data { lock.withLock { writingData ?? value.data } }
     public func isWriting() -> Bool { lock.withLock { writingData != nil } }
@@ -167,9 +171,12 @@ public final class DocumentSnapshot: @unchecked Sendable {
             }
         }
     }
+    /// The record's revision is the snapshot's version, not the editor's: the recovery store writes the
+    /// source again only when the revision changes, and the snapshot also changes without an editor
+    /// edit, as when the file is read again.
     public func record() -> RecoveryRecord {
-        let bytes = snapshot.get()
-        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: editor?.revision ?? 0, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
+        let (bytes, version) = snapshot.versioned()
+        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()

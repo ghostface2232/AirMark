@@ -1,0 +1,12 @@
+RECOVERY_IO source=9.54MB recovery_dir=10.12MB files=["EA6B8509-EBF7-407F-A8E2-6A41B28ED165.json"]
+RECOVERY_IO edit per_step_bytes p50=10.12MB max=10.12MB total=50.62MB files_replaced=1,1,1,1,1
+RECOVERY_IO caret per_step_bytes p50=10.12MB max=10.12MB total=50.62MB files_replaced=1,1,1,1,1
+RECOVERY_IO scroll_pause per_step_bytes p50=10.12MB max=10.12MB total=50.62MB files_replaced=1,1,1,1,1
+RECOVERY_IO scroll_continuous_60_steps per_step_bytes p50=10.12MB max=10.12MB total=10.12MB files_replaced=1
+RECOVERY_IO reading_10_scrolls_1500ms_apart per_step_bytes p50=101.25MB max=101.25MB total=101.25MB files_replaced=1
+RECOVERY_IO idle_5s per_step_bytes p50=0.00MB max=0.00MB total=0.00MB files_replaced=0
+RECOVERY_IO store_save document_record source_changed p50=163.8ms max=187.1ms selection_only p50=166.5ms max=167.7ms
+RECOVERY_IO store_save native source_changed p50=17.4ms max=17.5ms selection_only p50=17.6ms max=17.8ms records_load=33.4ms
+✔ Test tenMegabyteRecoveryWrites() passed after 62.004 seconds.
+✔ Suite RecoveryIOTests passed after 62.004 seconds.
+✔ Test run with 1 test in 1 suite passed after 62.004 seconds.
