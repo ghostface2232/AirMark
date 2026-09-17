@@ -279,6 +279,38 @@ import AirMarkCore
         editor.textView.unmarkText()
     }
 
+    /// A parse that finishes after further typing is installed moved through the later edits, as
+    /// the drawn presentation was, while `parsed` keeps waiting for a parse of the current text.
+    @Test func staleParseIsInstalledMovedThroughLaterEdits() async throws {
+        let editor = try await make("hello\n\nworld\n")
+        editor.performEdit(range: NSRange(location: 7, length: 0), replacement: "# ")
+        let older = editor.source, olderRevision = editor.revision, olderEdit = editor.editSequence
+        #expect(!editor.presentationStyles(intersecting: NSRange(location: 7, length: 7)).contains { $0.kind == .heading(1) })
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "abc ")
+        let store = PresentationStore(MarkdownParser.parse(older, revision: olderRevision))
+        #expect(await editor.installStaleParse(store, revision: olderRevision, parsedAtEdit: olderEdit))
+        #expect(editor.presentationRevision == olderRevision)
+        #expect(editor.parsed.revision != editor.revision, "renders and lookups still wait for a current parse")
+        let heading = editor.presentationStyles(intersecting: NSRange(location: 11, length: 7)).first { $0.kind == .heading(1) }
+        #expect(heading?.span.location == 11)
+        #expect(Data(editor.source.utf8) == Data("abc hello\n\n# world\n".utf8))
+    }
+
+    /// A parse from before the text was replaced cannot be moved to it, and none is installed
+    /// during composition.
+    @Test func staleParseIsDroppedAcrossReplacementAndComposition() async throws {
+        let editor = try await make("hello\n")
+        let older = editor.source, olderRevision = editor.revision, olderEdit = editor.editSequence
+        editor.replaceSource("# replaced\n")
+        #expect(!(await editor.installStaleParse(PresentationStore(MarkdownParser.parse(older, revision: olderRevision)), revision: olderRevision, parsedAtEdit: olderEdit)))
+        let current = editor.source, currentRevision = editor.revision, currentEdit = editor.editSequence
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "x")
+        editor.textView.setSelectedRange(NSRange(location: 1, length: 0))
+        editor.textView.setMarkedText("ㅎ", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(!(await editor.installStaleParse(PresentationStore(MarkdownParser.parse(current, revision: currentRevision)), revision: currentRevision, parsedAtEdit: currentEdit)))
+        editor.textView.unmarkText()
+    }
+
     /// Cmd-Return right after typing, before the next parse lands, must toggle the box on the
     /// caret's line at its current position, never at the previous parse's coordinates.
     @Test func toggleTaskBeforeReparseUsesCurrentCoordinates() async throws {

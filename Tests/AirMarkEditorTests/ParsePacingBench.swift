@@ -58,7 +58,7 @@ import AirMarkCore
         let editor = try #require(document.editor)
         let log = Log()
         let previous = editor.onParseApplied
-        editor.onParseApplied = { [editor] in previous?(); log.applies.append((clock.now, editor.parsed.revision)) }
+        editor.onParseApplied = { [editor] in previous?(); log.applies.append((clock.now, editor.presentationRevision)) }
         for _ in 0..<4800 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
             try await Task.sleep(for: .milliseconds(25))
         }
