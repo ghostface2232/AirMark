@@ -122,8 +122,12 @@ func launchRecord(_ path: String?, _ source: String, state: RecoveryState = .ope
 /// be a draft a crash left behind and the next a document put away weeks ago — so restoring them all
 /// would open a window for every document the user had ever opened.
 @Test func launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted() {
+    // What `RecoveryWriter.load` produces for a stored record with no `state` field, which
+    // `RecoveryStoreTests.recordsKeepTheirStateAndUnsavedFlag` decodes from such a file. The
+    // initialiser's default is `.open`, the state a document records while it is running.
     func legacy(_ path: String?, _ source: String) -> RecoveryRecord {
-        RecoveryRecord(id: UUID(), filePath: path, source: source, hasBOM: false, revision: 1, selection: SourceSpan(0, 0), scrollY: 0)
+        RecoveryRecord(id: UUID(), filePath: path, source: source, hasBOM: false, revision: 1, selection: SourceSpan(0, 0), scrollY: 0,
+                       state: .unknown, hasUnsavedChanges: true)
     }
     let newest = legacy(nil, "draft")
     #expect(newest.state == .unknown)
