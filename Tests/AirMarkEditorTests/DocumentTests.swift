@@ -281,6 +281,37 @@ import AirMarkCore
         #expect(plans == [.openFile(path: url.path, record: record)], "the last document still reopens when nothing was left open")
     }
 
+    /// The closed record is on disk before `close()` returns. It used to be written from a detached
+    /// Task, so closing a document and quitting straight after left the record saying the document was
+    /// open, and the next launch brought back a window the user had put away.
+    @Test func closingWritesTheRecordBeforeItReturns() async throws {
+        let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try #require(MarkdownDocument.recoveryStore)
+        let identity = document.identity
+        _ = try #require(try await recoveryRecord(document) { $0.state == .open })
+        document.close()
+        // Read the bytes straight off disk, with no await and no wait: nothing the process does after
+        // this point, including exiting, can be what put them there.
+        let file = directory.appendingPathComponent("Recovery").appendingPathComponent(identity.uuidString + ".json")
+        let stored = try JSONSerialization.jsonObject(with: try Data(contentsOf: file)) as? [String: Any]
+        #expect(stored?["state"] as? String == "closed", "close() returned before the record was written")
+
+        // Another document of the same session was left open, so the closed one is not the single most
+        // recent document a launch reopens when nothing was left open. It must not come back at all.
+        let closed = try #require(await store.records().first { $0.id == identity })
+        var left = closed
+        left.id = UUID(); left.filePath = directory.appendingPathComponent("Left.md").path
+        left.state = .quit; left.hasUnsavedChanges = false
+        try Data("left open\n".utf8).write(to: URL(fileURLWithPath: left.filePath!))
+        left.source = "left open\n"
+        try store.saveImmediately(left)
+        let plans = LaunchPlan.resolve(records: await store.records(), recentPaths: [],
+                                       fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(!plans.contains { $0.recordID == identity }, "the closed document came back: \(plans)")
+        #expect(plans.contains { $0.recordID == left.id }, "the document left open did not: \(plans)")
+    }
+
     /// Every record a run writes names that run, so a launch restores the documents the last session
     /// had open and not the ones a session before it left behind. Without the session, `.quit` records
     /// nothing has rewritten since came back at every later launch.

@@ -76,3 +76,47 @@ through a real `RecoveryStore`, not by launching the app twice. `order` is asser
 records; that `NSApplication.shared.orderedDocuments` reports the window stacking a user sees is
 taken from AppKit, not measured here. In the unit tests documents are not registered with
 `NSDocumentController`, so their records carry no order and exercise the nil path.
+
+## 2. The closed record written before `close()` returns
+
+### Problem
+
+`MarkdownDocument.close()` built the `.closed` record and handed it to a detached
+`Task { try? await store.save(saved) }`. Nothing waited for that Task. Closing a document and quitting
+straight after — Cmd-W then Cmd-Q — could exit the process before it ran, leaving the record saying the
+document was open. `applicationShouldTerminate` does not rewrite it either: it only writes records for
+the documents still in `NSDocumentController.shared.documents`, and this one has left. The next launch
+read a stale `.open` record and reopened a window the user had put away.
+
+### Change
+
+`close()` calls `store.saveImmediately(record(state: .closed))`, the same synchronous writer the quit
+path uses, so the record is on disk before the method returns. The error is still swallowed: the window
+is going away and there is nowhere to report it, which is what happened before.
+
+The cancelled debounced save cannot undo it. If that Task was already suspended inside `store.save`,
+its record carries this document's revision with an earlier date, and `RecoveryWriter`'s ordering gate
+rejects a record that is not newer at the same revision.
+
+### Result
+
+`closingWritesTheRecordBeforeItReturns` reads `<id>.json` straight off disk with no await and no wait
+after `close()` returns, so nothing the process does afterwards can be what wrote it, and then checks
+that a launch with another document of the same session left open does not bring the closed one back.
+
+| | before (`close-before.txt`) | after (`close-after.txt`) |
+|---|---|---|
+| `closingWritesTheRecordBeforeItReturns` | fails: `stored?["state"]` is `nil`, the file holds the earlier `.open` record | pass |
+| `closingADocumentRecordsItAsClosed` (existing, polls up to 5 s) | pass | pass |
+
+Before was produced by reverting only the write in `close()` to the detached Task.
+
+Full suite after: 98 tests in 15 suites and 52 in 4 suites, all passing.
+
+### One flake, not from this change
+
+In one of five full-suite runs, `repeatedSavesPreserveBytesWithoutFalseConflicts` failed its first
+`#expect(document.isDocumentEdited)`. That assertion follows a fixed 250 ms wait for the text view to
+close its undo group, and the run was on a machine at load average 3.3 with the other suites running in
+parallel. It passed in the three isolated `--filter DocumentTests` runs and in both full runs after,
+and nothing in this change touches the edit, undo or change-count path. Recorded rather than dropped.
