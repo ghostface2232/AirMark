@@ -1,0 +1,163 @@
+== 02:19:30 main-100000-r1 load={ 2.26 2.10 1.78 }
+PACING main-100000-r1 bytes=100100 standalone_parse n=5 p50=27 p95=29 max=29
+PACING main-100000-r1 idle latency n=20 p50=112 p95=114 max=114 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-100000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=117 p95=124 max=125 settle=112ms parses=117 stale=0 applied=117 max_apply_gap=423ms
+PACING main-100000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=87 p95=88 max=88 key_latency n=180 p50=483 p95=1129 max=1215 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[13, 13, 14, 12, 13, 14, 14, 14, 12, 14, 14, 14]
+PACING main-100000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=724 p95=5683 max=7366 settle=87ms parses=438 stale=405 applied=33 max_apply_gap=7367ms key_gap_max=95ms
+== 02:21:34 s3-100000-r1 load={ 2.00 2.01 1.78 }
+PACING s3-100000-r1 bytes=100100 standalone_parse n=5 p50=16 p95=18 max=18
+PACING s3-100000-r1 idle latency n=20 p50=93 p95=95 max=95 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-100000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=99 p95=104 max=105 settle=94ms parses=117 stale=0 applied=117 max_apply_gap=415ms
+PACING s3-100000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=74 p95=79 max=79 key_latency n=180 p50=77 p95=102 max=105 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[7, 6, 5, 5, 4, 6, 6, 6, 3, 5, 5, 5]
+PACING s3-100000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=77 p95=87 max=103 settle=74ms parses=438 stale=130 applied=438 max_apply_gap=147ms key_gap_max=90ms
+== 02:23:38 win-100000-r1 load={ 0.91 1.58 1.64 }
+PACING win-100000-r1 bytes=100100 standalone_parse n=5 p50=16 p95=18 max=18
+PACING win-100000-r1 idle latency n=20 p50=50 p95=52 max=55 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=58 p95=61 max=61 settle=52ms parses=117 stale=0 applied=117 max_apply_gap=414ms
+PACING win-100000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=53 p95=54 max=54 key_latency n=180 p50=55 p95=60 max=61 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=54 p95=60 max=61 settle=49ms parses=438 stale=0 applied=438 max_apply_gap=95ms key_gap_max=90ms
+== 02:25:41 main-1000000-r1 load={ 1.34 1.56 1.62 }
+PACING main-1000000-r1 bytes=1000090 standalone_parse n=5 p50=269 p95=274 max=274
+PACING main-1000000-r1 idle latency n=20 p50=382 p95=385 max=385 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-1000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=1987 p95=6445 max=7261 settle=359ms parses=114 stale=100 applied=14 max_apply_gap=7284ms
+PACING main-1000000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=502 p95=509 max=509 key_latency n=180 p50=1062 p95=1617 max=1629 parses=[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5] stale=[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+PACING main-1000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=18055 p95=33891 max=35577 settle=616ms parses=108 stale=107 applied=1 max_apply_gap=35577ms key_gap_max=100ms
+== 02:27:58 s3-1000000-r1 load={ 2.23 1.85 1.73 }
+PACING s3-1000000-r1 bytes=1000090 standalone_parse n=5 p50=168 p95=179 max=179
+PACING s3-1000000-r1 idle latency n=20 p50=276 p95=278 max=282 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-1000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=258 p95=273 max=300 settle=256ms parses=117 stale=31 applied=117 max_apply_gap=467ms
+PACING s3-1000000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=332 p95=360 max=360 key_latency n=180 p50=311 p95=397 max=417 parses=[7, 7, 6, 7, 7, 7, 7, 6, 6, 7, 6, 7] stale=[6, 6, 5, 6, 6, 6, 6, 5, 5, 6, 5, 6]
+PACING s3-1000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=292 p95=388 max=415 settle=333ms parses=175 stale=174 applied=175 max_apply_gap=287ms key_gap_max=87ms
+== 02:30:10 win-1000000-r1 load={ 2.28 1.97 1.78 }
+PACING win-1000000-r1 bytes=1000090 standalone_parse n=5 p50=170 p95=186 max=186
+PACING win-1000000-r1 idle latency n=20 p50=56 p95=57 max=58 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=60 p95=62 max=63 settle=56ms parses=117 stale=0 applied=117 max_apply_gap=418ms
+PACING win-1000000-r1 bursts(15x80ms) settle_after_last_key n=12 p50=55 p95=57 max=57 key_latency n=180 p50=58 p95=61 max=64 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=58 p95=60 max=61 settle=56ms parses=438 stale=0 applied=438 max_apply_gap=89ms key_gap_max=87ms
+== 02:32:14 main-10000000-r1 load={ 2.02 1.98 1.81 }
+PACING main-10000000-r1 bytes=10000120 standalone_parse n=3 p50=2783 p95=2816 max=2816
+PACING main-10000000-r1 idle latency n=10 p50=3144 p95=3168 max=3168 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-10000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=22067 p95=37959 max=39414 settle=4219ms parses=13 stale=12 applied=1 max_apply_gap=39414ms
+PACING main-10000000-r1 bursts(15x80ms) settle_after_last_key n=6 p50=5069 p95=5140 max=5140 key_latency n=90 p50=5636 p95=6185 max=6240 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING main-10000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=22055 p95=37894 max=39578 settle=4614ms parses=13 stale=12 applied=1 max_apply_gap=39578ms key_gap_max=90ms
+== 02:35:22 s3-10000000-r1 load={ 2.28 2.11 1.90 }
+PACING s3-10000000-r1 bytes=10000120 standalone_parse n=3 p50=1687 p95=1745 max=1745
+PACING s3-10000000-r1 idle latency n=10 p50=2006 p95=2027 max=2027 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-10000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=2913 p95=3774 max=3903 settle=2023ms parses=19 stale=18 applied=19 max_apply_gap=2036ms
+PACING s3-10000000-r1 bursts(15x80ms) settle_after_last_key n=6 p50=2871 p95=2896 max=2896 key_latency n=90 p50=3351 p95=3903 max=3932 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING s3-10000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=3010 p95=3893 max=4058 settle=3096ms parses=19 stale=18 applied=19 max_apply_gap=2108ms key_gap_max=114ms
+== 02:37:58 win-10000000-r1 load={ 2.70 2.27 1.98 }
+PACING win-10000000-r1 bytes=10000120 standalone_parse n=3 p50=1745 p95=1798 max=1798
+PACING win-10000000-r1 idle latency n=10 p50=94 p95=107 max=107 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-10000000-r1 slow(200-400ms, 35s) keys=117 latency n=117 p50=97 p95=103 max=107 settle=94ms parses=117 stale=0 applied=117 max_apply_gap=432ms
+PACING win-10000000-r1 bursts(15x80ms) settle_after_last_key n=6 p50=71 p95=75 max=75 key_latency n=90 p50=74 p95=95 max=105 parses=[15, 15, 15, 15, 15, 15] stale=[5, 6, 5, 4, 4, 4]
+PACING win-10000000-r1 sustained(80ms, 35s) keys=438 latency n=438 p50=75 p95=85 max=100 settle=71ms parses=438 stale=109 applied=438 max_apply_gap=147ms key_gap_max=90ms
+== 02:39:53 win-100000-r2 load={ 2.32 2.26 2.01 }
+PACING win-100000-r2 bytes=100100 standalone_parse n=5 p50=17 p95=18 max=18
+PACING win-100000-r2 idle latency n=20 p50=51 p95=52 max=57 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=58 p95=60 max=61 settle=51ms parses=117 stale=0 applied=117 max_apply_gap=416ms
+PACING win-100000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=50 p95=51 max=51 key_latency n=180 p50=54 p95=60 max=61 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=53 p95=60 max=61 settle=50ms parses=438 stale=0 applied=438 max_apply_gap=93ms key_gap_max=91ms
+== 02:41:56 main-100000-r2 load={ 1.84 2.10 1.98 }
+PACING main-100000-r2 bytes=100100 standalone_parse n=5 p50=26 p95=28 max=28
+PACING main-100000-r2 idle latency n=20 p50=112 p95=114 max=119 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-100000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=115 p95=124 max=127 settle=114ms parses=117 stale=0 applied=117 max_apply_gap=413ms
+PACING main-100000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=86 p95=89 max=89 key_latency n=180 p50=250 p95=731 max=1209 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[13, 12, 12, 11, 13, 11, 14, 11, 11, 13, 11, 12]
+PACING main-100000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=563 p95=1843 max=2800 settle=87ms parses=438 stale=399 applied=39 max_apply_gap=2802ms key_gap_max=95ms
+== 02:44:00 s3-100000-r2 load={ 1.69 1.94 1.93 }
+PACING s3-100000-r2 bytes=100100 standalone_parse n=5 p50=16 p95=18 max=18
+PACING s3-100000-r2 idle latency n=20 p50=92 p95=94 max=94 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-100000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=98 p95=104 max=108 settle=87ms parses=117 stale=0 applied=117 max_apply_gap=420ms
+PACING s3-100000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=73 p95=76 max=76 key_latency n=180 p50=77 p95=94 max=102 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[5, 5, 5, 5, 5, 5, 4, 4, 5, 4, 6, 4]
+PACING s3-100000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=77 p95=85 max=96 settle=74ms parses=438 stale=112 applied=438 max_apply_gap=146ms key_gap_max=90ms
+== 02:46:04 win-1000000-r2 load={ 2.24 2.06 1.98 }
+PACING win-1000000-r2 bytes=1000090 standalone_parse n=5 p50=168 p95=174 max=174
+PACING win-1000000-r2 idle latency n=20 p50=56 p95=57 max=58 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=62 p95=67 max=68 settle=56ms parses=117 stale=0 applied=117 max_apply_gap=404ms
+PACING win-1000000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=55 p95=57 max=57 key_latency n=180 p50=60 p95=66 max=67 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=59 p95=65 max=68 settle=58ms parses=438 stale=0 applied=438 max_apply_gap=96ms key_gap_max=92ms
+== 02:48:08 main-1000000-r2 load={ 2.01 1.96 1.94 }
+PACING main-1000000-r2 bytes=1000090 standalone_parse n=5 p50=267 p95=274 max=274
+PACING main-1000000-r2 idle latency n=20 p50=378 p95=382 max=384 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-1000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=1613 p95=6197 max=7266 settle=377ms parses=114 stale=98 applied=16 max_apply_gap=7276ms
+PACING main-1000000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=494 p95=505 max=505 key_latency n=180 p50=1057 p95=1617 max=1629 parses=[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5] stale=[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+PACING main-1000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=18017 p95=33862 max=35544 settle=577ms parses=111 stale=110 applied=1 max_apply_gap=35544ms key_gap_max=90ms
+== 02:50:25 s3-1000000-r2 load={ 2.27 2.08 1.99 }
+PACING s3-1000000-r2 bytes=1000090 standalone_parse n=5 p50=162 p95=170 max=170
+PACING s3-1000000-r2 idle latency n=20 p50=274 p95=285 max=315 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-1000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=258 p95=278 max=282 settle=250ms parses=117 stale=32 applied=117 max_apply_gap=482ms
+PACING s3-1000000-r2 bursts(15x80ms) settle_after_last_key n=12 p50=323 p95=337 max=337 key_latency n=180 p50=298 p95=388 max=407 parses=[7, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7] stale=[6, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+PACING s3-1000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=292 p95=379 max=414 settle=335ms parses=180 stale=179 applied=180 max_apply_gap=284ms key_gap_max=90ms
+== 02:52:37 win-10000000-r2 load={ 2.73 2.27 2.07 }
+PACING win-10000000-r2 bytes=10000120 standalone_parse n=3 p50=1772 p95=1793 max=1793
+PACING win-10000000-r2 idle latency n=10 p50=93 p95=100 max=100 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-10000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=98 p95=107 max=112 settle=94ms parses=117 stale=0 applied=117 max_apply_gap=420ms
+PACING win-10000000-r2 bursts(15x80ms) settle_after_last_key n=6 p50=28 p95=73 max=73 key_latency n=90 p50=75 p95=98 max=111 parses=[15, 15, 15, 15, 15, 15] stale=[7, 7, 6, 7, 7, 7]
+PACING win-10000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=77 p95=88 max=98 settle=71ms parses=438 stale=152 applied=438 max_apply_gap=147ms key_gap_max=90ms
+== 02:54:32 main-10000000-r2 load={ 2.26 2.20 2.07 }
+PACING main-10000000-r2 bytes=10000120 standalone_parse n=3 p50=2789 p95=2835 max=2835
+PACING main-10000000-r2 idle latency n=10 p50=3163 p95=3231 max=3231 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-10000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=22078 p95=37979 max=39422 settle=4221ms parses=13 stale=12 applied=1 max_apply_gap=39422ms
+PACING main-10000000-r2 bursts(15x80ms) settle_after_last_key n=6 p50=5129 p95=5158 max=5158 key_latency n=90 p50=5691 p95=6238 max=6268 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING main-10000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=22188 p95=38028 max=39694 settle=4749ms parses=13 stale=12 applied=1 max_apply_gap=39694ms key_gap_max=90ms
+== 02:57:41 s3-10000000-r2 load={ 1.95 2.16 2.07 }
+PACING s3-10000000-r2 bytes=10000120 standalone_parse n=3 p50=1682 p95=1724 max=1724
+PACING s3-10000000-r2 idle latency n=10 p50=1979 p95=2008 max=2008 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-10000000-r2 slow(200-400ms, 35s) keys=117 latency n=117 p50=2906 p95=3756 max=3859 settle=3409ms parses=20 stale=19 applied=20 max_apply_gap=2010ms
+PACING s3-10000000-r2 bursts(15x80ms) settle_after_last_key n=6 p50=2831 p95=2875 max=2875 key_latency n=90 p50=3305 p95=3864 max=3909 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING s3-10000000-r2 sustained(80ms, 35s) keys=438 latency n=438 p50=3000 p95=3874 max=4034 settle=2935ms parses=19 stale=18 applied=19 max_apply_gap=2088ms key_gap_max=110ms
+== 03:00:18 s3-100000-r3 load={ 1.85 1.98 2.01 }
+PACING s3-100000-r3 bytes=100100 standalone_parse n=5 p50=16 p95=18 max=18
+PACING s3-100000-r3 idle latency n=20 p50=94 p95=98 max=98 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-100000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=101 p95=106 max=109 settle=94ms parses=117 stale=0 applied=117 max_apply_gap=417ms
+PACING s3-100000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=77 p95=81 max=81 key_latency n=180 p50=78 p95=97 max=104 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[6, 6, 5, 5, 6, 5, 6, 6, 7, 6, 5, 7]
+PACING s3-100000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=78 p95=88 max=102 settle=76ms parses=438 stale=140 applied=438 max_apply_gap=148ms key_gap_max=90ms
+== 03:02:21 win-100000-r3 load={ 1.32 1.76 1.91 }
+PACING win-100000-r3 bytes=100100 standalone_parse n=5 p50=17 p95=20 max=20
+PACING win-100000-r3 idle latency n=20 p50=51 p95=51 max=52 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=58 p95=61 max=61 settle=49ms parses=117 stale=0 applied=117 max_apply_gap=417ms
+PACING win-100000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=51 p95=52 max=52 key_latency n=180 p50=55 p95=60 max=61 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-100000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=54 p95=60 max=61 settle=51ms parses=438 stale=0 applied=438 max_apply_gap=94ms key_gap_max=91ms
+== 03:04:24 main-100000-r3 load={ 1.52 1.64 1.84 }
+PACING main-100000-r3 bytes=100100 standalone_parse n=5 p50=26 p95=28 max=28
+PACING main-100000-r3 idle latency n=20 p50=113 p95=114 max=116 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-100000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=119 p95=123 max=126 settle=115ms parses=117 stale=0 applied=117 max_apply_gap=422ms
+PACING main-100000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=86 p95=88 max=88 key_latency n=180 p50=411 p95=1125 max=1215 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[13, 14, 14, 13, 14, 13, 13, 14, 14, 12, 13, 13]
+PACING main-100000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=650 p95=3203 max=4879 settle=88ms parses=438 stale=402 applied=36 max_apply_gap=4881ms key_gap_max=91ms
+== 03:06:28 s3-1000000-r3 load={ 1.54 1.56 1.77 }
+PACING s3-1000000-r3 bytes=1000090 standalone_parse n=5 p50=161 p95=169 max=169
+PACING s3-1000000-r3 idle latency n=20 p50=270 p95=273 max=273 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-1000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=257 p95=278 max=284 settle=246ms parses=117 stale=31 applied=117 max_apply_gap=485ms
+PACING s3-1000000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=307 p95=368 max=368 key_latency n=180 p50=301 p95=387 max=413 parses=[7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7] stale=[6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+PACING s3-1000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=291 p95=379 max=413 settle=382ms parses=181 stale=180 applied=181 max_apply_gap=268ms key_gap_max=89ms
+== 03:08:40 win-1000000-r3 load={ 1.65 1.55 1.73 }
+PACING win-1000000-r3 bytes=1000090 standalone_parse n=5 p50=168 p95=178 max=178
+PACING win-1000000-r3 idle latency n=20 p50=55 p95=57 max=57 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=59 p95=61 max=62 settle=56ms parses=117 stale=0 applied=117 max_apply_gap=417ms
+PACING win-1000000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=56 p95=59 max=59 key_latency n=180 p50=58 p95=62 max=66 parses=[15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-1000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=58 p95=60 max=62 settle=57ms parses=438 stale=0 applied=438 max_apply_gap=89ms key_gap_max=87ms
+== 03:10:44 main-1000000-r3 load={ 1.81 1.62 1.73 }
+PACING main-1000000-r3 bytes=1000090 standalone_parse n=5 p50=267 p95=275 max=275
+PACING main-1000000-r3 idle latency n=20 p50=385 p95=389 max=390 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-1000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=2551 p95=12823 max=14240 settle=356ms parses=114 stale=103 applied=11 max_apply_gap=14251ms
+PACING main-1000000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=503 p95=507 max=507 key_latency n=180 p50=1063 p95=1621 max=1627 parses=[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5] stale=[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+PACING main-1000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=18025 p95=33865 max=35547 settle=586ms parses=111 stale=110 applied=1 max_apply_gap=35547ms key_gap_max=85ms
+== 03:13:02 s3-10000000-r3 load={ 1.73 1.63 1.71 }
+PACING s3-10000000-r3 bytes=10000120 standalone_parse n=3 p50=1724 p95=1763 max=1763
+PACING s3-10000000-r3 idle latency n=10 p50=2051 p95=2069 max=2069 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING s3-10000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=2909 p95=3828 max=3935 settle=2634ms parses=19 stale=18 applied=19 max_apply_gap=2075ms
+PACING s3-10000000-r3 bursts(15x80ms) settle_after_last_key n=6 p50=2934 p95=2967 max=2967 key_latency n=90 p50=3419 p95=3973 max=3997 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING s3-10000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=3051 p95=4000 max=4098 settle=3938ms parses=19 stale=18 applied=19 max_apply_gap=2108ms key_gap_max=107ms
+== 03:15:40 win-10000000-r3 load={ 1.99 1.78 1.76 }
+PACING win-10000000-r3 bytes=10000120 standalone_parse n=3 p50=1773 p95=1797 max=1797
+PACING win-10000000-r3 idle latency n=10 p50=93 p95=96 max=96 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING win-10000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=96 p95=104 max=107 settle=82ms parses=117 stale=0 applied=117 max_apply_gap=433ms
+PACING win-10000000-r3 bursts(15x80ms) settle_after_last_key n=6 p50=27 p95=74 max=74 key_latency n=90 p50=75 p95=100 max=109 parses=[15, 15, 15, 15, 15, 15] stale=[6, 5, 7, 5, 5, 5]
+PACING win-10000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=75 p95=85 max=101 settle=73ms parses=438 stale=115 applied=438 max_apply_gap=149ms key_gap_max=90ms
+== 03:17:35 main-10000000-r3 load={ 2.51 2.06 1.86 }
+PACING main-10000000-r3 bytes=10000120 standalone_parse n=3 p50=2795 p95=2843 max=2843
+PACING main-10000000-r3 idle latency n=10 p50=3134 p95=3163 max=3163 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING main-10000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=21651 p95=37548 max=38997 settle=3796ms parses=13 stale=12 applied=1 max_apply_gap=38997ms
+PACING main-10000000-r3 bursts(15x80ms) settle_after_last_key n=6 p50=5016 p95=5035 max=5035 key_latency n=90 p50=5577 p95=6130 max=6151 parses=[2, 2, 2, 2, 2, 2] stale=[1, 1, 1, 1, 1, 1]
+PACING main-10000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=21808 p95=37648 max=39329 settle=4375ms parses=13 stale=12 applied=1 max_apply_gap=39329ms key_gap_max=90ms
+DONE

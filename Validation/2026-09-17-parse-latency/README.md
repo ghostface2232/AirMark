@@ -175,18 +175,72 @@ mixing headings, nested quotes and lists, indented continuation lines, fences, t
 links, HTML, math, CRLF/CR endings, tabs, Hangul, emoji and combining marks: 35,092 styles and 4,737
 elements, identical.
 
+## 6. Reparsing only the blocks an edit touched
+
+`block-window/`: `main` (`cb8c3df`), `s3` (`8dba8b9`, the cheaper whole parse) and `win` (`10fc3c9`,
+block windows), three runs each, order rotated per run. p50 / p95 / max in ms, pooled.
+
+| scenario | size | main | s3 | win |
+|---|---|---|---|---|
+| idle key → applied | 100KB | 113 / 114 / 119 | 93 / 95 / 98 | **51 / 52 / 57** |
+| | 1MB | 382 / 388 / 390 | 273 / 278 / 315 | **56 / 57 / 58** |
+| | 10MB | 3,149 / 3,185 / 3,231 | 2,008 / 2,065 / 2,069 | **93 / 100 / 107** |
+| slow typing, per key | 1MB | 1,994 / 9,085 / 14,240 | 258 / 278 / 300 | **60 / 65 / 68** |
+| | 10MB | 21,899 / 37,670 / 39,422 | 2,909 / 3,799 / 3,935 | **97 / 105 / 112** |
+| 80 ms typing for 35 s, per key | 100KB | 647 / 3,523 / 7,366 | 77 / 87 / 103 | **54 / 60 / 61** |
+| | 1MB | 18,055 / 33,862 / 35,577 | 292 / 380 / 415 | **58 / 63 / 68** |
+| | 10MB | 22,048 / 37,818 / 39,694 | 3,034 / 3,921 / 4,098 | **75 / 87 / 101** |
+| burst settle | 100KB | 86 / 88 / 89 | 74 / 79 / 81 | **51 / 54 / 54** |
+| | 1MB | 501 / 508 / 509 | 320 / 360 / 368 | **55 / 59 / 59** |
+| | 10MB | 5,069 / 5,158 / 5,158 | 2,875 / 2,967 / 2,967 | **29 / 75 / 75** |
+| stale parses per burst | 1MB | 4 of 5 | 5.9 of 6.9 | **0 of 15** |
+| | 10MB | 1 of 2 | 1 of 2 | **5.7 of 15** |
+| latest key during 35 s at 80 ms, max, per run | 10MB | 90 / 90 / 90 | 114 / 110 / 107 | **90 / 90 / 90** |
+
+At 10MB a keystroke now reaches the screen's parse in about 100 ms rather than 2–40 s, the window
+install costs nothing the key gap can see (90 ms, as on `main`), and typing no longer waits for a
+parse of the whole document: each key starts its own parse of its block. At 100KB and 1MB every key
+of a 35 s burst is parsed and installed (438 of 438) instead of 33–46 (`main`).
+
+The windows stay small on this fixture (one heading, paragraph, task item per block). On the
+repository's own Markdown with random typing they were a few hundred to a few thousand UTF-16 units,
+except in `DEV_LOG.md`, where one top-level list is a single block and the window is that list.
+
+### The cost on documents that cannot be reparsed in part
+
+`block-window-references/`: the same fixture with one link reference definition appended, which makes
+every parse whole, two runs each. `winref` is `10fc3c9`, `wintuned` is `fa5de7c`, which takes the
+block spans from the walk instead of a second pass.
+
+| | size | s3ref | winref | wintuned |
+|---|---|---|---|---|
+| standalone parse | 1MB | 167 ms | 170 ms | 165 ms |
+| | 10MB | 1,679 ms | 1,789 ms | 1,701 ms |
+| idle key → applied (p50) | 1MB | 277 | 293 | 288 |
+| | 10MB | 2,021 | 2,228 | 2,158 |
+| 80 ms typing, per key (p50 / max) | 10MB | 3,022 / 4,063 | 3,361 / 5,071 | 3,232 / 4,302 |
+
+Recording block spans in a second pass over the document's children cost 61 ms of a 1,742 ms 10MB
+parse (measured directly, with the `]:` scan at 12.5 ms); taking them from the walk brought the parse
+to 1,681 ms. What remains on a document that is always parsed whole is about 1% of the parse plus the
+`]:` scan, and about 6% of the wait after a keystroke at 10MB (2,021 → 2,158 ms p50).
+
 ## Remaining
 
-- A 10MB parse still takes 1.7 s, so typing there still waits up to about 4 s for new formatting.
-  Block-local reparsing of the edited block is the step that removes the dependence on document size.
-- Settling after typing still waits for a running stale parse before the final one starts.
-- Installing a parse on the main actor delays a key by up to 34 ms at 10MB (`changedStyleSpans` and `elementDiff`
-  walk every style and element).
+- A document that may define link references (`]:` anywhere) is parsed whole on every keystroke, which
+  is 2.2 s at 10MB, and costs about 6% more than before the block window existed.
+- A top-level list is one block, so editing inside a long list reparses the whole list.
+- A whole parse still holds the main actor for about 35 ms at 10MB when it lands (the style and element
+  diff), and the presentation and edit log still store absolute offsets, so an edit moves every entry
+  after it. Both are proportional to the document, not to the change.
+- swift-markdown gives no source range to a paragraph that a GFM table directly below splits; such a
+  document has no block spans and is parsed whole.
 
 ## Tests
 
 `swift test -c release --disable-sandbox` passed at each commit: 86 editor/integration and 38 core
-tests at `65ca984`, 88 and 38 at `881d4d8` and `8dba8b9` (environment-gated scale benchmarks
+tests at `65ca984`, 88 and 38 at `881d4d8` and `8dba8b9`, 88 and 39 at `8a1f141`, 88 and 42 at
+`2ffcf5b`, 89 and 42 at `10fc3c9`, 89 and 43 at `fa5de7c` (environment-gated scale benchmarks
 skipped). `EditorTests/staleParseIsInstalledMovedThroughLaterEdits` failed with the move through later
 edits removed and passed with it. `PresentationStoreTests`, `ArtifactStoreDifferentialTests`,
 `EditorTests` and `RenderLifecycleTests` also passed on `1a06e31` before the revert.
