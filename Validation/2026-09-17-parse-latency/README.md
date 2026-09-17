@@ -1,7 +1,10 @@
 # Parse latency, parse application and render failures
 
 The three original commits (`aeaf008`, `8a5da84`, `1a06e31`) were written without a toolchain and
-not run. Everything below was measured afterwards on the development host.
+not run. Everything below was measured afterwards on the development host, then three changes were
+stacked on them: fixed pacing restored (`65ca984`), stale parses installed moved through later edits
+(`881d4d8`), and a cheaper parse (`8dba8b9`). Sections 4 and 5 compare `main`, `881d4d8` and
+`8dba8b9`.
 
 Host: Mac17,3 (Apple M5), 24 GiB RAM, macOS 27.0, Xcode 27.0 (27A266a), Swift 6.4. Release builds
 (`swift test -c release --disable-sandbox`). OS cache state uncontrolled. A background
@@ -31,8 +34,12 @@ it is installed (`onParseApplied`), polled on the main actor at 1 ms. It is not 
 - `sustained`: 35 s of keys 80 ms apart (438 keys).
 - `parses`/`stale`: parses that finished during the scenario, and those whose text had changed by then.
 
-The benchmark reads `parseCompletedCount`/`staleParseCount`. `main` has no such counters, so the
-`main` worktree added exactly the two lines `aeaf008` adds to `scheduleParse`; nothing else differed.
+The benchmark reads `parseCompletedCount`/`staleParseCount` and, from `881d4d8` on,
+`presentationRevision` (the revision of the source the installed presentation was parsed from).
+`main` has none of these, so the `main` worktree added the two counter lines `aeaf008` adds to
+`scheduleParse` and `presentationRevision { parsed.revision }`; nothing else differed. With stale
+parses installed, `applied` counts every installation and a key's latency ends at the first
+installation whose source includes it.
 
 ## 1. Parse pacing in `aeaf008`: measured, then reverted
 
@@ -104,8 +111,82 @@ Same runs. Keystroke p50 per run, 50,000 failed elements:
 With no failures both are 2.8–3.1 / 1.3–1.4 / 0.12–0.13 ms, so a failure history no longer costs a
 keystroke anything measurable; what remains at the head and middle is the style rebase.
 
+## 4. Stale parses installed, and a cheaper parse
+
+`step2-step3/`: `main` (`cb8c3df`), `step2` (`881d4d8`) and `step3` (`8dba8b9`), three runs each,
+order rotated per run. p50 / p95 / max in ms, pooled.
+
+| scenario | size | main | step2 | step3 |
+|---|---|---|---|---|
+| idle key → current parse | 100KB | 113 / 114 / 118 | 108 / 109 / 111 | 93 / 94 / 95 |
+| | 1MB | 383 / 390 / 394 | 380 / 385 / 392 | 274 / 296 / 310 |
+| | 10MB | 3,130 / 3,180 / 3,182 | 3,092 / 3,148 / 3,167 | 2,014 / 2,037 / 2,039 |
+| slow typing, per key | 100KB | 117 / 123 / 134 | 113 / 118 / 122 | 98 / 103 / 106 |
+| | 1MB | 2,168 / 9,102 / 14,251 | 407 / 552 / 601 | 265 / 298 / 333 |
+| | 10MB | 21,580 / 37,352 / 39,116 | 4,531 / 5,897 / 6,069 | 2,958 / 3,816 / 3,940 |
+| 80 ms typing for 35 s, per key | 100KB | 563 / 3,192 / 5,358 | 84 / 95 / 117 | 77 / 85 / 102 |
+| | 1MB | 18,023 / 33,851 / 35,549 | 457 / 595 / 629 | 304 / 404 / 437 |
+| | 10MB | 21,531 / 37,312 / 39,397 | 4,685 / 6,063 / 6,253 | 3,034 / 3,935 / 4,158 |
+| parses installed during 35 s at 80 ms | 1MB | 1 of 111 | 115–116 of 115–116 | 162–179 of 162–179 |
+| | 10MB | 1 of 13 | 13 of 13 | 19 of 19 |
+| burst settle | 100KB | 87 / 89 / 89 | 85 / 87 / 88 | 75 / 78 / 79 |
+| | 1MB | 495 / 506 / 509 | 482 / 495 / 497 | 323 / 343 / 364 |
+| | 10MB | 5,019 / 5,104 / 5,104 | 5,063 / 5,144 / 5,144 | 2,886 / 2,953 / 2,953 |
+| settle after 35 s at 80 ms, per run | 10MB | 4,433 / 3,874 / 3,847 | 5,492 / 5,503 / 5,372 | 3,908 / 2,981 / 3,336 |
+| latest key during 35 s at 80 ms, max, per run | 10MB | 90 / 90 / 92 | 114 / 97 / 109 | 110 / 108 / 109 |
+
+Standalone parse + `PresentationStore`: `step3` 16 ms (100KB), 166 ms (1MB), 1,701 ms (10MB), against
+26–27, 274 and 2,764–2,800 ms.
+
+What this shows:
+
+- Installing stale parses bounds how long typing goes without a new parse to about two parses:
+  the longest wait for a key during 35 s of 80 ms typing fell from 5.4 s to 117 ms at 100KB, from
+  35.5 s to 629 ms at 1MB, and from 39.4 s to 6.3 s at 10MB. Slow typing at 1MB no longer waits
+  seconds (max 14.3 s → 601 ms). Single keys after idle are unchanged, since nothing is running then.
+- `step2` costs two things at 10MB. When typing stops while a parse runs, the parse of the final
+  text starts only after it, so settling after 35 s of typing took 5.4–5.5 s instead of 3.8–4.4 s.
+  Installing a 10MB parse runs on the main actor, and the latest key during typing arrived up to
+  114 ms after the previous one instead of 90–92 ms, up to 34 ms late each time a parse lands
+  (about every 3 s).
+- `step3`'s cheaper parse shortens everything that includes a parse by about 40% and removes the
+  settle regression: 3.0–3.9 s after 35 s of typing, 2.9 s after a burst (main 5.0 s). The hitch
+  when a 10MB parse lands remains (108–110 ms).
+- Burst parses per burst stay at five at 1MB and two at 10MB: the same parses run, but none is
+  wasted, and at 1MB `step3` runs more of them (6–7) because each is shorter.
+
+## 5. Where a 10MB parse went (`8dba8b9`)
+
+Sampled with `sample` on a release executable parsing the fixture repeatedly
+(2.82 s per parse before):
+
+- `NSRegularExpression.init` for the list item and block quote patterns, compiled per item and quote:
+  about 28% of parse samples. Compiled once: 2.82 → 2.28 s.
+- `SourceIndex.offset(line:utf8Column:)` at the top of about 12% of samples, searching 156,000
+  checkpoints and walking scalars; `ClosedRange.contains` in the scalar width was not inlined. A
+  column inside a line's leading ASCII run now maps directly: 2.28 → 1.99 s.
+- `walk` computed spans for every `Text`, `SoftBreak` and `LineBreak` and ran the type switch on them,
+  though they add no style and their spans have no side effects: 1.99 → 1.65 s.
+- `swift-markdown`'s `Document(parsing:)` is now most of what remains (about 0.9 s).
+
+The parser output (styles with markers, elements, checkboxes) was compared byte for byte before and
+after the three changes on every Markdown file in the repository and on 4,000 generated documents
+mixing headings, nested quotes and lists, indented continuation lines, fences, tables, reference
+links, HTML, math, CRLF/CR endings, tabs, Hangul, emoji and combining marks: 35,092 styles and 4,737
+elements, identical.
+
+## Remaining
+
+- A 10MB parse still takes 1.7 s, so typing there still waits up to about 4 s for new formatting.
+  Block-local reparsing of the edited block is the step that removes the dependence on document size.
+- Settling after typing still waits for a running stale parse before the final one starts.
+- Installing a parse on the main actor delays a key by up to 34 ms at 10MB (`changedStyleSpans` and `elementDiff`
+  walk every style and element).
+
 ## Tests
 
-Step 1: `swift test -c release --disable-sandbox` passed, 86 editor/integration and 38 core tests
-(environment-gated scale benchmarks skipped). `PresentationStoreTests`, `ArtifactStoreDifferentialTests`,
+`swift test -c release --disable-sandbox` passed at each commit: 86 editor/integration and 38 core
+tests at `65ca984`, 88 and 38 at `881d4d8` and `8dba8b9` (environment-gated scale benchmarks
+skipped). `EditorTests/staleParseIsInstalledMovedThroughLaterEdits` failed with the move through later
+edits removed and passed with it. `PresentationStoreTests`, `ArtifactStoreDifferentialTests`,
 `EditorTests` and `RenderLifecycleTests` also passed on `1a06e31` before the revert.

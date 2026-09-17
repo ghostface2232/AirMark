@@ -12,7 +12,8 @@ sizes = sorted({k[0] for k in runs})
 print("latency/settle columns: p50 p95 max (ms), pooled over runs; per-run max in brackets")
 for size in sizes:
     print(f"\n### {size//1000}KB")
-    for v in ("main", "pr"):
+    variants = sorted({k[1] for k in runs if k[0] == size}, key=lambda v: (v != "main", v))
+    for v in variants:
         rs = runs.get((size, v), [])
         if not rs: continue
         parse = [x for _, d in rs for x in d["standalone_parse_ms"]]
