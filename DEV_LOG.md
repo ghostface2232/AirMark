@@ -99,10 +99,13 @@ suites on macOS before trusting any of it.
   recently closed one only when nothing was left open, which is what a single-record launch did. A file
   another app edited after a clean close now opens as a file instead of coming back as a dirty
   "Recovered —" draft. Records from older builds have neither field and read as open with work to
-  recover, which is the previous behaviour. Restored windows step down from each other rather than
-  stacking exactly. Not addressed: records are still never removed, so one accumulates per document
-  identity ever opened, including empty untitled ones; the launch cap keeps that out of the UI but not
-  off the disk.
+  recover, but a launch uses only the most recent of them and only when nothing was left open, which is
+  exactly what a launch did with every record before — restoring them all would open a window for each
+  of the tens of documents a long-standing recovery directory holds. Restored windows step down from
+  each other rather than stacking exactly. There is no limit on how many documents a launch restores:
+  a record left unrestored would be work with no way to reach it, and the same records would be left
+  out at every later launch. Not addressed: records are still never removed, so one accumulates on disk
+  per document identity ever opened, including empty untitled ones.
 - **Live resize.** Any environment change, down to one point of width, cancelled every render, ran
   `artifacts.removeAll()` and invalidated every element, so a window drag replaced each rendered element
   with its Markdown source and back at every step and discarded the layout that scroll eviction keeps.
@@ -112,7 +115,9 @@ suites on macOS before trusting any of it.
   its attachment at its measured size, scaled into the width there is now, and its last pixels — until
   the new render replaces it. A changed font size, theme or background still measures from scratch. The
   150 ms comes from PLAN-2026-09-17 §W8; nothing here measured it, and no frame time or page-load count
-  during a drag was measured either.
+  during a drag was measured either. One consequence to know: while the environment is unsettled no
+  render starts at all, so an element scrolled into view or added by a parse during a long drag shows
+  its source until 150 ms after the drag ends.
 - **Table raster.** `drawTable` read the scale and color space from `NSScreen.main` while every other
   element followed the host window's backing scale through the render environment, so a window on a 1×
   display beside a Retina main display got its tables at 2× and everything else at 1×. The scale was
@@ -122,5 +127,39 @@ suites on macOS before trusting any of it.
   `NSWindow.didChangeBackingPropertiesNotification`. The equivalence test against the previous AppKit
   drawing is kept with the same corpus, but it now compares the two drawings inside one raster instead
   of also deciding which raster is right — following the window matters more than reproducing the old
-  bitmap. Still unverified, and unverifiable here: a real two-screen machine, and right-to-left locales,
-  where cell text continues to align by the user's language direction rather than the host view's.
+  bitmap. Two consequences on a multi-screen setup, neither tested: the set of tables rejected as too
+  large moves in both directions, because the cost check and the display limit now use the same scale;
+  and a move between two screens of the same scale but different color profiles does not re-render,
+  because `RenderEnvironment` carries no color space — the bitmap is tagged, so it is converted rather
+  than shown wrong. Still unverified, and unverifiable here: a real two-screen machine, and
+  right-to-left locales, where cell text continues to align by the user's language direction rather
+  than the host view's.
+
+### Review of the three changes above
+
+A review agent read the branch diff against `main` in the same container, so it could not compile it
+either; it traced every changed expression by hand and found no compile error. It found four real
+defects in the launch logic, which are fixed in the commits that follow, and four inaccurate statements
+in the documents written alongside, which are corrected:
+
+- Records from older builds decoded as open with unsaved work, and every non-closed record was
+  restored, so the first launch after an upgrade would have opened a window for each of the tens of
+  records a long-standing recovery directory holds — most of them documents put away weeks ago, shown
+  as dirty "Recovered —" drafts. They now decode as `.unknown` and only the most recent is used.
+- A record whose file is gone was dropped when nothing was marked unsaved. An unmounted volume is
+  enough to reach that state, and the record is then the only copy the app can reach. It comes back as
+  a draft again, as before.
+- The eight-window cap stranded drafts 9 and beyond permanently — the same defect the first commit
+  claims to fix, at a higher threshold. The cap is gone.
+- `isTerminating` was never cleared if a quit was vetoed after `applicationShouldTerminate` returned,
+  after which no closed document would ever be recorded again. It is cleared on the next turn of the
+  run loop, which a real quit never reaches.
+- Bringing the newest document to the front looked it up by identity, which a document opened from a
+  file does not have yet at that point, so it silently did nothing for exactly the common case. The
+  plan that belongs in front now asks for it where its window is made.
+- The `didEndLiveResize` observer restarted the 150 ms wait instead of ending it, and the re-arming
+  wait already notices the end of a drag on its own. Removed.
+- Corrected in `Validation/2026-09-17-recovery-resize-tables/`: a false claim that single-record
+  launches behave exactly as before (three cases do not, now listed), a test described as passing
+  before the change that does not compile before it, a `--filter` argument that matches no test, and a
+  comment claiming windows restore a remembered frame, which nothing in that method does.

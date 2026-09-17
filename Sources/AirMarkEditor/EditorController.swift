@@ -126,11 +126,6 @@ import os
             let window = notification.object as? NSWindow
             MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
         })
-        // The drag is over: the environment can settle now rather than waiting for the next layout.
-        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: nil, queue: .main) { [weak self] notification in
-            let window = notification.object as? NSWindow
-            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
-        })
         scrollView.contentView.postsBoundsChangedNotifications = true
         observations.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.viewportDidChange(); self?.onSelectionChange?() }
@@ -364,7 +359,9 @@ import os
     }
     /// Adopts the current environment once it has held still for `environmentSettleDelay`, and never
     /// while the window is being dragged. Every change restarts the wait, so one drag costs one
-    /// environment change and one round of renders instead of one per step.
+    /// environment change and one round of renders instead of one per step. A wait that finds the drag
+    /// still going re-arms itself, which is also how the end of a drag is noticed: nothing else has to
+    /// report it, and the first wait after the mouse is released adopts.
     private func scheduleEnvironmentChange() {
         environmentTask?.cancel()
         environmentTask = Task { [weak self] in

@@ -90,8 +90,8 @@ private final class RecoveryWriter: @unchecked Sendable {
         var scrollY: Double
         var date: Date
         /// Absent in records written before a record said where in a document's life it came from.
-        /// Such a record was written while its document was open and is read that way, which is what
-        /// a launch did with every record before.
+        /// Such a record reads as `.unknown`, which a launch treats the way it treated every record
+        /// before: only the most recent one, and only when nothing was left open.
         var state: RecoveryState?
         var hasUnsavedChanges: Bool?
     }
@@ -160,7 +160,7 @@ private final class RecoveryWriter: @unchecked Sendable {
         }
         var record = RecoveryRecord(id: stored.id, filePath: stored.filePath, source: source, hasBOM: stored.hasBOM, revision: stored.revision,
                                     selection: stored.selection, scrollY: stored.scrollY,
-                                    state: stored.state ?? .open, hasUnsavedChanges: stored.hasUnsavedChanges ?? true)
+                                    state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true)
         record.date = stored.date
         return record
     }

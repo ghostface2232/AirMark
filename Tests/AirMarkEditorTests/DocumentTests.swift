@@ -229,10 +229,12 @@ import AirMarkCore
     /// so the other draft stayed in the recovery directory with no way to reach it.
     @Test func everyUnsavedDocumentOpenAtOnceIsRecovered() async throws {
         let (first, firstURL, directory) = try makeDocument(Data("first saved\n".utf8))
-        defer { try? FileManager.default.removeItem(at: directory) }
         let secondURL = directory.appendingPathComponent("Second.md")
         try Data("second saved\n".utf8).write(to: secondURL)
         let second = try MarkdownDocument(contentsOf: secondURL, ofType: Self.type)
+        // Closed here, not at the end: a failed expectation must not leave documents behind for the
+        // suites that run after this one.
+        defer { first.close(); second.close(); try? FileManager.default.removeItem(at: directory) }
         second.makeWindowControllers()
         second.editor?.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
         append(first, "one")
@@ -256,7 +258,6 @@ import AirMarkCore
         #expect(drafts.contains { $0.id == second.identity && $0.source == "second saved\ntwo" && $0.filePath == secondURL.path })
         // Both were open, so both records say so and both hold text that is on no disk.
         #expect(drafts.allSatisfy { $0.state == .open && $0.hasUnsavedChanges })
-        first.close(); second.close()
     }
 
     /// Closing a document records that the user put it away, so the next launch does not reopen every

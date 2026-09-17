@@ -58,6 +58,9 @@ import AirMarkCore
             #expect(bounds.height > 0)
             widths.append(bounds.width)
         }
+        // The fixture is 32 points wide, narrower than every width the drag passes through, so it is
+        // never clamped and these stay equal. What this test covers is that the attachment, its
+        // metrics and its pixels survive the drag at all; the clamping arithmetic is unchanged code.
         let firstDrawn = widths.first ?? 0, lastDrawn = widths.last ?? 0
         print("RESIZE drag steps=\(Self.dragWidths.count) measured=\(measured.size) drawn width \(firstDrawn) to \(lastDrawn) requests=\(editor.renderRequestCount - requests)")
         #expect(editor.renderRequestCount == requests, "renders were started for widths the drag passed through")

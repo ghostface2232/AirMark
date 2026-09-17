@@ -62,12 +62,13 @@ public final class DocumentSnapshot: @unchecked Sendable {
         window.contentViewController = controller
         window.tabbingMode = .disallowed
         window.center(); window.setFrameAutosaveName("AirMarkDocument")
-        // A launch that restores several documents must not stack their windows exactly. Each takes the
-        // remembered size, then steps down from the document opened before it; only the first window
-        // writes its frame back, so the remembered position does not drift with every such launch.
+        // Two documents open at once must not stack their windows exactly, and a launch that restores a
+        // whole session would otherwise put every window in the same place. A second or later window
+        // steps down from the one before it instead of staying centred. Only the first window holds the
+        // autosave name — the others' `setFrameAutosaveName` call fails because the name is taken — so
+        // the stepped positions are never written back and the remembered frame does not drift.
         let others = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.windowControllers.first?.window }
         if let last = others.last(where: { $0 !== window }) {
-            window.setFrameAutosaveName("")
             window.setFrameTopLeftPoint(NSPoint(x: last.frame.minX + 24, y: last.frame.maxY - 24))
         }
         addWindowController(NSWindowController(window: window))

@@ -19,7 +19,7 @@ this branch is merged, run on macOS:
 ```sh
 swift test --disable-sandbox
 swift test -c release --disable-sandbox
-swift test -c release --disable-sandbox --filter LaunchPlan
+swift test -c release --disable-sandbox --filter 'launch'
 swift test -c release --disable-sandbox --filter ResizeTests
 swift test -c release --disable-sandbox --filter TableRenderTests
 AIRMARK_TEST_RESULTS=/tmp/airmark-recovery-resize.xcresult bash Scripts/test-ui.sh -configuration Release

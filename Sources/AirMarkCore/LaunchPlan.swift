@@ -12,6 +12,11 @@ public enum RecoveryState: String, Codable, Sendable {
     /// Written when the document was closed. The next launch does not restore it, except as the single
     /// most recent document when nothing was left open.
     case closed
+    /// Written before records said any of this. Such a record may be a draft a crash left behind or a
+    /// document put away weeks ago, and nothing in it tells the two apart. A directory of them would
+    /// open a window each, most of them unwanted, so they are read the way a launch read them before:
+    /// only the most recent one is considered, and only when nothing else was left open.
+    case unknown
 }
 
 /// What AirMark opens at launch when no file was handed to it. Pure so the decision can be tested
@@ -24,10 +29,6 @@ public enum LaunchPlan: Equatable, Sendable {
     case recoverDraft(RecoveryRecord)
     case openRecent(path: String)
     case newDocument
-
-    /// The most documents one launch restores. Beyond this the oldest sessions stay in the recovery
-    /// directory instead of opening a window each; unsaved drafts are kept first.
-    public static let maximumSessions = 8
 
     var isDraft: Bool {
         if case .recoverDraft = self { return true }
@@ -46,26 +47,19 @@ public enum LaunchPlan: Equatable, Sendable {
     /// `records` is newest first, as `RecoveryStore.records()` returns them.
     ///
     /// Every document that was open when AirMark last stopped is restored, whether it stopped by
-    /// quitting or by crashing, so several unsaved drafts are not reduced to the newest one. When
-    /// nothing was left open the most recently closed document is reopened, as before, then the most
+    /// quitting or by crashing, so several unsaved drafts are not reduced to the newest one. There is no
+    /// limit on how many: the windows restored are the windows there were, and a record left unrestored
+    /// would be work with nothing in the app that could reach it, which is the whole point of this. When
+    /// nothing was left open the most recently put away document is reopened, as before, then the most
     /// recent file, then a blank note.
     public static func resolve(records: [RecoveryRecord], recentPaths: [String], fileData: (String) -> Data?) -> [LaunchPlan] {
-        var plans = sessions(records.filter { $0.state != .closed }, fileData: fileData)
-        if plans.isEmpty, let closed = records.first(where: { $0.state == .closed }) {
-            plans = sessions([closed], fileData: fileData)
+        var plans = sessions(records.filter { $0.state == .open || $0.state == .quit }, fileData: fileData)
+        if plans.isEmpty, let last = records.first(where: { $0.state == .closed || $0.state == .unknown }) {
+            plans = sessions([last], fileData: fileData)
         }
         guard !plans.isEmpty else {
             if let recent = recentPaths.first { return [.openRecent(path: recent)] }
             return [.newDocument]
-        }
-        if plans.count > maximumSessions {
-            // Unsaved work is why a record exists at all, so those windows come first; among equals the
-            // newest are kept. The rest stay on disk rather than opening a window each.
-            let ranked = plans.indices.sorted { a, b in
-                plans[a].isDraft == plans[b].isDraft ? a < b : plans[a].isDraft
-            }
-            let kept = Set(ranked.prefix(maximumSessions))
-            plans = plans.indices.filter(kept.contains).map { plans[$0] }
         }
         return Array(plans.reversed())
     }
@@ -86,15 +80,19 @@ public enum LaunchPlan: Equatable, Sendable {
             let onDisk = fileData(path)
             if onDisk == DocumentBytes(source: record.source, hasBOM: record.hasBOM).data {
                 plans.append(.openFile(path: path, record: record))
+            } else if onDisk == nil {
+                // The file is gone, or its volume is not mounted. Whether the text was on disk once says
+                // nothing about where it is now: this record is the only copy the app can still reach,
+                // so it comes back as a draft rather than being dropped.
+                if !record.source.isEmpty { plans.append(.recoverDraft(record)) }
             } else if record.hasUnsavedChanges && !record.source.isEmpty {
                 // The record is the only copy of this text, whatever the file now holds.
                 plans.append(.recoverDraft(record))
-            } else if onDisk != nil {
+            } else {
                 // The text was on disk when the record was written and the file has changed since, in
                 // another app. Open what the file holds now at the recorded position; nothing was lost.
                 plans.append(.openFile(path: path, record: record))
             }
-            // A file that is gone with nothing unsaved is not resurrected from its record.
         }
         return plans
     }

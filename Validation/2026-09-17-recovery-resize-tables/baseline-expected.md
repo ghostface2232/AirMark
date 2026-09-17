@@ -15,8 +15,8 @@ comparing the record's source with the file on disk, which also reports a file a
 | `SourceTests.launchRestoresEveryDocumentThatWasOpen` | `resolve` returned `LaunchPlan`, not `[LaunchPlan]`: the test does not compile against the old signature, and the behaviour it pins (three open documents, three plans) was one plan. |
 | `SourceTests.launchSkipsClosedDocumentsUnlessNothingWasOpen` | `RecoveryState` did not exist. |
 | `SourceTests.launchSeparatesUnsavedWorkFromAnExternallyChangedFile` | `RecoveryRecord.hasUnsavedChanges` did not exist; a cleanly closed record whose file changed externally resolved to `.recoverDraft`, i.e. a window titled "Recovered — …" marked dirty. |
-| `SourceTests.launchCapsRestoredSessionsKeepingUnsavedWorkFirst` | n/a before: one plan was always returned. |
-| `SourceTests.launchTreatsRecordsWithoutAStateAsOpen` | Pins that records from older builds keep the previous behaviour. |
+| `SourceTests.launchRestoresEveryOpenDocumentWithoutALimit` | n/a before: one plan was always returned. |
+| `SourceTests.launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted` | Pins that a directory of records from older builds still opens one window, not one per record. |
 | `RecoveryStoreTests.recordsKeepTheirStateAndUnsavedFlag` | The two fields were not stored. |
 | `DocumentTests.everyUnsavedDocumentOpenAtOnceIsRecovered` | Two documents edited at once produced one `.recoverDraft` plan; the test requires two. |
 | `DocumentTests.closingADocumentRecordsItAsClosed` | `close()` wrote a record indistinguishable from one written while the document was open. |
@@ -27,9 +27,24 @@ encodes the whole document on every record — including the caret-move and scro
 had just made cost about 4 KB and 0.3 ms on a 9.5 MB document. Nothing here measured either, so the
 cheap one that AppKit already maintains is the one used.
 
-Unchanged on purpose: a launch with a single record behaves exactly as before, including the
-`.openFile` / `.recoverDraft` / `.openRecent` / `.newDocument` order, and Markdown source bytes are
-untouched by all of this.
+Markdown source bytes are untouched by all of this. A launch with a single record behaves as before in
+the cases that matter — the file still on disk opens with its position, a record holding text that is on
+no disk comes back as a draft — but three single-record cases do change, and none of them is covered by
+a test that would have caught the divergence:
+
+- `filePath == nil` with an empty source: before, `.recoverDraft` of an empty draft (an empty window);
+  now the record yields no plan, so the launch falls through to the most recent file or a blank note.
+- `filePath` set, file gone, empty source, with a recent file: before, an explicit `.newDocument`
+  branch; now `.openRecent`. The old `.newDocument`-from-a-record case is unreachable.
+  `launchPlanPrefersRecoveryThenRecent` only exercises this with an empty recent list, which hides it.
+- A record written by a clean close or quit whose file has since been changed by another app: before,
+  `.recoverDraft`; now `.openFile`. That one is the point of `hasUnsavedChanges`, not an accident.
+
+A file that is *gone* was briefly in this list too. It is not any more: the record is then the only copy
+of that text the app can reach — the volume may simply be unmounted — so it comes back as a draft
+exactly as before. There is no cap on how many documents a launch restores, because a record left
+unrestored is work with no way to reach it, and the same records would be left out at every later
+launch.
 
 ## Task 2 — live resize
 
@@ -45,7 +60,7 @@ step.
 | Test | Assertion that fails before the change |
 |---|---|
 | `ResizeTests.draggingAWindowKeepsRenderedElementsInPlace` | At the first width step `measuredElementCount` was 0, `renderedElementCount` was 0 and the paragraph carried no `.attachment`. Each step also raised `renderRequestCount`, so `renderRequestCount == requests` fails as well. |
-| `ResizeTests.changingTheFontSizeRemeasuresFromScratch` | Passes before and after; it pins that geometry is the only thing held over, and that a new font size, theme or background still measures from scratch. |
+| `ResizeTests.changingTheFontSizeRemeasuresFromScratch` | Does not compile before — it reads `heldGeometryCount`, which this branch adds. It is a guard test, not a reproduction: it pins that geometry is the only thing held over, and that a new font size, theme or background still measures from scratch. |
 | `ArtifactResidencyTests.heldGeometryStandsInUntilTheElementIsMeasuredAgain` | `ArtifactStore.holdGeometry` did not exist. |
 | `ArtifactResidencyTests.metricsBelongToTheirEnvironment` | Unchanged, and still passes: metrics are matched to their environment until the store is told to hold what it has. |
 
@@ -67,8 +82,16 @@ cached under a 1× key could hold 2× pixels.
 | Test | Assertion that fails before the change |
 |---|---|
 | `TableRenderTests.tableRasterFollowsTheRequestingWindow` | Both scales rasterized at the main screen's, so the two bitmaps had the same pixel dimensions. On a 2× host `one.image.width == ceil(one.size.width)` fails; on a 1× host the 3× assertion fails. Either way the previous code cannot pass it. |
-| `TableRenderTests.tableColorSpaceComesFromTheHostWindowsScreen` | Passes before and after on a single-screen machine; it pins where the value is read from and that the bitmap's scale is the environment's. |
+| `TableRenderTests.tableColorSpaceComesFromTheHostWindowsScreen` | Passes before and after on a single-screen machine, where the host window's screen is `NSScreen.main`; it pins where the value is read from and that the bitmap's scale is the environment's. It uses no new API, so it does compile against the previous code. |
 | `TableRenderTests.matchesTheAppKitReference` | Kept, with the same corpus and the same three environments, but it now compares the two drawings inside one raster — the main screen's, which is what `NSImage` rasterized into — instead of routing one side through `RenderService`. Without that the test would compare a bitmap at the environment's scale with one at the screen's and fail for a reason that is the point of this change. |
+
+One user-visible consequence is untested and worth knowing: `TableRenderer.cost` uses the raster scale
+while the display limit uses `environment.scale`, and those were different numbers on a multi-screen
+setup and are now the same. So the set of tables rejected with "Table is too large to render." or "This
+image is too large to display." moves in both directions there — a 2× window beside a 1× main display
+now rejects some tables it used to draw, and a 1× window beside a 2× main display draws some it used to
+reject. Both are the correct answer for the bitmap actually produced, which is the point of the change,
+and the messages are unchanged; but no test covers it and it cannot be observed on one screen.
 
 Deliberately unchanged: cell text still aligns by the user's language direction
 (`NSParagraphStyle.defaultWritingDirection`), not the host view's layout direction. That is the second
