@@ -86,6 +86,35 @@ import Testing
         #expect(await store.records() == [moved])
     }
 
+    /// Where a record came from, and whether its text was anywhere but in the record, survive the round
+    /// trip; several documents keep their own records. A record written before these fields existed
+    /// reads as unknown with work to recover, which a launch treats the way it treated every record
+    /// before: only the most recent one, and only when nothing was left open.
+    @Test func recordsKeepTheirStateAndUnsavedFlag() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        var quit = Self.record(UUID(), "on disk\n", revision: 2, path: "/notes/a.md")
+        quit.state = .quit; quit.hasUnsavedChanges = false
+        var draft = Self.record(UUID(), "typed but never saved", revision: 1)
+        draft.state = .open; draft.hasUnsavedChanges = true
+        var closed = Self.record(UUID(), "put away\n", revision: 5, path: "/notes/b.md")
+        closed.state = .closed; closed.hasUnsavedChanges = false
+        for record in [quit, draft, closed] { try await store.save(record) }
+        let read = await RecoveryStore(directory: directory).records()
+        #expect(Set(read.map(\.id)) == Set([quit.id, draft.id, closed.id]))
+        #expect(read.first { $0.id == quit.id } == quit)
+        #expect(read.first { $0.id == draft.id } == draft)
+        #expect(read.first { $0.id == closed.id } == closed)
+        // A record from before the fields existed.
+        let legacy = UUID()
+        try Data("{\"id\":\"\(legacy.uuidString)\",\"source\":\"old\",\"hasBOM\":false,\"revision\":1,\"selection\":{\"location\":0,\"length\":0},\"scrollY\":0,\"date\":0}".utf8)
+            .write(to: directory.appendingPathComponent(legacy.uuidString + ".json"))
+        let old = try #require(await RecoveryStore(directory: directory).records().first { $0.id == legacy })
+        #expect(old.state == .unknown)
+        #expect(old.hasUnsavedChanges)
+    }
+
     /// A crash can stop a save after the new source is on disk but before the record names it, or leave
     /// a record naming a source that is gone. Neither hides the complete records, and the leftover is
     /// removed by the next save that writes a source.

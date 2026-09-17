@@ -35,6 +35,8 @@ public final class DocumentSnapshot: @unchecked Sendable {
     public static var recoveryStore: RecoveryStore?
     /// Launch milestones for Scripts/measure.sh; nil unless AIRMARK_LAUNCH_LOG is set.
     public static var launchTimeline: LaunchTimeline?
+    /// Set while AirMark is quitting, so a document closed by the quit keeps the record the quit wrote.
+    public static var isTerminating = false
     public nonisolated let snapshot = DocumentSnapshot()
     public var editor: EditorController?
     public var identity = UUID()
@@ -60,6 +62,15 @@ public final class DocumentSnapshot: @unchecked Sendable {
         window.contentViewController = controller
         window.tabbingMode = .disallowed
         window.center(); window.setFrameAutosaveName("AirMarkDocument")
+        // Two documents open at once must not stack their windows exactly, and a launch that restores a
+        // whole session would otherwise put every window in the same place. A second or later window
+        // steps down from the one before it instead of staying centred. Only the first window holds the
+        // autosave name — the others' `setFrameAutosaveName` call fails because the name is taken — so
+        // the stepped positions are never written back and the remembered frame does not drift.
+        let others = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.windowControllers.first?.window }
+        if let last = others.last(where: { $0 !== window }) {
+            window.setFrameTopLeftPoint(NSPoint(x: last.frame.minX + 24, y: last.frame.maxY - 24))
+        }
         addWindowController(NSWindowController(window: window))
         window.isRestorable = false
         controller.onChange = { [weak self] in
@@ -174,9 +185,17 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// The record's revision is the snapshot's version, not the editor's: the recovery store writes the
     /// source again only when the revision changes, and the snapshot also changes without an editor
     /// edit, as when the file is read again.
-    public func record() -> RecoveryRecord {
+    ///
+    /// `state` says where in the document's life the record is written; a launch restores the documents
+    /// that were still open when AirMark stopped. Whether the text is anywhere but in the record is a
+    /// separate question, and `isDocumentEdited` already answers it: it is what the window's dirty mark
+    /// shows, it survives a failed save, and reading it costs nothing. Comparing the source with the
+    /// bytes on disk instead would encode the whole document on every caret move.
+    public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
-        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
+        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version,
+                              selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
+                              state: state, hasUnsavedChanges: isDocumentEdited)
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()
@@ -190,8 +209,13 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     public override func close() {
         recoveryTask?.cancel()
-        let saved = record()
-        if let store = Self.recoveryStore { Task { try? await store.save(saved) } }
+        // Quitting writes every open document's record itself, and AppKit may close the documents
+        // afterwards. A close record written then would say the user had closed them and the next
+        // launch would restore nothing.
+        if !Self.isTerminating, let store = Self.recoveryStore {
+            let saved = record(state: .closed)
+            Task { try? await store.save(saved) }
+        }
         super.close()
     }
 }

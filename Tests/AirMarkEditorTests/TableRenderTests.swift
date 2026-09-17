@@ -89,16 +89,26 @@ import AirMarkCore
         ("single-column", table(rows: 5, columns: 1) { row, _ in "only \(row)" }),
     ]
 
+    /// The table renderer in the raster the AppKit reference used: the main screen's scale and color
+    /// space, which is what `NSImage` rasterized into. Which raster the app asks for is a separate
+    /// question, pinned by `tableRasterFollowsTheRequestingWindow`.
+    static func coreTextInTheReferenceRaster(_ element: RenderElement, environment: RenderEnvironment) throws -> RenderArtifact {
+        let screen = NSScreen.main
+        let raster = TableRenderer.Raster(scale: screen.map { Double($0.backingScaleFactor) } ?? environment.scale,
+                                          colorSpace: screen?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          alignment: NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left)
+        return try TableRenderer.render(element.content, label: element.label, environment: environment, raster: raster,
+                                        memoryLimit: ReferenceTableRenderer.memoryLimit)
+    }
+
     /// The CoreText renderer against the AppKit reference: same outcome and failure message, same size,
     /// pixel dimensions, bytes and baseline, and pixels that differ only by glyph rasterization.
     @Test func matchesTheAppKitReference() async throws {
         _ = NSApplication.shared
-        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         for environment in [RenderEnvironment(width: 680, fontSize: 16, scale: 2, dark: false), RenderEnvironment(width: 600.25, fontSize: 13, scale: 1, dark: true), RenderEnvironment(width: 720.5, fontSize: 19, scale: 2, dark: false)] {
             for (name, element) in Self.equivalenceCorpus {
                 let expected = Result { try ReferenceTableRenderer.render(element, environment: environment) }
-                let actual: Result<RenderArtifact, any Error>
-                do { actual = .success(try await RenderService().render(element, environment: environment, baseURL: nil, host: host)) } catch { actual = .failure(error) }
+                let actual = Result { try Self.coreTextInTheReferenceRaster(element, environment: environment) }
                 switch (expected, actual) {
                 case (.success(let old), .success(let new)):
                     #expect(new.size == old.size, "\(name) \(environment.fontSize): size \(new.size) vs \(old.size)")
@@ -126,6 +136,44 @@ import AirMarkCore
                 }
             }
         }
+    }
+
+    /// The raster follows the window the table will be drawn in. Both bitmaps used to come out at
+    /// `NSScreen.main`'s scale whatever the requesting window's was, so a window on a 1× display beside a
+    /// Retina main display got 2× pixels and a Retina window beside a 1× main display got 1×, while
+    /// every other element on the page followed the window.
+    @Test func tableRasterFollowsTheRequestingWindow() async throws {
+        _ = NSApplication.shared
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let element = Self.table(rows: 4, columns: 3) { "r\($0)c\($1)" }
+        // Two scales, neither of which can be the main screen's at the same time: the previous code
+        // produced one bitmap size for both.
+        var rendered: [Double: RenderArtifact] = [:]
+        for scale in [1.0, 3.0] {
+            rendered[scale] = try await RenderService().render(element, environment: RenderEnvironment(width: 400, fontSize: 16, scale: scale, dark: false), baseURL: nil, host: host)
+        }
+        let one = try #require(rendered[1.0]), three = try #require(rendered[3.0])
+        print("TABLE_RASTER size=\(one.size) 1x=\(one.image.width)x\(one.image.height) 3x=\(three.image.width)x\(three.image.height) main=\(NSScreen.main?.backingScaleFactor ?? 0)")
+        #expect(one.size == three.size, "the table's points must not depend on the raster")
+        #expect(one.image.width == Int(ceil(one.size.width)) && one.image.height == Int(ceil(one.size.height)))
+        #expect(three.image.width == Int(ceil(three.size.width * 3)) && three.image.height == Int(ceil(three.size.height * 3)))
+    }
+
+    /// The bitmap is in the host window's screen color space, not the frontmost screen's. On a machine
+    /// with one screen the two are the same and this only pins where the value is read from.
+    @Test func tableColorSpaceComesFromTheHostWindowsScreen() async throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320), styleMask: [.titled], backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        window.contentView?.addSubview(host)
+        let expected = try #require(window.screen?.colorSpace?.cgColorSpace)
+        let environment = RenderEnvironment(width: 300, fontSize: 16, scale: Double(window.backingScaleFactor), dark: false)
+        let artifact = try await RenderService().render(Self.table(rows: 2, columns: 2) { "r\($0)c\($1)" }, environment: environment, baseURL: nil, host: host)
+        let produced = try #require(artifact.image.colorSpace)
+        #expect(CFEqual(produced, expected), "the table was rasterized in another screen's color space")
+        #expect(artifact.image.width == Int(ceil(artifact.size.width * environment.scale)))
     }
 
     /// A table whose row and column counts already exceed a limit is rejected without measuring its

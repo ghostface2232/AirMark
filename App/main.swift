@@ -49,17 +49,20 @@ import os
             let records = await Self.recovery.records()
             guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
             let recent = NSDocumentController.shared.recentDocumentURLs.map(\.path)
-            switch LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) }) {
-            case .openFile(let path, let record): open(URL(fileURLWithPath: path), recovery: record)
-            case .openRecent(let path): open(URL(fileURLWithPath: path))
-            case .newDocument: newDocument(nil)
-            case .recoverDraft(let record):
-                let document = MarkdownDocument(); document.identity = record.id
-                document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
-                document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
-                NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
-                if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
-                if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
+            // Every document that was open when AirMark last stopped comes back, not only the newest
+            // record. The plans arrive in the order to open them; the last one belongs in front.
+            let plans = LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+            for (index, plan) in plans.enumerated() {
+                // A document opened from a file gets its window through an asynchronous completion, so
+                // the order the windows appear in does not say which document is newest. The last plan
+                // asks for the front itself, wherever its window turns up.
+                let front = index == plans.count - 1
+                switch plan {
+                case .openFile(let path, let record): open(URL(fileURLWithPath: path), recovery: record, bringToFront: front)
+                case .openRecent(let path): open(URL(fileURLWithPath: path), bringToFront: front)
+                case .newDocument: newDocument(nil)
+                case .recoverDraft(let record): recoverDraft(record, bringToFront: front)
+                }
             }
             NSApp.activate()
         }
@@ -69,15 +72,28 @@ import os
         for filename in filenames { open(URL(fileURLWithPath: filename)) }
         sender.reply(toOpenOrPrint: .success)
     }
-    func open(_ url: URL, recovery: RecoveryRecord? = nil) {
+    func open(_ url: URL, recovery: RecoveryRecord? = nil, bringToFront: Bool = false) {
         openedFile = true
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { document, _, error in
             if let error { NSApp.presentError(error); if NSDocumentController.shared.documents.isEmpty { self.newDocument(nil) } }
-            if let document = document as? MarkdownDocument, let recovery {
-                document.identity = recovery.id; document.editor?.restore(selection: recovery.selection, scrollY: recovery.scrollY)
+            if let document = document as? MarkdownDocument {
+                if let recovery {
+                    document.identity = recovery.id; document.editor?.restore(selection: recovery.selection, scrollY: recovery.scrollY)
+                }
+                if bringToFront { document.windowControllers.first?.window?.makeKeyAndOrderFront(nil) }
             }
             NSApp.activate()
         }
+    }
+    /// Opens a record whose text is on no disk as an unsaved draft.
+    func recoverDraft(_ record: RecoveryRecord, bringToFront: Bool = false) {
+        let document = MarkdownDocument(); document.identity = record.id
+        document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
+        document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
+        NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
+        if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
+        if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
+        if bringToFront { document.windowControllers.first?.window?.makeKeyAndOrderFront(nil) }
     }
     @objc func newDocument(_ sender: Any?) {
         let document = MarkdownDocument()
@@ -90,9 +106,16 @@ import os
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
         // never runs a main-actor Task, so an asynchronous reply would hang the quit.
+        MarkdownDocument.isTerminating = true
+        // A quit can still be stopped after this returns, by another app during a logout. The process
+        // would then keep running with the flag set and never record a closed document again, so clear
+        // it on the next turn of the run loop: a real quit exits before that task can run, while any
+        // documents the quit itself closes are closed before it.
+        Task { @MainActor in MarkdownDocument.isTerminating = false }
         for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
-            do { try Self.recovery.saveImmediately(document.record()) }
-            catch { NSApp.presentError(error); return .terminateCancel }
+            // Recorded as open at the quit, so the next launch restores every one of these windows.
+            do { try Self.recovery.saveImmediately(document.record(state: .quit)) }
+            catch { MarkdownDocument.isTerminating = false; NSApp.presentError(error); return .terminateCancel }
         }
         return .terminateNow
     }

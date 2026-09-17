@@ -106,6 +106,32 @@ import AirMarkCore
         #expect(!store.needsPixels(at: span, environment: light))
     }
 
+    /// Held geometry answers layout under a new environment, with the old size and the old pixels, and
+    /// still asks for a new render. Measuring the element again ends the stand-in.
+    @Test func heldGeometryStandsInUntilTheElementIsMeasuredAgain() throws {
+        let store = ArtifactStore()
+        let wide = RenderEnvironment(width: 600, fontSize: 16, scale: 2, dark: false)
+        var narrow = wide; narrow.width = 300
+        let span = SourceSpan(4, 10)
+        store.store(Self.artifact(width: 120, height: 80, label: "a"), at: span, environment: wide)
+        #expect(store.layout(at: span, environment: narrow) == nil)
+        store.holdGeometry()
+        let held = try #require(store.layout(at: span, environment: narrow))
+        #expect(held.metrics.size == CGSize(width: 120, height: 80), "the element lost its place while the window moved")
+        #expect(held.metrics.environment == wide)
+        #expect(store.heldGeometryCount == 1)
+        #expect(store.needsPixels(at: span, environment: narrow), "held geometry must still ask for the new render")
+        #expect(store.hasPixels(at: span), "the last pixels are drawn, scaled, until the new ones arrive")
+        store.store(Self.artifact(width: 60, height: 40, label: "a"), at: span, environment: narrow)
+        #expect(store.heldGeometryCount == 0)
+        #expect(store.layout(at: span, environment: narrow)?.metrics.size == CGSize(width: 60, height: 40))
+        #expect(!store.needsPixels(at: span, environment: narrow))
+        // A later environment of the same appearance holds what is there now, not what it replaced.
+        var narrower = narrow; narrower.width = 200
+        store.holdGeometry()
+        #expect(store.layout(at: span, environment: narrower)?.metrics.size == CGSize(width: 60, height: 40))
+    }
+
     /// Over budget, pixels outside the protected range go farthest first until the budget holds.
     /// Metrics and drawing identities survive, and follow edits.
     @Test func releaseOrderAndIdentityAcrossEdits() {

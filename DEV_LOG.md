@@ -135,3 +135,86 @@ Host and raw output: `Validation/2026-09-17-parse-latency/` (Release, Mac17,3, m
 - **Windowed parses in the editor.** `MarkdownParsingWorker` keeps its last parse and the edit number it was made at; the editor sends the logged edits since then, and the worker reparses the touched blocks when it can. When the drawn presentation came from that same parse, the editor compares only the elements inside the reported window and invalidates only the window, instead of diffing every style and element (about 25 ms of a 35 ms install at 10MB, measured with temporary timers). The worker also keeps the previous parse until the next one, so the editor's release of a document-sized parse is not the last one. `EditorTests/windowedParsesDrawWhatAWholeParseDraws` types with parses landing in between and checks that the drawn styles and `parsed` equal a whole parse; it failed when one logged edit was left out.
 - **Measured.** Against `main` and against the cheaper whole parse (`8dba8b9`), three rotated Release runs each. A keystroke after a pause reaches the presentation in 51/56/93 ms at 100KB/1MB/10MB (`main`: 113/382/3,149 ms). During 35 s of typing 80 ms apart every key is parsed and installed — 438 of 438 at 100KB and 1MB, where `main` installed 33–46 and 1 — and the longest a key waited was 61 ms at 1MB and 101 ms at 10MB, against 35.6 s and 39.7 s on `main`. Typing 200–400 ms apart on 10MB waits 112 ms at worst instead of 39.4 s. Settling after a burst at 10MB is 75 ms instead of 5.1 s. The key gaps during typing are back to `main`'s 90 ms, so installing a windowed parse costs nothing a key can see. Raw output and the whole table: `Validation/2026-09-17-parse-latency/`.
 - **What it costs.** A document with `]:` anywhere is parsed whole on every keystroke; recording block spans and scanning for `]:` then makes it about 6% slower than before this work (10MB keystroke 2,021 → 2,158 ms p50), of which the block spans were 61 ms of a 1,742 ms parse until they were taken from the walk (`fa5de7c`, 1,681 ms). A top-level list is one block, so editing in a long list reparses that list.
+
+## 2026-09-17 — Multi-document recovery, live resize, table raster
+
+Host: a Linux container with **no Swift toolchain and no macOS SDK**. Nothing in this entry was
+compiled, run or measured. The three changes below are code and tests written against a reading of the
+source at `cb8c3df`; `Validation/2026-09-17-recovery-resize-tables/` says, per test, which assertion the
+previous code fails and why, and that is a claim about the code, not a result. Run the Swift and UI
+suites on macOS before trusting any of it.
+
+- **Multi-document recovery.** `LaunchPlan.resolve` took `records.first` and returned one plan, and the
+  launch path opened that one. Several unsaved drafts open at once therefore left one recoverable and
+  the rest in the recovery directory with nothing in the app that could reach them. `resolve` now
+  returns one plan per document, in the order to open them, and `applicationDidFinishLaunching` opens
+  all of them, bounded at eight, unsaved drafts first. A record also carries `state` — open, quit or
+  closed — and `hasUnsavedChanges`. The two answer different questions: a launch restores the documents
+  that were open when AirMark stopped, whether it stopped by quitting or crashing, and reopens the most
+  recently closed one only when nothing was left open, which is what a single-record launch did. A file
+  another app edited after a clean close now opens as a file instead of coming back as a dirty
+  "Recovered —" draft. Records from older builds have neither field and read as open with work to
+  recover, but a launch uses only the most recent of them and only when nothing was left open, which is
+  exactly what a launch did with every record before — restoring them all would open a window for each
+  of the tens of documents a long-standing recovery directory holds. Restored windows step down from
+  each other rather than stacking exactly. There is no limit on how many documents a launch restores:
+  a record left unrestored would be work with no way to reach it, and the same records would be left
+  out at every later launch. Not addressed: records are still never removed, so one accumulates on disk
+  per document identity ever opened, including empty untitled ones.
+- **Live resize.** Any environment change, down to one point of width, cancelled every render, ran
+  `artifacts.removeAll()` and invalidated every element, so a window drag replaced each rendered element
+  with its Markdown source and back at every step and discarded the layout that scroll eviction keeps.
+  The editor now measures and draws in the environment it last settled on; a geometry-only change arms
+  a 150 ms wait that every further change restarts and that never fires during a live resize. When it
+  fires, `ArtifactStore.holdGeometry` keeps what was measured as temporary geometry — each element keeps
+  its attachment at its measured size, scaled into the width there is now, and its last pixels — until
+  the new render replaces it. A changed font size, theme or background still measures from scratch. The
+  150 ms comes from PLAN-2026-09-17 §W8; nothing here measured it, and no frame time or page-load count
+  during a drag was measured either. One consequence to know: while the environment is unsettled no
+  render starts at all, so an element scrolled into view or added by a parse during a long drag shows
+  its source until 150 ms after the drag ends.
+- **Table raster.** `drawTable` read the scale and color space from `NSScreen.main` while every other
+  element followed the host window's backing scale through the render environment, so a window on a 1×
+  display beside a Retina main display got its tables at 2× and everything else at 1×. The scale was
+  also in the cache key without the bitmap following it. The raster is now `environment.scale`, which is
+  that window's backing scale captured with the rest of the environment and keyed with it, and the color
+  space of that window's screen; a window moving between screens reaches the editor through
+  `NSWindow.didChangeBackingPropertiesNotification`. The equivalence test against the previous AppKit
+  drawing is kept with the same corpus, but it now compares the two drawings inside one raster instead
+  of also deciding which raster is right — following the window matters more than reproducing the old
+  bitmap. Two consequences on a multi-screen setup, neither tested: the set of tables rejected as too
+  large moves in both directions, because the cost check and the display limit now use the same scale;
+  and a move between two screens of the same scale but different color profiles does not re-render,
+  because `RenderEnvironment` carries no color space — the bitmap is tagged, so it is converted rather
+  than shown wrong. Still unverified, and unverifiable here: a real two-screen machine, and
+  right-to-left locales, where cell text continues to align by the user's language direction rather
+  than the host view's.
+
+### Review of the three changes above
+
+A review agent read the branch diff against `main` in the same container, so it could not compile it
+either; it traced every changed expression by hand and found no compile error. It found four real
+defects in the launch logic, which are fixed in the commits that follow, and four inaccurate statements
+in the documents written alongside, which are corrected:
+
+- Records from older builds decoded as open with unsaved work, and every non-closed record was
+  restored, so the first launch after an upgrade would have opened a window for each of the tens of
+  records a long-standing recovery directory holds — most of them documents put away weeks ago, shown
+  as dirty "Recovered —" drafts. They now decode as `.unknown` and only the most recent is used.
+- A record whose file is gone was dropped when nothing was marked unsaved. An unmounted volume is
+  enough to reach that state, and the record is then the only copy the app can reach. It comes back as
+  a draft again, as before.
+- The eight-window cap stranded drafts 9 and beyond permanently — the same defect the first commit
+  claims to fix, at a higher threshold. The cap is gone.
+- `isTerminating` was never cleared if a quit was vetoed after `applicationShouldTerminate` returned,
+  after which no closed document would ever be recorded again. It is cleared on the next turn of the
+  run loop, which a real quit never reaches.
+- Bringing the newest document to the front looked it up by identity, which a document opened from a
+  file does not have yet at that point, so it silently did nothing for exactly the common case. The
+  plan that belongs in front now asks for it where its window is made.
+- The `didEndLiveResize` observer restarted the 150 ms wait instead of ending it, and the re-arming
+  wait already notices the end of a drag on its own. Removed.
+- Corrected in `Validation/2026-09-17-recovery-resize-tables/`: a false claim that single-record
+  launches behave exactly as before (three cases do not, now listed), a test described as passing
+  before the change that does not compile before it, a `--filter` argument that matches no test, and a
+  comment claiming windows restore a remembered frame, which nothing in that method does.
