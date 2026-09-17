@@ -95,6 +95,8 @@ public struct SourceIndex: Sendable {
         guard string.length > 0 else { return SourceSpan(0, 0) }
         return SourceSpan(string.paragraphRange(for: NSRange(location: min(max(0, offset), string.length), length: 0)))
     }
+    /// The UTF-16 unit at `offset`, or 0 outside the source.
+    public func unit(at offset: Int) -> UInt16 { offset >= 0 && offset < units.count ? units[offset] : 0 }
     public func text(in span: SourceSpan) -> String {
         guard span.location >= 0, span.length >= 0, span.end <= utf16Count else { return "" }
         return String(decoding: units[span.location..<span.end], as: UTF16.self)

@@ -228,10 +228,79 @@ public enum MarkdownParser {
         var output = ParsedDocument(source: source, revision: revision)
         let document = Document(parsing: source)
         var protected: [SourceSpan] = []
-        func span(_ node: any Markup) -> SourceSpan? {
-            guard let r = node.range, let a = index.offset(line: r.lowerBound.line, utf8Column: r.lowerBound.column),
-                  let b = index.offset(line: r.upperBound.line, utf8Column: r.upperBound.column), b >= a, b <= index.utf16Count else { return nil }
+        /// Column corrections for inline nodes, by line. swift-markdown reports inline columns on a
+        /// paragraph's continuation lines relative to where it considers the line's content to start, so
+        /// "para\n   three **b**" placed the strong run three columns early and concealed "ee". The shift is
+        /// first estimated from the line's leading whitespace and quote markers, then checked against the
+        /// delimiters (and, on one line, the text) of nodes that have them; a line whose delimiters are
+        /// found elsewhere nearby takes that shift for all its inline nodes. A delimited node that cannot be
+        /// matched to its source is left unstyled.
+        var inlineColumnShift: [Int: Int] = [:]
+        func offsets(_ r: SourceRange, shift lower: Int, _ upper: Int) -> SourceSpan? {
+            guard let a = index.offset(line: r.lowerBound.line, utf8Column: r.lowerBound.column + lower),
+                  let b = index.offset(line: r.upperBound.line, utf8Column: r.upperBound.column + upper), b >= a, b <= index.utf16Count else { return nil }
             return SourceSpan(a, b - a)
+        }
+        /// The characters a delimited inline node's source must start and end with, or nil.
+        func delimiters(_ node: any Markup) -> (start: Set<UInt16>, end: Set<UInt16>)? {
+            switch node {
+            case is Strong, is Emphasis: return ([42, 95], [42, 95])                  // * _
+            case is Strikethrough: return ([126], [126])                              // ~
+            case is InlineCode: return ([96], [96])                                   // `
+            case is Link: return ([91, 60], [41, 93, 62])                             // [ <  ) ] >
+            case is Markdown.Image: return ([33], [41, 93])                           // !  ) ]
+            default: return nil
+            }
+        }
+        func span(_ node: any Markup) -> SourceSpan? {
+            guard let r = node.range else { return nil }
+            guard !(node is BlockMarkup) else { return offsets(r, shift: 0, 0) }
+            let lowerLine = r.lowerBound.line, upperLine = r.upperBound.line
+            let lower = inlineColumnShift[lowerLine] ?? 0, upper = inlineColumnShift[upperLine] ?? 0
+            let estimated = offsets(r, shift: lower, upper)
+            guard let expected = delimiters(node) else { return estimated }
+            // On one line, a shifted candidate must also contain the node's text: adjacent runs such as
+            // "**b**> **b**" put matching delimiters at the ends of a wrong candidate. Computed only when a
+            // shift is involved; unshifted positions are what the parser reported and are accepted.
+            var content: String?
+            func fits(_ span: SourceSpan?, checkingContent: Bool) -> Bool {
+                guard let span, span.length >= 2 else { return false }
+                guard expected.start.contains(index.unit(at: span.location)), expected.end.contains(index.unit(at: span.end - 1)) else { return false }
+                guard checkingContent, lowerLine == upperLine else { return true }
+                if content == nil { content = plain(node) }
+                return content!.isEmpty || index.text(in: span).contains(content!)
+            }
+            if fits(estimated, checkingContent: lower != 0 || upper != 0) { return estimated }
+            for distance in 1...8 {
+                for delta in [distance, -distance] {
+                    let candidate = offsets(r, shift: lower + delta, lowerLine == upperLine ? upper + delta : upper)
+                    if fits(candidate, checkingContent: true) {
+                        inlineColumnShift[lowerLine] = lower + delta
+                        if lowerLine == upperLine { inlineColumnShift[upperLine] = upper + delta }
+                        return candidate
+                    }
+                }
+            }
+            // Not found in the source: leave the node unstyled rather than conceal characters it does not own.
+            return nil
+        }
+        /// For each continuation line of a paragraph, where its content starts relative to the paragraph's
+        /// start column. The parser reports a continuation line's inline columns as if its content began
+        /// at that column, after stripping leading whitespace and block quote markers. List item content
+        /// indentation is whitespace here and already matches the start column, so it needs no correction.
+        func continuationShifts(_ paragraph: Paragraph) -> [Int: Int] {
+            guard let range = paragraph.range, range.upperBound.line > range.lowerBound.line else { return [:] }
+            var shifts: [Int: Int] = [:]
+            for line in (range.lowerBound.line + 1)...min(range.upperBound.line, index.lines.count) {
+                var contentStart = 0
+                for byte in index.text(in: index.lines[line - 1]).utf8 {
+                    guard byte == 32 || byte == 9 || byte == 62 else { break }        // space, tab, ">"
+                    contentStart += 1
+                }
+                let shift = contentStart - (range.lowerBound.column - 1)
+                if shift != 0 { shifts[line] = shift }
+            }
+            return shifts
         }
         func plain(_ node: any Markup) -> String {
             if let t = node as? Text { return t.string }
@@ -240,6 +309,13 @@ public enum MarkdownParser {
             return node.children.map { plain($0) }.joined()
         }
         func walk(_ node: any Markup) {
+            if let paragraph = node as? Paragraph {
+                let outer = inlineColumnShift
+                inlineColumnShift = continuationShifts(paragraph)
+                for child in node.children { walk(child) }
+                inlineColumnShift = outer
+                return
+            }
             guard let s = span(node) else { for child in node.children { walk(child) }; return }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }

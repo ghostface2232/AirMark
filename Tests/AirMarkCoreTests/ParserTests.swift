@@ -201,3 +201,39 @@ import Testing
         if estimate < depth { return }
     }
 }
+
+/// Inline spans on a paragraph's continuation lines that start with whitespace. swift-markdown reports
+/// their columns without the whitespace it strips, which put markers on the writer's own characters:
+/// in "para\n   three **b**" the concealed text was "ee" instead of "**".
+@Test func inlineSpansOnIndentedContinuationLinesCoverTheirDelimiters() async throws {
+    let fixed: [(String, String)] = [("x\n **ab** y", "**ab**"), ("para\n   three **b**", "**b**"), ("x\n\t**ab** y", "**ab**"),
+                                     ("- item\n  continued **bold**", "**bold**"), ("> quote\n> more **bold**", "**bold**")]
+    for (source, strong) in fixed {
+        let index = SourceIndex(source)
+        let run = try #require(MarkdownParser.parse(source).styles.first { $0.kind == .strong }, "\(source.debugDescription)")
+        #expect(index.text(in: run.span) == strong, "\(source.debugDescription)")
+    }
+    // Styles are separated by spaces as in prose; runs glued together ("**b****b**") are not the target.
+    let pieces = [" **b** ", " *e* ", " ~~s~~ ", " `c` ", " [l](u) ", "word", " ", "  ", "   ", "\t", "\n", "\n ", "\n   ", "\n\t", "\n\n", "- ", "> ", "한글", "😀"]
+    var state: UInt64 = 23
+    func next(_ bound: Int) -> Int { state = state &* 6364136223846793005 &+ 1442695040888963407; return Int((state >> 33) % UInt64(bound)) }
+    let worker = MarkdownParsingWorker()
+    for round in 0..<20_000 {
+        let source = (0..<(1 + next(30))).map { _ in pieces[next(pieces.count)] }.joined()
+        let index = SourceIndex(source)
+        for run in try await worker.parse(source, revision: 0).styles {
+            let text = index.text(in: run.span)
+            let ok: Bool
+            switch run.kind {
+            case .strong: ok = (text.hasPrefix("**") && text.hasSuffix("**")) || (text.hasPrefix("__") && text.hasSuffix("__"))
+            case .emphasis: ok = (text.hasPrefix("*") && text.hasSuffix("*")) || (text.hasPrefix("_") && text.hasSuffix("_"))
+            case .strike: ok = text.hasPrefix("~") && text.hasSuffix("~")
+            case .code: ok = text.hasPrefix("`") && text.hasSuffix("`")
+            case .link: ok = text.hasPrefix("[") && text.hasSuffix(")")
+            default: ok = true
+            }
+            #expect(ok, "round \(round): \(source.debugDescription) \(run.kind) covers \(text.debugDescription)")
+            if !ok { return }
+        }
+    }
+}
