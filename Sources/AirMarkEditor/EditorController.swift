@@ -617,12 +617,23 @@ import os
         }
         return units
     }
-    /// True when a fenced block's closing fence line directly follows its opening fence line.
+    /// True when a fenced block's closing fence line directly follows its opening fence line. The second
+    /// line must really be a closing fence (at most three spaces, then at least three of the opening
+    /// fence's character, then only whitespace): an unterminated fence's span also reaches its second
+    /// line, which is visible content.
     static func isEmptyFencedBlock(_ span: SourceSpan, in text: NSString) -> Bool {
         guard span.length > 0, span.end <= text.length else { return false }
         let firstLineEnd = NSMaxRange(text.lineRange(for: NSRange(location: span.location, length: 0)))
         guard span.end > firstLineEnd else { return false }
-        return text.lineRange(for: NSRange(location: span.end - 1, length: 0)).location == firstLineEnd
+        let secondLine = text.lineRange(for: NSRange(location: span.end - 1, length: 0))
+        guard secondLine.location == firstLineEnd else { return false }
+        let fence = text.character(at: span.location)
+        guard fence == 96 || fence == 126 else { return false }                         // ` or ~
+        let line = text.substring(with: NSRange(location: secondLine.location, length: span.end - secondLine.location))
+        let indentation = line.prefix { $0 == " " }.count
+        let rest = line.dropFirst(indentation)
+        let run = rest.prefix { $0.utf16.first == fence }.count
+        return indentation <= 3 && run >= 3 && rest.dropFirst(run).allSatisfy { $0 == " " || $0 == "\t" }
     }
     /// The nearest position that is not inside concealed source, following the caret's direction.
     public func normalizedCaret(_ position: Int, direction: CaretDirection) -> Int {

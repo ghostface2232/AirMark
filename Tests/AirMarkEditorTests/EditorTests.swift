@@ -367,6 +367,10 @@ import AirMarkCore
             ("~~~\n~~~\nb", 8, "\nb"),
             // A block whose last content line is blank: Backspace deletes that line, like any last character.
             ("```\n\n\n```\nb", 10, "```\n\n```\nb"),
+            // An unterminated fence has content, not a closing fence: only the hidden fence goes.
+            ("```\nx", 4, "x"),
+            ("a\n```\nx", 6, "a\nx"),
+            ("- ```\n  x", 6, "-   x"),
         ]
         for (source, caret, expected) in cases {
             let editor = try await make(source)
