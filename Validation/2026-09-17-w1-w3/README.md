@@ -13,3 +13,12 @@ Keystroke durations are synchronous main-thread time of one `performEdit`. The d
 ## W3 — adversarial inputs
 
 - `adversarial-before.txt`: `swift run -c release --disable-sandbox AirMarkBench --adversarial` before the W3 changes. `query2000` is 2,000 caret-sized (6-unit) style queries at deterministic random positions on the presentation store.
+
+## W4 — WebKit render lifecycle
+
+- `w4-before.txt`: `swift test --disable-sandbox --filter RenderLifecycleTests` against the renderer at `a83df84`, with only two observation hooks added (a render attempt counter and a page load counter) and a test-local stub for failure classification.
+- `w4-after.txt`: the same suite after the lifecycle change.
+
+Two corrections to the before run. Its slow diagram was top-to-bottom, which on its own exceeds the 12-megapixel display limit, so the "exceeds the display limit" failures after killing the process and closing the window came from the diagram, not from those events. The final tests use a left-to-right diagram that is scaled to the column (0.31 s alone; the kill at 0.15 s lands mid-render). The before run also counted attempts on the shared render service, which other suites use in parallel; the final test counts requests on its own editor.
+
+What the before run did establish: 8 of 40 concurrent formulas failed permanently as "Renderer unavailable"; a render in a minimized window was a permanent failure; a failed formula was resubmitted on every unrelated edit (3 attempts for 3 edits); and a termination callback naming another web view discarded the current page (2 loads instead of 1). No indefinite wait was reproduced in any scenario, before or after.

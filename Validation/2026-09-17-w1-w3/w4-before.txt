@@ -1,0 +1,21 @@
+◇ Test run started.
+LIFECYCLE killed: Optional(Swift.Result<AirMarkRender.RenderArtifact, Swift.Error>.failure(Error Domain=WKErrorDomain Code=5 "JavaScript execution returned a result of an unsupported type" UserInfo={NSLocalizedDescription=JavaScript execution returned a result of an unsupported type})) after 0.171827 seconds
+LIFECYCLE after kill: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((149.0, 390.0)))
+✔ Test killedContentProcessEndsTheRenderAndRecovers() passed after 0.778 seconds.
+LIFECYCLE closed host: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.invalid("Rendered content exceeds the display limit.")))
+LIFECYCLE other window: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((151.0, 390.0)))
+✔ Test closingTheHostWindowMidRenderDoesNotStallOthers() passed after 0.517 seconds.
+LIFECYCLE concurrent: Optional(Swift.Result<Swift.String, Swift.Error>.success("32 of 40"))
+✘ Test manyConcurrentRequestsAllComplete() recorded an issue at RenderLifecycleTests.swift:110:9: Expectation failed: succeeded == 40
+✘ Test manyConcurrentRequestsAllComplete() failed after 0.162 seconds with 1 issue.
+LIFECYCLE minimized: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.unavailable))
+✘ Test minimizedWindowPostponesInsteadOfFailing() recorded an issue at RenderLifecycleTests.swift:124:13: Expectation failed: (error as? RenderFailure)?.isTransient == true
+↳ a minimized window is not a rendering error: .unavailable
+✘ Test minimizedWindowPostponesInsteadOfFailing() failed after 0.583 seconds with 1 issue.
+LIFECYCLE failed element attempts: 3, errors 1
+✘ Test failedElementIsNotRetriedByUnrelatedEdits() recorded an issue at RenderLifecycleTests.swift:145:9: Expectation failed: RenderService.shared.attemptCount == attempts
+✘ Test failedElementIsNotRetriedByUnrelatedEdits() failed after 1.377 seconds with 1 issue.
+✘ Test run with 5 tests in 1 suite failed after 3.420 seconds with 3 issues.
+LIFECYCLE stale termination callback: loads 2
+✘ Test callbacksFromAReplacedPageAreIgnored() recorded an issue at RenderLifecycleTests.swift:68:9: Expectation failed: service.math.loadCount == 1
+✘ Test callbacksFromAReplacedPageAreIgnored() failed after 0.430 seconds with 1 issue.

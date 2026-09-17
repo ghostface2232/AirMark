@@ -1,0 +1,21 @@
+◇ Test run started.
+LIFECYCLE stale termination callback: loads 1
+✔ Test callbacksFromAReplacedPageAreIgnored() passed after 0.313 seconds.
+LIFECYCLE slow diagram alone: 0.311027708 seconds
+LIFECYCLE killed: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 9.0))) after 0.589462875 seconds
+LIFECYCLE after kill: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((626.0, 78.0))) loads 2
+✔ Test killedContentProcessEndsTheRenderAndRecovers() passed after 1.185 seconds.
+LIFECYCLE closed host: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+LIFECYCLE other window: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((633.0, 78.0)))
+✔ Test closingTheHostWindowMidRenderDoesNotStallOthers() passed after 0.474 seconds.
+LIFECYCLE timeout: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.timeout)) loads 1 -> 1
+✔ Test timedOutScriptReplacesThePage() passed after 0.423 seconds.
+LIFECYCLE cancelled queued: 10 of 10
+✔ Test cancelledQueuedRequestsDoNotRun() passed after 0.391 seconds.
+LIFECYCLE concurrent: Optional(Swift.Result<Swift.String, Swift.Error>.success("40 of 40"))
+✔ Test manyConcurrentRequestsAllComplete() passed after 0.157 seconds.
+LIFECYCLE minimized: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+✔ Test minimizedWindowPostponesInsteadOfFailing() passed after 1.263 seconds.
+LIFECYCLE failed element requests: 0, errors 1
+✔ Test failedElementIsNotRetriedByUnrelatedEdits() passed after 1.290 seconds.
+✔ Test run with 8 tests in 1 suite passed after 5.501 seconds.

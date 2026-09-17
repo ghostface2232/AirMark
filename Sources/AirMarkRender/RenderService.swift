@@ -24,21 +24,55 @@ public struct RenderArtifact: @unchecked Sendable {
     public let label: String
     public var cost: Int { image.bytesPerRow * image.height }
 }
-public enum RenderFailure: LocalizedError {
-    case invalid(String), timeout, unavailable
+public enum RenderFailure: LocalizedError, Equatable {
+    /// The source cannot be rendered. Stays until the element's content changes.
+    case invalid(String)
+    /// A wait on WebKit exceeded its budget; the page was replaced.
+    case timeout
+    /// WebKit could not load or answer for a reason unrelated to the source; the page was replaced.
+    case unavailable
+    /// The page's content process died.
+    case processTerminated
+    /// The requesting window is minimized or gone. Not a failure of the element; render again later.
+    case suspended
+
+    /// Worth one more attempt later: nothing suggests the source itself is at fault.
+    public var isTransient: Bool {
+        switch self {
+        case .invalid: false
+        case .timeout, .unavailable, .processTerminated, .suspended: true
+        }
+    }
     public var errorDescription: String? {
-        switch self { case .invalid(let message): return message; case .timeout: return "Rendering took too long. Edit the source to retry."; case .unavailable: return "Renderer unavailable." }
+        switch self {
+        case .invalid(let message): message
+        case .timeout: "Rendering took too long."
+        case .unavailable: "Renderer unavailable."
+        case .processTerminated: "The renderer stopped unexpectedly."
+        case .suspended: "Rendering is postponed while the window is hidden."
+        }
     }
 }
 
 @MainActor public final class RenderService {
     public static let shared = RenderService()
-    private var math = WebRenderer(), mermaid = WebRenderer()
+    let math: WebRenderer, mermaid: WebRenderer
     private var cache: [String: RenderArtifact] = [:]
     private var order: [String] = []
     private var bytes = 0
     private let memoryLimit = 48 * 1024 * 1024
-    private var pending: [String: Task<RenderArtifact, Error>] = [:]
+    /// In-flight renders shared by every caller asking for the same key. The underlying work is
+    /// cancelled only when all of its callers have been.
+    @MainActor private final class Pending {
+        let task: Task<RenderArtifact, any Error>
+        var callers = 0
+        init(_ task: Task<RenderArtifact, any Error>) { self.task = task }
+    }
+    private var pending: [String: Pending] = [:]
+    init(budget: WebRenderer.Budget = .init()) {
+        math = WebRenderer(budget: budget)
+        mermaid = WebRenderer(budget: budget)
+    }
     public private(set) var renderedCount = 0
 
     public func key(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?) -> String {
@@ -55,21 +89,47 @@ public enum RenderFailure: LocalizedError {
     public func render(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?, host: NSView) async throws -> RenderArtifact {
         let identifier = key(element, environment: environment, baseURL: baseURL)
         if let result = cache[identifier] { touch(identifier); return labeled(result, for: element, baseURL: baseURL) }
-        if let task = pending[identifier] { return labeled(try await task.value, for: element, baseURL: baseURL) }
-        guard pending.count < 32 else { throw RenderFailure.unavailable }
-        let task = Task<RenderArtifact, Error> { [self] in
+        if let shared = pending[identifier] { return labeled(try await wait(for: shared), for: element, baseURL: baseURL) }
+        let task = Task<RenderArtifact, any Error> { [self] in
             if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
             if element.kind == .table { return try drawTable(element, environment: environment) }
             let renderer = element.kind == .math ? math : mermaid
             return try await renderer.render(element, environment: environment, host: host)
         }
-        pending[identifier] = task
-        defer { pending[identifier] = nil }
-        let result = try await task.value
-        guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
+        let entry = Pending(task)
+        pending[identifier] = entry
+        // Settle the entry when the work ends, even if every caller stopped waiting, so a finished
+        // result is cached and a cancelled or failed one is never handed to a later caller.
+        Task { [self] in settle(identifier, entry, try? await task.value) }
+        do {
+            let result = try await wait(for: entry)
+            settle(identifier, entry, result)
+            guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
+            return labeled(result, for: element, baseURL: baseURL)
+        } catch {
+            settle(identifier, entry, nil)
+            throw error
+        }
+    }
+    /// Removes a finished entry and caches its result. Only the first call for an entry has an effect.
+    private func settle(_ identifier: String, _ entry: Pending, _ result: RenderArtifact?) {
+        guard pending[identifier] === entry else { return }
+        pending[identifier] = nil
+        guard let result, result.cost <= memoryLimit else { return }
         cache[identifier] = result; bytes += result.cost; touch(identifier); renderedCount += 1
         while bytes > memoryLimit, let oldest = order.first { order.removeFirst(); if let removed = cache.removeValue(forKey: oldest) { bytes -= removed.cost } }
-        return labeled(result, for: element, baseURL: baseURL)
+    }
+    private func wait(for entry: Pending) async throws -> RenderArtifact {
+        entry.callers += 1
+        return try await withTaskCancellationHandler {
+            defer { entry.callers -= 1 }
+            return try await entry.task.value
+        } onCancel: {
+            Task { @MainActor in
+                // Late cancellation after the value arrived is harmless: cancelling a finished task does nothing.
+                if entry.callers <= 1 { entry.task.cancel() }
+            }
+        }
     }
     /// Accessibility belongs to the requesting element, while identical pixels remain shared.
     private func labeled(_ artifact: RenderArtifact, for element: RenderElement, baseURL: URL?) -> RenderArtifact {
@@ -134,103 +194,5 @@ public enum RenderFailure: LocalizedError {
         var rect = CGRect(origin: .zero, size: size)
         guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { throw RenderFailure.unavailable }
         return RenderArtifact(image: cg, size: size, baseline: size.height, label: element.label)
-    }
-}
-
-@MainActor private final class WebRenderer: NSObject, WKNavigationDelegate {
-    private var web: WKWebView?
-    private var loaded = false
-    private var navigation: CheckedContinuation<Void, Error>?
-    private var tail: Task<RenderArtifact, Error>?
-    func render(_ element: RenderElement, environment: RenderEnvironment, host: NSView) async throws -> RenderArtifact {
-        let previous = tail
-        let task = Task { @MainActor in
-            _ = try? await previous?.value
-            try Task.checkCancellation()
-            return try await self.perform(element, environment: environment, host: host)
-        }
-        tail = task
-        return try await task.value
-    }
-    private func prepare(host: NSView) async throws -> WKWebView {
-        if let web, loaded {
-            if web.superview !== host { web.removeFromSuperview(); host.addSubview(web, positioned: .below, relativeTo: host.subviews.first) }
-            return web
-        }
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()
-        let rules = try await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "AirMarkOffline", encodedContentRuleList: "[{\"trigger\":{\"url-filter\":\"^https?://\"},\"action\":{\"type\":\"block\"}}]")
-        if let rules { config.userContentController.add(rules) }
-        let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 720, height: 512), configuration: config)
-        view.navigationDelegate = self
-        view.setAccessibilityElement(false)
-        host.addSubview(view, positioned: .below, relativeTo: host.subviews.first)
-        self.web = view
-        guard let resource = Bundle.module.url(forResource: "renderer", withExtension: "html", subdirectory: "Resources") else { throw RenderFailure.unavailable }
-        try await withCheckedThrowingContinuation { continuation in
-            navigation = continuation
-            view.loadFileURL(resource, allowingReadAccessTo: resource.deletingLastPathComponent())
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(10))
-                guard let self, let pending = self.navigation else { return }
-                self.navigation = nil; pending.resume(throwing: RenderFailure.timeout)
-            }
-        }
-        loaded = true
-        return view
-    }
-    private func perform(_ element: RenderElement, environment: RenderEnvironment, host: NSView) async throws -> RenderArtifact {
-        guard host.window?.isMiniaturized != true else { throw RenderFailure.unavailable }
-        do {
-            let web = try await prepare(host: host)
-            // Measure in a viewport wider than any result. A frame left small by the previous
-            // snapshot let display-mode KaTeX report a box thousands of points wide.
-            web.setFrameSize(NSSize(width: max(1024, ceil(environment.width) + 64), height: 2048))
-            let result = try await javascript(web, body: "return await window.renderAirMark(source, kind, display, fontSize, dark, width, background);", arguments: ["source": element.content, "kind": element.kind.rawValue, "display": !element.inline, "fontSize": environment.fontSize, "dark": environment.dark, "width": environment.width, "background": environment.background])
-            guard let metrics = try JSONSerialization.jsonObject(with: result) as? [String: Any], let width = metrics["width"] as? Double, let height = metrics["height"] as? Double,
-                  width.isFinite, height.isFinite, width > 0, height > 0,
-                  width * height * environment.scale * environment.scale <= 12_000_000 else { throw RenderFailure.invalid("Rendered content exceeds the display limit.") }
-            let size = CGSize(width: ceil(width), height: ceil(height))
-            web.setFrameSize(size)
-            // Occluded WebViews may suspend animation frames. Force DOM layout without
-            // waiting for a display refresh; takeSnapshot handles the drawing update.
-            _ = try await javascript(web, body: "return document.getElementById('output').getBoundingClientRect().width;", arguments: [:])
-            let config = WKSnapshotConfiguration()
-            config.rect = CGRect(origin: .zero, size: size)
-            config.snapshotWidth = NSNumber(value: size.width)
-            let snapshot = try await web.takeSnapshot(configuration: config)
-            var bounds = CGRect(origin: .zero, size: size)
-            guard let image = snapshot.cgImage(forProposedRect: &bounds, context: nil, hints: nil) else { throw RenderFailure.unavailable }
-            return RenderArtifact(image: image, size: size, baseline: metrics["baseline"] as? Double ?? size.height, label: element.kind == .math ? element.content : "Mermaid diagram. \(element.content.prefix(300))")
-        } catch {
-            if case RenderFailure.timeout = error { web?.stopLoading(); web?.removeFromSuperview(); web = nil; loaded = false }
-            throw error
-        }
-    }
-    private func javascript(_ web: WKWebView, body: String, arguments: [String: Any]) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            var completed = false
-            web.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { result in
-                guard !completed else { return }; completed = true
-                switch result {
-                case .success(let value):
-                    do { continuation.resume(returning: try JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed)) }
-                    catch { continuation.resume(throwing: error) }
-                case .failure(let error): continuation.resume(throwing: error)
-                }
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(8))
-                guard !completed else { return }; completed = true
-                continuation.resume(throwing: RenderFailure.timeout)
-            }
-        }
-    }
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { let pending = self.navigation; self.navigation = nil; pending?.resume() }
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { let pending = self.navigation; self.navigation = nil; pending?.resume(throwing: error) }
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { let pending = self.navigation; self.navigation = nil; pending?.resume(throwing: error) }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loaded = false; web?.removeFromSuperview(); web = nil }
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        navigationAction.request.url?.isFileURL == true ? .allow : .cancel
     }
 }
