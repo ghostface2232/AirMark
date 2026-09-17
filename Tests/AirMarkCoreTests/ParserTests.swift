@@ -82,3 +82,48 @@ import Testing
     let bullet = MarkdownParser.parse("- [ ] task\n")
     #expect(bullet.checkboxes.count == 1)
 }
+
+/// Deeply nested containers must not crash the background parse. swift-markdown converts the tree
+/// recursively, and a concurrency-pool thread's stack ended at about 70 nested quotes.
+@Test func deepNestingParsesInTheWorkerWithoutCrashing() async throws {
+    let worker = MarkdownParsingWorker()
+    let quotes = String(repeating: ">", count: 200) + " deep\n"
+    let quoted = try await worker.parse(quotes, revision: 1)
+    #expect(quoted.styles.filter { $0.kind == .quote }.count == 200)
+    let list = (0..<150).map { String(repeating: "  ", count: $0) + "- item **\($0)**\n" }.joined()
+    let listed = try await worker.parse(list, revision: 2)
+    #expect(listed.styles.contains { $0.kind == .strong })
+}
+
+/// Past the nesting limit the document is shown as plain text instead of risking the stack.
+@Test func nestingBeyondTheLimitIsPresentedAsPlainText() async throws {
+    let worker = MarkdownParsingWorker()
+    for source in [String(repeating: "> ", count: 20_000) + "text\n",
+                   String(repeating: "- ", count: 20_000) + "text\n",
+                   (0..<400).map { String(repeating: "  ", count: $0) + "- item\n" }.joined()] {
+        let result = try await worker.parse(source, revision: 3)
+        #expect(result.source == source)
+        #expect(result.styles.isEmpty && result.elements.isEmpty && result.checkboxes.isEmpty)
+    }
+    #expect(MarkdownParser.nestingEstimate(String(repeating: "> ", count: 3) + "- 1. text") == 7)
+    #expect(MarkdownParser.nestingEstimate("text\n    indented code\n") == 2)
+    #expect(MarkdownParser.nestingEstimate(String(repeating: ">", count: 200) + " deep") == 200)
+    // An estimate never below the real depth: 40 list levels indented two columns each.
+    let nested = (0..<40).map { String(repeating: "  ", count: $0) + "- item\n" }.joined()
+    #expect(MarkdownParser.nestingEstimate(nested) >= 40)
+}
+
+/// The limit is only safe if the estimate never falls below the depth the parser actually builds.
+@Test func nestingEstimateIsNotBelowParsedContainerDepth() {
+    let pieces = ["> ", ">", "- ", "* ", "+ ", "1. ", "2) ", "  ", "    ", "\t", " ", "text", "-", "1.", "\n", "\n\n", "\r\n"]
+    var state: UInt64 = 5
+    func next(_ bound: Int) -> Int { state = state &* 6364136223846793005 &+ 1442695040888963407; return Int((state >> 33) % UInt64(bound)) }
+    for round in 0..<20_000 {
+        let source = (0..<(1 + next(30))).map { _ in pieces[next(pieces.count)] }.joined()
+        let containers = MarkdownParser.parse(source).styles.filter { $0.kind == .quote || $0.kind == .list }.map(\.span)
+        let depth = containers.map { inner in containers.filter { $0.location <= inner.location && inner.end <= $0.end }.count }.max() ?? 0
+        let estimate = MarkdownParser.nestingEstimate(source)
+        #expect(estimate >= depth, "round \(round): \(source.debugDescription) estimate \(estimate) depth \(depth)")
+        if estimate < depth { return }
+    }
+}

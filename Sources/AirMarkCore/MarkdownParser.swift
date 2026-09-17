@@ -36,22 +36,87 @@ public struct ParsedDocument: Sendable {
     }
 }
 
+/// Parses off the main actor on a thread with a large stack. swift-markdown converts its tree
+/// recursively, and a concurrency-pool thread's stack (about 512KB) ran out at about 70 nested block
+/// quotes, which crashed the app. With 16MB, nesting survives past 1,500 levels, far above
+/// `MarkdownParser.nestingLimit`.
 public actor MarkdownParsingWorker {
+    static let stackSize = 16 << 20
     public init() {}
-    public func parse(_ source: String, revision: UInt64) throws -> ParsedDocument {
+    public func parse(_ source: String, revision: UInt64) async throws -> ParsedDocument {
         try Task.checkCancellation()
-        return MarkdownParser.parse(source, revision: revision)
+        return await Self.onLargeStack { MarkdownParser.parse(source, revision: revision) }
     }
     /// The parse and the presentation built from it, so neither is constructed on the main actor.
-    public func parsePresentation(_ source: String, revision: UInt64) throws -> (ParsedDocument, PresentationStore) {
-        let document = try parse(source, revision: revision)
+    public func parsePresentation(_ source: String, revision: UInt64) async throws -> (ParsedDocument, PresentationStore) {
         try Task.checkCancellation()
-        return (document, PresentationStore(document))
+        return await Self.onLargeStack {
+            let document = MarkdownParser.parse(source, revision: revision)
+            return (document, PresentationStore(document))
+        }
+    }
+    private static func onLargeStack<Result: Sendable>(_ work: @escaping @Sendable () -> Result) async -> Result {
+        await withCheckedContinuation { continuation in
+            let thread = Thread { continuation.resume(returning: work()) }
+            thread.stackSize = stackSize
+            thread.qualityOfService = .userInitiated
+            thread.start()
+        }
     }
 }
 
 public enum MarkdownParser {
+    /// Documents whose containers may nest deeper than this are presented as plain text. Real notes
+    /// stay far below it; it exists so a short hostile line cannot exhaust the parser's stack, which
+    /// on an 8MB main thread lasts to about 890 nested list items.
+    public static let nestingLimit = 256
+
+    /// An upper bound on container nesting: for each line, the block quote and list markers at its start
+    /// plus half its leading whitespace in columns. A line stays inside a block quote only with its `>`
+    /// and inside a list item only when indented at least two columns per item, so both are counted;
+    /// separators after markers are counted too, which only overestimates. A lazy continuation line
+    /// cannot open containers, so the line that opened them bounds the depth. Linear; no parse.
+    public static func nestingEstimate(_ source: String) -> Int {
+        var deepest = 0, depth = 0, columns = 0, atLineStart = true
+        var utf8 = source.utf8.makeIterator()
+        var pending: UInt8? = nil
+        func next() -> UInt8? { if let byte = pending { pending = nil; return byte }; return utf8.next() }
+        while let byte = next() {
+            if byte == 10 || byte == 13 {
+                deepest = max(deepest, depth + columns / 2)
+                depth = 0; columns = 0; atLineStart = true
+                continue
+            }
+            guard atLineStart else { continue }
+            switch byte {
+            case 32: columns += 1
+            case 9: columns += 4 - columns % 4
+            case 62: depth += 1                                   // ">"
+            case 45, 43, 42:                                      // "-", "+", "*" then a space or the line's end
+                let following = next()
+                if Self.endsMarker(following) { depth += 1; pending = following } else { atLineStart = false; pending = following }
+            case 48...57:                                         // digits, then "." or ")", then a space
+                var digit: UInt8? = byte
+                while let current = digit, (48...57).contains(current) { digit = next() }
+                if digit == 46 || digit == 41 {
+                    let following = next()
+                    if Self.endsMarker(following) { depth += 1; pending = following } else { atLineStart = false; pending = following }
+                } else { atLineStart = false; pending = digit }
+            default: atLineStart = false
+            }
+        }
+        return max(deepest, depth + columns / 2)
+    }
+
+    /// A list marker counts when a space, a tab, a line break or the end of the source follows it;
+    /// an empty item (`-` alone on a line) is still a list item.
+    private static func endsMarker(_ byte: UInt8?) -> Bool {
+        guard let byte else { return true }
+        return byte == 32 || byte == 9 || byte == 10 || byte == 13
+    }
+
     public static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
+        guard nestingEstimate(source) <= nestingLimit else { return ParsedDocument(source: source, revision: revision) }
         let index = SourceIndex(source)
         var output = ParsedDocument(source: source, revision: revision)
         let document = Document(parsing: source)

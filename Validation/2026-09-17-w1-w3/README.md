@@ -61,3 +61,11 @@ How the numbers were obtained matters. ImageIO thumbnails decode lazily: 150 of 
 Scrolling back requests each image at most once. The first pass requests 177 for 150 images: some images rendered ahead of scrolling were released for the budget before they came into view.
 
 Two intermediate designs failed this test and are recorded because they explain the final one. Releasing pixels relative to the viewport controller's range produced a render/release loop (1,177 stores for 71 images) because, in the offscreen window, that range fell back to the start of the document between layout passes. Measuring windows in UTF-16 units held 39 images: a one-line image reference can be a screen tall, so ±2,000 units spanned about 40 screens. Windows are now screen heights derived from the scroll position.
+
+## Review fixes
+
+### 1. Deep nesting crashed the parse worker
+
+- Stack depth survived by `MarkdownParser.parse` plus `PresentationStore` on a thread of a given stack size (binary search, scratch probe): quotes on one line 127 (1MB), 1,044 (8MB), 8,417 (64MB); nested lists 108 (1MB), 888 (8MB). The worker ran on a concurrency-pool thread and crashed at 70 nested quotes (SIGBUS in the reproduction test).
+- Parsing now runs on a 16MB-stack thread, and a source whose nesting estimate exceeds 256 is presented as plain text. The estimate is checked against the depth of quote and list styles the parser builds on 20,000 random inputs.
+- `fix1-bench.txt`: `swift run -c release --disable-sandbox AirMarkBench` afterwards, at load average 3.9. The estimate alone costs 2.9ms at 1MB and 29.7ms at 10MB, 0.75% of the parse; the difference from the 2026-09-16 record is machine load, not the estimate.
