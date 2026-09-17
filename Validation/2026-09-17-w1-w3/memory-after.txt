@@ -1,0 +1,2 @@
+MEMORY measured=150 images=150 start=25.2MB afterDown=34.0MB afterUp=28.3MB peak=96.4MB growth=71.2MB held=14/10 pixels=83.1MB/59.3MB requestsDown=178 requestsUp=138 errors=0
+✔ Test run with 1 test in 1 suite passed after 2.935 seconds.

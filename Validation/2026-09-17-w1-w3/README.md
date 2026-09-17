@@ -44,3 +44,20 @@ The long-list and unclosed-display query exponents move between 0.08 and 0.76 wi
 
 - `adversarial-scaling-math-after.txt`: after the scanner remembers where a failed scan stopped. One line of `$1 ` or `$a ` now has parse exponents of 0.90–1.00 (80KB: 947.7 → 0.63 ms). Lines of bounded length were already linear in document size; they lose the per-line rescanning factor (currency lines at 1MB: 140.7 → 9.5 ms). Other corpora are unchanged within noise.
 - `MathScannerTests` compares the scanner with the original on 3,000 random inputs with random, possibly overlapping protected spans. It fails if the two delimiter kinds share one remembered boundary or if the boundary is extended to the end of the source. Recording the boundary one position later is not a defect: no opener can start at a line break, inside a protected span or at the end.
+
+## W2 — rendered pixels
+
+- `memory-before.txt` / `memory-after.txt`: `AIRMARK_MEMORY=1 swift test -c release --disable-sandbox --filter MemoryTests`. 150 distinct 1600×1200 PNG images, each downsampled to the 1360-pixel column (about 5.9MB decoded), one per short paragraph. The editor scrolls to every third image and back.
+
+How the numbers were obtained matters. ImageIO thumbnails decode lazily: 150 of them cost 7MB when created and 798MB after each was drawn once (measured separately). A test window is never composited and draws nothing, so the first runs showed 16MB of growth while the editor held 890MB of nominal pixels. The test now draws each image the editor holds once into a small context, standing in for the screen. It measures app-process `phys_footprint`; WebKit content processes are not involved for images and are not counted.
+
+| | before | after |
+|---|---:|---:|
+| peak footprint growth | 903.1MB | 65–71MB (two runs) |
+| images holding pixels after scrolling down | 150 | 14 |
+| elements with layout metrics | 150 | 150 |
+| render requests scrolling down / back up | 138 / 0 | 177 / 138 |
+
+Scrolling back requests each image at most once. The first pass requests 177 for 150 images: some images rendered ahead of scrolling were released for the budget before they came into view.
+
+Two intermediate designs failed this test and are recorded because they explain the final one. Releasing pixels relative to the viewport controller's range produced a render/release loop (1,177 stores for 71 images) because, in the offscreen window, that range fell back to the start of the document between layout passes. Measuring windows in UTF-16 units held 39 images: a one-line image reference can be a screen tall, so ±2,000 units spanned about 40 screens. Windows are now screen heights derived from the scroll position.

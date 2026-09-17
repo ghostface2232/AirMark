@@ -17,10 +17,18 @@ import os
     public private(set) var textKitFallbackCount = 0
     public var showsMarkers = false { didSet { invalidatePresentation(); scheduleRenders() } }
     public var fontSize: CGFloat = 16 { didSet { artifacts.removeAll(); invalidatePresentation(); scheduleRenders() } }
+    /// Distances from the visible area, in screen heights. Elements within `nearScreens` are always
+    /// rendered and never released. Within `aheadScreens`, renders start before scrolling reaches them
+    /// while held pixels are under three quarters of the budget. Beyond `nearScreens`, pixels are released
+    /// farthest first while over budget. Measured in points because source length says nothing about
+    /// height: a one-line image reference can fill a screen.
+    static let nearScreens: CGFloat = 1
+    static let aheadScreens: CGFloat = 3
     private var parseTask: Task<Void, Never>?
     private let parsingWorker = MarkdownParsingWorker()
     private var renderTasks: [SourceSpan: Task<Void, Never>] = [:]
-    private var artifacts: [SourceSpan: RenderArtifact] = [:]
+    /// Layout metrics for rendered elements, and their pixels while near the viewport.
+    private let artifacts = ArtifactStore()
     /// A render that failed. A transient failure (timeout, lost renderer) gets one more attempt at
     /// `retryAt`; a source error stays until the element's content changes.
     private struct RenderIssue {
@@ -54,7 +62,14 @@ import os
     public var selection: SourceSpan { SourceSpan(textView.selectedRange()) }
     public var scrollY: Double { scrollView.contentView.bounds.origin.y }
     public var renderErrorCount: Int { errors.count }
-    public var renderedElementCount: Int { artifacts.count }
+    /// Rendered elements whose pixels are held.
+    public var renderedElementCount: Int { artifacts.residentCount }
+    /// Rendered elements whose layout metrics are known, with or without pixels.
+    public var measuredElementCount: Int { artifacts.count }
+    /// Decoded pixel bytes of the render results this editor holds.
+    public var retainedPixelBytes: Int { artifacts.pixelBytes }
+    /// The images this editor holds, for tests that stand in for on-screen drawing.
+    var heldImages: [CGImage] { artifacts.residentImages }
     public var pendingRenderCount: Int { renderTasks.count }
     /// Render requests this editor has started, including ones answered from the cache.
     public private(set) var renderRequestCount = 0
@@ -128,7 +143,7 @@ import os
     public func fileLocationChanged(to url: URL?) {
         fileURL = url
         let images = Set(parsed.elements.filter { $0.kind == .image }.map(\.span))
-        for span in images { artifacts[span] = nil; errors[span] = nil; renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
+        for span in images { artifacts.remove(span); errors[span] = nil; renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
         invalidatePresentation(spans: Array(images))
         scheduleRenders()
     }
@@ -198,7 +213,7 @@ import os
         // A distant reference definition can change an image's content without moving its span.
         // Source coordinates alone do not identify a reusable artifact.
         let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
-        artifacts = artifacts.filter { spans.contains($0.key) }
+        artifacts.retain(spans)
         errors = errors.filter { spans.contains($0.key) }
         parsed = result; presentation = next
         let changed = old.changedStyleSpans(comparedTo: next)
@@ -211,9 +226,7 @@ import os
         let edit = PresentationEdit(range: previous, replacement: replacement)
         EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
-        artifacts = Dictionary(uniqueKeysWithValues: artifacts.compactMap { span, artifact in
-            edit.unchanged(span).map { ($0, artifact) }
-        })
+        artifacts.apply(edit)
         errors = Dictionary(uniqueKeysWithValues: errors.compactMap { span, issue in
             edit.unchanged(span).map { ($0, issue) }
         })
@@ -245,9 +258,15 @@ import os
             invalidatePresentation(spans: parsed.elements.map(\.span))
         }
         let currentRevision = revision
-        let candidates = elements(intersecting: viewportWindow(margin: 2000))
+        releaseDistantPixels()
+        let windows = renderWindows()
+        var candidates = Array(elements(intersecting: windows.near))
+        if artifacts.pixelBytes < artifacts.pixelBudget / 4 * 3 {
+            let near = Set(candidates.map(\.span))
+            candidates += elements(intersecting: windows.ahead).filter { !near.contains($0.span) }
+        }
         let now = ContinuousClock.now
-        for element in candidates where !isEditing(element.span) && artifacts[element.span] == nil && renderTasks[element.span] == nil
+        for element in candidates where !isEditing(element.span) && artifacts.needsPixels(at: element.span, environment: environment) && renderTasks[element.span] == nil
                 && errors[element.span].map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
             guard renderTasks.count < 12 else { break }
             let token = UUID(); renderTokens[element.span] = token
@@ -262,8 +281,9 @@ import os
                 do {
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
                     guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
-                    artifacts[element.span] = artifact
+                    artifacts.store(artifact, at: element.span, environment: environment)
                     errors[element.span] = nil
+                    releaseDistantPixels()
                     if let onFirstRender { self.onFirstRender = nil; onFirstRender() }
                 } catch {
                     guard !Task.isCancelled, revision == currentRevision else { return }
@@ -286,6 +306,65 @@ import os
         }
     }
     public override func viewDidAppear() { super.viewDidAppear(); scheduleRenders() }
+
+    /// Pixels near the viewport stay; farther ones go, then the farthest while over budget. Layout
+    /// metrics stay, so the document does not move, and scrolling back renders them again.
+    func releaseDistantPixels() {
+        guard let near = sourceRange(screensAroundVisible: Self.nearScreens) else { return }
+        artifacts.releasePixels(protecting: near)
+    }
+    /// Where renders start: `near` always, `ahead` while under budget.
+    private func renderWindows() -> (near: NSRange, ahead: NSRange) {
+        guard let near = sourceRange(screensAroundVisible: Self.nearScreens),
+              let ahead = sourceRange(screensAroundVisible: Self.aheadScreens) else {
+            let fallback = viewportWindow(margin: 2000)
+            return (fallback, fallback)
+        }
+        return (near, ahead)
+    }
+    /// The source range laid out within `screens` screen heights above and below the scroll view's
+    /// visible bounds. Lays out that area if needed, never the whole document. Computed from the scroll
+    /// position rather than the viewport controller's range, which can briefly fall back to the start of
+    /// the document between layout passes; releasing from that dropped pixels on screen and rendered
+    /// them again in a loop. Nil when the area cannot be mapped, in which case nothing is released.
+    private func sourceRange(screensAroundVisible screens: CGFloat) -> NSRange? {
+        guard isViewLoaded, let manager = textView.textLayoutManager, let content = manager.textContentManager else { return nil }
+        let bounds = scrollView.contentView.bounds, origin = textView.textContainerOrigin
+        let padding = bounds.height * screens
+        let area = CGRect(x: 0, y: max(0, bounds.minY - origin.y - padding), width: max(1, bounds.width), height: bounds.height + 2 * padding)
+        manager.ensureLayout(for: area)
+        let length = content.offset(from: content.documentRange.location, to: content.documentRange.endLocation)
+        let used = manager.usageBoundsForTextContainer
+        func offset(at y: CGFloat, end: Bool) -> Int? {
+            if y >= used.maxY { return length }
+            guard let fragment = manager.textLayoutFragment(for: CGPoint(x: 0, y: max(0, y))) else { return nil }
+            return content.offset(from: content.documentRange.location, to: end ? fragment.rangeInElement.endLocation : fragment.rangeInElement.location)
+        }
+        guard let start = offset(at: area.minY, end: false), let end = offset(at: area.maxY - 1, end: true), start >= 0, end >= start else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
+    /// The source range under the scroll view's visible bounds, from the layout fragments at its top
+    /// and bottom edges. Releasing pixels uses this rather than the viewport controller's range, which
+    /// can briefly fall back to the start of the document between layout passes; releasing from that
+    /// dropped pixels on screen and rendered them again in a loop. Nil when either edge is not laid out,
+    /// in which case nothing is released.
+    private func scrolledSourceRange() -> NSRange? {
+        guard isViewLoaded, let manager = textView.textLayoutManager, let content = manager.textContentManager else { return nil }
+        let bounds = scrollView.contentView.bounds, origin = textView.textContainerOrigin
+        let top = CGPoint(x: 0, y: max(0, bounds.minY - origin.y))
+        let bottom = CGPoint(x: 0, y: max(0, bounds.maxY - origin.y))
+        guard let first = manager.textLayoutFragment(for: top), let last = manager.textLayoutFragment(for: bottom) else { return nil }
+        let start = content.offset(from: content.documentRange.location, to: first.rangeInElement.location)
+        let end = content.offset(from: content.documentRange.location, to: last.rangeInElement.endLocation)
+        guard start >= 0, end >= start else { return nil }
+        return NSRange(location: start, length: end - start)
+    }
+    /// Releases every held pixel, as scrolling far away would; for tests.
+    func releaseAllPixels() {
+        artifacts.releasePixels(protecting: NSRange(location: 0, length: 0), budget: 0)
+    }
+    /// Requests renders for elements near the viewport that lack pixels; for tests.
+    func requestRenders() { scheduleRenders() }
 
     /// The laid-out range plus `margin` UTF-16 units on either side, in source coordinates.
     private func viewportWindow(margin: Int) -> NSRange {
@@ -421,16 +500,18 @@ import os
             }
         }
         result.addAttribute(.paragraphStyle, value: paragraph.copy(), range: entire)
+        let environment = environment
         for element in elements(intersecting: range) where !isEditing(element.span) {
-            if let artifact = artifacts[element.span] {
+            if let (metrics, entry) = artifacts.layout(at: element.span, environment: environment) {
                 conceal(element.span, in: result, paragraphRange: range)
                 if current.contains(element.span.location) {
                     let local = element.span.location - range.location
-                    let width = min(artifact.size.width, environment.width)
-                    let factor = element.inline ? 1.0 : min(1, width / artifact.size.width)
-                    let height = artifact.size.height * factor
-                    let attachment = ArtifactAttachment(image: NSImage(cgImage: artifact.image, size: artifact.size), label: artifact.label)
-                    attachment.bounds = NSRect(x: 0, y: element.inline ? -(height - artifact.baseline) : -4, width: width, height: height)
+                    let width = min(metrics.size.width, environment.width)
+                    let factor = element.inline ? 1.0 : min(1, width / metrics.size.width)
+                    let height = metrics.size.height * factor
+                    // Sized from metrics; pixels are fetched when drawn and may be released meanwhile.
+                    let attachment = ArtifactAttachment(size: metrics.size, label: metrics.label, store: artifacts, entry: entry)
+                    attachment.bounds = NSRect(x: 0, y: element.inline ? -(height - metrics.baseline) : -4, width: width, height: height)
                     result.replaceCharacters(in: NSRange(location: local, length: 1), with: "\u{FFFC}")
                     result.setAttributes([.attachment: attachment, .font: NSFont.systemFont(ofSize: fontSize), .paragraphStyle: paragraph], range: NSRange(location: local, length: 1))
                 } else if !element.inline {
@@ -512,7 +593,8 @@ import os
                 units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: marker.nsRange))
             }
         }
-        for element in elements(intersecting: window) where element.span.length > 1 && artifacts[element.span] != nil && !isEditing(element.span) {
+        let environment = environment
+        for element in elements(intersecting: window) where element.span.length > 1 && artifacts.layout(at: element.span, environment: environment) != nil && !isEditing(element.span) {
             units.append(ConcealUnit(kind: .element, range: element.span.nsRange, removal: element.span.nsRange))
         }
         return units
@@ -646,11 +728,32 @@ public enum CaretDirection: Sendable { case left, right, none }
 /// TextKit 2 measures line height from `attachmentBounds(for:…)`, not from `bounds`.
 /// Drawing the image directly avoids per-paragraph attachment views that outlive re-created paragraphs.
 final class ArtifactAttachment: NSTextAttachment {
+    private weak var store: ArtifactStore?
+    private var entry: Int?
     init(image: NSImage, label: String) {
         super.init(data: nil, ofType: nil)
         self.image = image
         image.accessibilityDescription = label
         allowsTextAttachmentView = false
+    }
+    /// A rendered element: `image` is an empty placeholder carrying the label, and drawing asks the
+    /// store for the pixels, which draw as nothing while released.
+    init(size: CGSize, label: String, store: ArtifactStore, entry: Int) {
+        super.init(data: nil, ofType: nil)
+        let placeholder = NSImage(size: size)
+        placeholder.accessibilityDescription = label
+        image = placeholder
+        self.store = store
+        self.entry = entry
+        allowsTextAttachmentView = false
+    }
+    override func image(for bounds: CGRect, attributes: [NSAttributedString.Key: Any], location: any NSTextLocation, textContainer: NSTextContainer?) -> NSImage? {
+        guard let entry, Thread.isMainThread else { return super.image(for: bounds, attributes: attributes, location: location, textContainer: textContainer) }
+        // TextKit draws on the main thread; the store is main-actor state.
+        let store = self.store
+        nonisolated(unsafe) var drawable: NSImage?
+        MainActor.assumeIsolated { drawable = store?.drawable(for: entry) }
+        return drawable ?? image
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     override func attachmentBounds(for attributes: [NSAttributedString.Key: Any], location: any NSTextLocation, textContainer: NSTextContainer?, proposedLineFragment: CGRect, position: CGPoint) -> CGRect { bounds }
