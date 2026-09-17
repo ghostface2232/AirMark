@@ -270,6 +270,9 @@ public enum MarkdownParser {
             start -= 1
             if start > 0, text.character(at: start - 1) == 13, text.character(at: start) == 10 { start -= 1 }
         }
+        // In an empty block the break before the closing fence is the opening marker's own break; the
+        // markers of one style stay disjoint, which the presentation store's searches rely on.
+        start = max(start, NSMaxRange(firstLine))
         markers.append(SourceSpan(base + start, end - start))
         return markers
     }

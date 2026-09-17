@@ -26,7 +26,7 @@ struct PresentationStoreTests {
 
     @Test func editsMatchWholeArrayRebase() {
         var generator = Generator(state: 7)
-        for round in 0..<60 {
+        for round in 0..<400 {
             let text = NSMutableString(string: Self.document(&generator, pieces: 20 + generator.next(120)))
             var reference = MarkdownParser.parse(text as String)
             var store = PresentationStore(reference)
@@ -40,12 +40,16 @@ struct PresentationStoreTests {
                 #expect(store.styles == reference.styles, "round \(round) step \(step)")
                 #expect(store.elements == reference.elements, "round \(round) step \(step)")
                 #expect(store.checkboxes == reference.checkboxes.sorted { $0.location < $1.location }, "round \(round) step \(step)")
-                let probe = Self.randomSpan(&generator, length: text.length)
-                let expected = reference.styles.filter { $0.span.end > probe.location && $0.span.location < probe.end }.map { run in
-                    StyleRun(span: run.span, kind: run.kind, markers: run.markers.filter { $0.end >= probe.location && $0.location <= probe.end })
+                // Several probes per step, half of them caret-sized, where marker searches are most fragile.
+                for probeNumber in 0..<8 {
+                    var probe = Self.randomSpan(&generator, length: text.length)
+                    if probeNumber % 2 == 0 { probe.length = 0 }
+                    let expected = reference.styles.filter { $0.span.end > probe.location && $0.span.location < probe.end }.map { run in
+                        StyleRun(span: run.span, kind: run.kind, markers: run.markers.filter { $0.end >= probe.location && $0.location <= probe.end })
+                    }
+                    #expect(store.styles(intersecting: probe) == expected, "round \(round) step \(step) probe \(probe)")
+                    #expect(Array(store.elements(intersecting: probe)) == reference.elements.filter { $0.span.end > probe.location && $0.span.location < probe.end })
                 }
-                #expect(store.styles(intersecting: probe) == expected, "round \(round) step \(step) probe \(probe)")
-                #expect(Array(store.elements(intersecting: probe)) == reference.elements.filter { $0.span.end > probe.location && $0.span.location < probe.end })
             }
             // A newer parse is compared with the edited store the way the editor applies it.
             let latest = MarkdownParser.parse(text as String)
@@ -74,6 +78,37 @@ struct PresentationStoreTests {
         let source = String(repeating: line, count: 20_000)
         let quote = PresentationStore(MarkdownParser.parse(source)).styles(intersecting: SourceSpan(source.utf16.count / 2, 0)).first { $0.kind == .quote }
         #expect((quote?.markers.count ?? .max) <= 2, "a query returns only the quote markers near it")
+    }
+
+    /// An empty fenced block: the opening marker takes its line break, and the closing marker must not
+    /// claim the same one. Overlapping markers broke the ordered search, dropping the opening marker
+    /// from a query after an edit.
+    @Test func emptyFencedBlockMarkersDoNotOverlap() {
+        for (source, insertAt, probe) in [("```\n```\n", 5, 4), ("```\r\n```\r\n", 7, 4)] {
+            var reference = MarkdownParser.parse(source)
+            var store = PresentationStore(reference)
+            let edit = PresentationEdit(range: NSRange(location: insertAt, length: 0), replacement: "x")
+            reference = reference.rebased(for: edit)
+            store.apply(edit)
+            let range = SourceSpan(probe, 0)
+            let expected = reference.styles.filter { $0.span.end > range.location && $0.span.location < range.end }.map { run in
+                StyleRun(span: run.span, kind: run.kind, markers: run.markers.filter { $0.end >= range.location && $0.location <= range.end })
+            }
+            #expect(store.styles(intersecting: range) == expected, "\(source.debugDescription)")
+        }
+    }
+
+    /// Every style's markers are sorted and disjoint, which the store's marker searches rely on.
+    @Test func parsedMarkersAreSortedAndDisjoint() {
+        var generator = Generator(state: 13)
+        for round in 0..<3_000 {
+            let source = Self.document(&generator, pieces: 1 + generator.next(40))
+            for run in MarkdownParser.parse(source).styles {
+                for (earlier, later) in zip(run.markers, run.markers.dropFirst()) {
+                    #expect(earlier.end <= later.location, "round \(round): \(source.debugDescription) \(run.kind) \(run.markers)")
+                }
+            }
+        }
     }
 
     /// The editor edits before its first parse lands, on an empty store.
