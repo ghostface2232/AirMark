@@ -31,8 +31,16 @@ public struct ParsedDocument: Sendable {
     public var styles: [StyleRun]
     public var elements: [RenderElement]
     public var checkboxes: [SourceSpan]
-    public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = []) {
+    /// Spans of the top-level blocks in order, which `MarkdownParser.reparse` cuts between. Empty when
+    /// a block has no source range or the document exceeded a nesting limit.
+    public var blocks: [SourceSpan]
+    /// The source contains `]:`, so it may define link references, which change links anywhere in the
+    /// document and rule out reparsing part of it.
+    public var mayDefineReferences: Bool
+    public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = [],
+                blocks: [SourceSpan] = [], mayDefineReferences: Bool = false) {
         self.source = source; self.revision = revision; self.styles = styles; self.elements = elements; self.checkboxes = checkboxes
+        self.blocks = blocks; self.mayDefineReferences = mayDefineReferences
     }
 }
 
@@ -249,6 +257,16 @@ public enum MarkdownParser {
     nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
     nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
 
+    /// Whether `source` contains `]:`, which every link reference definition does.
+    static func mayDefineReferences(_ source: String) -> Bool {
+        var previous: UInt8 = 0
+        for byte in source.utf8 {
+            if byte == 58, previous == 93 { return true }
+            previous = byte
+        }
+        return false
+    }
+
     private static func withBytes<Result>(_ source: String, _ body: ([UInt8]) -> Result) -> Result {
         body(Array(source.utf8))
     }
@@ -454,6 +472,9 @@ public enum MarkdownParser {
             for child in node.children { walk(child) }
         }
         walk(document)
+        let blocks = document.children.compactMap { $0.range.flatMap { offsets($0, shift: 0, 0) } }
+        output.blocks = blocks.count == document.childCount ? blocks : []
+        output.mayDefineReferences = mayDefineReferences(source)
         // Sorted by start, containers before their contents, so presentation can binary-search.
         output.styles.sort { $0.span.location != $1.span.location ? $0.span.location < $1.span.location : $0.span.length > $1.span.length }
         output.elements += mathSpans(source, excluding: protected)

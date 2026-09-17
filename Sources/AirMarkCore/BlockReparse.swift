@@ -1,0 +1,119 @@
+import Foundation
+
+extension MarkdownParser {
+    /// Parses `source` by reparsing only the top-level blocks that `edits` touched, given `previous`,
+    /// the parse of the text the edits were made to, in order. Returns the parse, which equals
+    /// `parse(source, revision:)`, and the span of `source` whose parse may differ from `previous`;
+    /// nil when the whole document has to be parsed.
+    ///
+    /// The window reparsed is the touched blocks plus at least one unchanged margin block on each side,
+    /// widened until both ends are at a blank line between blocks. Block structure is decided line by
+    /// line from the containers still open, so when the margin blocks reparse to exactly what they were,
+    /// the edit did not reach past them: an unterminated fence, an HTML block, or a paragraph or list
+    /// that absorbed its neighbour would change them. The window then doubles its margins, and past a
+    /// quarter of the document (or 64KB) the document is parsed whole. Inline syntax and math do not cross
+    /// a blank line, so the window holds them too. Link reference definitions resolve links anywhere,
+    /// so a document that may contain one is always parsed whole.
+    public static func reparse(_ source: String, revision: UInt64, previous: ParsedDocument, edits: [PresentationEdit])
+        -> (document: ParsedDocument, changed: SourceSpan)? {
+        let blocks = previous.blocks, count = blocks.count
+        guard count > 0, !previous.mayDefineReferences else { return nil }
+        let old = previous.source as NSString, new = source as NSString
+        guard let first = edits.first else {
+            guard old.length == new.length else { return nil }
+            var document = previous
+            document.source = source; document.revision = revision
+            return (document, SourceSpan(0, 0))
+        }
+        // The one range, in the new text, outside which the text only moved: before it unchanged, after
+        // it shifted by `delta`.
+        var dirty = SourceSpan(first.range.location, first.replacementLength)
+        var delta = first.replacementLength - first.range.length
+        for edit in edits.dropFirst() {
+            let shift = edit.replacementLength - edit.range.length
+            let start = min(dirty.location, edit.range.location)
+            dirty = SourceSpan(start, max(dirty.end, edit.range.end) + shift - start)
+            delta += shift
+        }
+        let dirtyOldEnd = dirty.end - delta
+        guard old.length + delta == new.length, dirty.location >= 0, dirty.end <= new.length, dirtyOldEnd >= dirty.location else { return nil }
+        // Touched blocks are `touchedFirst...touchedLast` (empty when the edit lies between blocks).
+        let touchedFirst = firstIndex(blocks) { $0.end >= dirty.location }
+        let touchedLast = firstIndex(blocks) { $0.location > dirtyOldEnd } - 1
+        func blankLine(between lower: Int, _ upper: Int) -> Bool {
+            var index = lower, lineStart = false
+            while index < upper {
+                let unit = old.character(at: index)
+                if unit == 10 || unit == 13 {
+                    if unit == 13, index + 1 < upper, old.character(at: index + 1) == 10 { index += 1 }
+                    if lineStart { return true }
+                    lineStart = true
+                } else if unit != 32 && unit != 9 {
+                    lineStart = false
+                }
+                index += 1
+            }
+            return false
+        }
+        let limit = max(65_536, old.length / 4)
+        var margin = 1
+        while true {
+            var lower = max(touchedFirst - margin, 0), upper = min(touchedLast + margin, count - 1)
+            while lower > 0, !blankLine(between: blocks[lower - 1].end, blocks[lower].location) { lower -= 1 }
+            while upper < count - 1, !blankLine(between: blocks[upper].end, blocks[upper + 1].location) { upper += 1 }
+            let whole = lower == 0 && upper == count - 1
+            let start = lower == 0 ? 0 : old.lineRange(for: NSRange(location: blocks[lower].location, length: 0)).location
+            let oldEnd = upper == count - 1 ? old.length : old.lineRange(for: NSRange(location: blocks[upper + 1].location, length: 0)).location
+            guard oldEnd - start <= limit || whole else { return nil }
+            let window = SourceSpan(start, oldEnd + delta - start)
+            let text = new.substring(with: window.nsRange)
+            guard !mayDefineReferences(text), nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
+            let part = parse(text, revision: revision)
+            let reparsed = part.blocks.map { SourceSpan($0.location + start, $0.length) }
+            let leading = blocks[lower..<max(lower, touchedFirst)]
+            let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { SourceSpan($0.location + delta, $0.length) }
+            let fits = reparsed.count >= leading.count + trailing.count
+                && reparsed.prefix(leading.count).elementsEqual(leading)
+                && reparsed.suffix(trailing.count).elementsEqual(trailing)
+            if fits || whole {
+                return (splice(previous, part, source: source, revision: revision, window: window, oldEnd: oldEnd, delta: delta), window)
+            }
+            margin *= 2
+        }
+    }
+
+    /// `previous` before `window`, `part` (parsed from the window's text) in it, and `previous` after
+    /// it moved by `delta`. Each list is sorted by start, so every part is a contiguous run.
+    private static func splice(_ previous: ParsedDocument, _ part: ParsedDocument, source: String, revision: UInt64,
+                               window: SourceSpan, oldEnd: Int, delta: Int) -> ParsedDocument {
+        let start = window.location
+        func moved(_ span: SourceSpan, by offset: Int) -> SourceSpan { SourceSpan(span.location + offset, span.length) }
+        func stitch<Item>(_ before: [Item], _ inside: [Item], location: (Item) -> Int, move: (Item, Int) -> Item) -> [Item] {
+            let head = firstIndex(before) { location($0) >= start }, tail = firstIndex(before) { location($0) >= oldEnd }
+            var result = Array(before[..<head])
+            result.reserveCapacity(before.count - (tail - head) + inside.count)
+            result += inside.lazy.map { move($0, start) }
+            result += before[tail...].lazy.map { move($0, delta) }
+            return result
+        }
+        var document = ParsedDocument(source: source, revision: revision)
+        document.styles = stitch(previous.styles, part.styles, location: \.span.location) { run, offset in
+            StyleRun(span: moved(run.span, by: offset), kind: run.kind, markers: run.markers.map { moved($0, by: offset) })
+        }
+        document.elements = stitch(previous.elements, part.elements, location: \.span.location) { element, offset in
+            var element = element; element.span = moved(element.span, by: offset); return element
+        }
+        document.checkboxes = stitch(previous.checkboxes, part.checkboxes, location: \.location) { moved($0, by: $1) }
+        document.blocks = stitch(previous.blocks, part.blocks, location: \.location) { moved($0, by: $1) }
+        return document
+    }
+
+    private static func firstIndex<Item>(_ items: [Item], where predicate: (Item) -> Bool) -> Int {
+        var low = 0, high = items.count
+        while low < high {
+            let middle = (low + high) / 2
+            if predicate(items[middle]) { high = middle } else { low = middle + 1 }
+        }
+        return low
+    }
+}
