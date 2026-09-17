@@ -18,6 +18,27 @@ enum TableRenderer {
         var alignment = CTTextAlignment.left
     }
 
+    /// Every input to a table's pixels that `RenderEnvironment` does not already carry. Built here and
+    /// nowhere else so that what `RenderService.key` hashes and what the renderer draws with cannot
+    /// drift apart: a bitmap is only safe to share under a key when the key names everything that
+    /// shaped it.
+    ///
+    /// The scale is the requesting window's, captured on the main actor with the rest of the
+    /// environment, so a window on a 1× display beside a Retina one does not get 2× pixels.
+    @MainActor static func raster(for environment: RenderEnvironment) -> Raster {
+        Raster(scale: environment.scale, colorSpace: colorSpace, alignment: naturalAlignment)
+    }
+    /// Fixed sRGB, not the requesting screen's profile. A table is drawn in neutral grays over an alpha
+    /// channel and composited onto the text view's background, so nothing it draws reaches outside
+    /// sRGB and a wider display gains nothing from a wider bitmap. Making it a constant is what lets
+    /// two windows on differently profiled screens share one cached bitmap correctly: the screen stops
+    /// being an input, rather than being an input the key forgets to name.
+    static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+    /// Read from the process's language settings, which do not change while it runs.
+    @MainActor static var naturalAlignment: CTTextAlignment {
+        NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left
+    }
+
     static let minimumColumnWidth = 70.0
     static let maximumColumnWidth = 300.0
     /// Points squared times scale squared.

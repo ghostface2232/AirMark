@@ -113,6 +113,12 @@ public enum RenderFailure: LocalizedError, Equatable {
 
     public func key(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?) -> String {
         var source = "renderer-1|mermaid-11.17.2|katex-0.16.22|\(element.kind.rawValue)|\(element.inline)|\(element.content)|\(environment)"
+        if element.kind == .table {
+            // The one input to a table's pixels that the environment does not carry. The color space is
+            // a constant and the scale is `environment.scale`, so with this the key names everything
+            // `TableRenderer.raster(for:)` draws with.
+            source += "|\(TableRenderer.naturalAlignment.rawValue)"
+        }
         if element.kind == .image {
             source += "|\(baseURL?.path ?? "")"
             if let url = localURL(element.content, baseURL: baseURL), let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]) {
@@ -148,7 +154,7 @@ public enum RenderFailure: LocalizedError, Equatable {
             let created = Pending()
             let task = Task<RenderArtifact, any Error> { [self] in
                 if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
-                if element.kind == .table { return try await drawTable(element, environment: environment, host: host) }
+                if element.kind == .table { return try await drawTable(element, environment: environment) }
                 let renderer = element.kind == .math ? math : mermaid
                 return try await renderer.render(element, environment: environment, host: host, isWanted: { [weak created] in created?.isWanted ?? false })
             }
@@ -202,21 +208,13 @@ public enum RenderFailure: LocalizedError, Equatable {
             return RenderArtifact(image: image, size: size, baseline: size.height, label: element.label.isEmpty ? url.lastPathComponent : element.label)
         }.value
     }
-    /// Tables are measured and drawn off the main thread, rasterized for the window they will be drawn
-    /// in rather than whichever screen is `NSScreen.main`. A window on a 1× display beside a Retina main
-    /// display must not get 2× pixels, nor the reverse, and moving the window between the two must
-    /// change the table with everything else on the page.
-    ///
-    /// The scale is `environment.scale`, which is that window's backing scale captured on the main actor
-    /// with the rest of the environment, and is part of this render's cache key: a cached bitmap's scale
-    /// therefore always matches the key it is stored under. The color space is the host window's screen,
-    /// read here on the main actor. Bitmaps carry their color space, so a result shared with a window on
-    /// another screen is converted rather than shown wrong; a result at the wrong scale is not.
-    private func drawTable(_ element: RenderElement, environment: RenderEnvironment, host: NSView) async throws -> RenderArtifact {
-        let screen = host.window?.screen ?? NSScreen.main
-        let raster = TableRenderer.Raster(scale: environment.scale,
-                                          colorSpace: screen?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
-                                          alignment: NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left)
+    /// Tables are measured and drawn off the main thread, in `TableRenderer.raster(for:)` — the one
+    /// place the raster policy lives, so that what `key` hashes and what is drawn cannot disagree. The
+    /// scale is the requesting window's, so a window on a 1× display beside a Retina one does not get
+    /// 2× pixels; the color space is a fixed sRGB, so the screen is not an input at all and two windows
+    /// on differently profiled screens share one cached bitmap correctly.
+    private func drawTable(_ element: RenderElement, environment: RenderEnvironment) async throws -> RenderArtifact {
+        let raster = TableRenderer.raster(for: environment)
         let content = element.content, label = element.label, limit = memoryLimit
         return try await Task.detached(priority: .userInitiated) {
             try TableRenderer.render(content, label: label, environment: environment, raster: raster, memoryLimit: limit)

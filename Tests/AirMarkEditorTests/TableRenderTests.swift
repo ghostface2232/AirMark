@@ -159,21 +159,80 @@ import AirMarkCore
         #expect(three.image.width == Int(ceil(three.size.width * 3)) && three.image.height == Int(ceil(three.size.height * 3)))
     }
 
-    /// The bitmap is in the host window's screen color space, not the frontmost screen's. On a machine
-    /// with one screen the two are the same and this only pins where the value is read from.
-    @Test func tableColorSpaceComesFromTheHostWindowsScreen() async throws {
+    /// The bitmap is sRGB whatever screen asked for it. A per-screen color space would be an input to
+    /// the pixels that the cache key does not name, so two windows on differently profiled screens
+    /// would share whichever bitmap was rendered first. Fixing it removes the input instead of adding
+    /// it to the key: a table is neutral grays over alpha and reaches nowhere near the sRGB gamut edge.
+    @Test func tableRasterIsSRGBWhicheverScreenAsks() async throws {
         _ = NSApplication.shared
+        let element = Self.table(rows: 2, columns: 2) { "r\($0)c\($1)" }
+        let environment = RenderEnvironment(width: 300, fontSize: 16, scale: 2, dark: false)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320), styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)
         defer { window.orderOut(nil) }
-        let host = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
-        window.contentView?.addSubview(host)
-        let expected = try #require(window.screen?.colorSpace?.cgColorSpace)
-        let environment = RenderEnvironment(width: 300, fontSize: 16, scale: Double(window.backingScaleFactor), dark: false)
-        let artifact = try await RenderService().render(Self.table(rows: 2, columns: 2) { "r\($0)c\($1)" }, environment: environment, baseURL: nil, host: host)
-        let produced = try #require(artifact.image.colorSpace)
-        #expect(CFEqual(produced, expected), "the table was rasterized in another screen's color space")
-        #expect(artifact.image.width == Int(ceil(artifact.size.width * environment.scale)))
+        let onScreen = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        window.contentView?.addSubview(onScreen)
+        // A host in a window on a screen, and one in no window at all: the two used to read their color
+        // space from different places, and neither place is named by the key they share.
+        for host in [onScreen, NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))] {
+            let artifact = try await RenderService().render(element, environment: environment, baseURL: nil, host: host)
+            let produced = try #require(artifact.image.colorSpace)
+            #expect(CFEqual(produced, TableRenderer.colorSpace), "rasterized in \(produced), not sRGB")
+            #expect(produced.name == CGColorSpace.sRGB)
+        }
+
+        // What makes fixing it safe rather than merely convenient: a table's palette is neutral, and a
+        // gray has the same coordinates in sRGB and in Display P3 — same white point, same transfer
+        // curve, and the primaries never come into it. Drawn into either profile the bitmap is
+        // identical byte for byte, so no window is being shown another window's colors.
+        //
+        // This is a guard, not a formality. Give a table a saturated color — a link, a status tint —
+        // and these bytes diverge, and the profile becomes an input that a fixed sRGB raster would be
+        // wrong to drop and the cache key would have to name.
+        let inSRGB = try TableRenderer.render(element.content, label: "", environment: environment,
+                                              raster: TableRenderer.Raster(scale: 2, colorSpace: TableRenderer.colorSpace),
+                                              memoryLimit: 48 * 1024 * 1024)
+        let inP3 = try TableRenderer.render(element.content, label: "", environment: environment,
+                                            raster: TableRenderer.Raster(scale: 2, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!),
+                                            memoryLimit: 48 * 1024 * 1024)
+        #expect(inSRGB.size == inP3.size, "the color space must not move the table")
+        let srgbBytes = try #require(inSRGB.image.dataProvider?.data as Data?)
+        let p3Bytes = try #require(inP3.image.dataProvider?.data as Data?)
+        #expect(srgbBytes == p3Bytes, "a table now draws a color that the display profile changes, so the profile is an input again")
+        print("TABLE_PROFILE sRGB and Display P3 bytes identical: \(srgbBytes == p3Bytes), \(srgbBytes.count) bytes")
+    }
+
+    /// The cache key names everything that shapes a table's pixels. A 1× and a 2× window get their own
+    /// bitmaps; two windows at one scale, whatever screen they are on, share one render.
+    @Test func tableCacheKeyCoversTheRasterAndNothingElse() async throws {
+        _ = NSApplication.shared
+        let service = RenderService()
+        let element = Self.table(rows: 3, columns: 2) { "r\($0)c\($1)" }
+        func environment(_ scale: Double) -> RenderEnvironment { RenderEnvironment(width: 400, fontSize: 16, scale: scale, dark: false) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320), styleMask: [.titled], backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let onScreen = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        window.contentView?.addSubview(onScreen)
+        let detached = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+
+        // 1× and 2×: different keys, one render each, and pixel dimensions that follow the scale.
+        let one = try await service.render(element, environment: environment(1), baseURL: nil, host: onScreen)
+        let two = try await service.render(element, environment: environment(2), baseURL: nil, host: onScreen)
+        #expect(service.key(element, environment: environment(1), baseURL: nil) != service.key(element, environment: environment(2), baseURL: nil))
+        #expect(service.renderedCount == 2, "a scale change must not be served from the other scale's entry")
+        #expect(one.size == two.size, "the raster must not move the table")
+        #expect(one.image.width == Int(ceil(one.size.width)))
+        #expect(two.image.width == Int(ceil(two.size.width * 2)))
+
+        // The same scale from a host on a screen and a host on none: one key, one render, and the
+        // second call is served from the cache.
+        let again = try await service.render(element, environment: environment(2), baseURL: nil, host: detached)
+        #expect(service.renderedCount == 2, "the same scale was rendered twice for two hosts")
+        #expect(again.image === two.image, "a second host at the same scale did not get the cached bitmap")
+        let key = service.key(element, environment: environment(2), baseURL: nil)
+        #expect(service.cached(key)?.image === two.image)
+        print("TABLE_CACHE keys 1x/2x differ, renders=\(service.renderedCount), 2x bitmap \(two.image.width)x\(two.image.height) \(two.image.colorSpace?.name as String? ?? "?")")
     }
 
     /// A table whose row and column counts already exceed a limit is rejected without measuring its
