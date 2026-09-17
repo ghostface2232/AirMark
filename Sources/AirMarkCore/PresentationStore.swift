@@ -299,21 +299,30 @@ public struct PresentationStore: Sendable {
         }
     }
 
-    /// Elements equal in both stores, at the same spans. Equivalent to
-    /// `Set(elements).intersection(Set(other.elements))` for sorted, non-overlapping elements.
-    public func unchangedElements(comparedTo other: PresentationStore) -> [RenderElement] {
-        var result: [RenderElement] = []
+    /// The spans of the elements present in exactly one of the two stores, and the spans of those
+    /// equal in both at the same span. Equivalent to the spans of
+    /// `Set(elements).symmetricDifference(Set(other.elements))` and of
+    /// `Set(elements).intersection(Set(other.elements))` for sorted, non-overlapping elements,
+    /// found by walking both stores in start order instead of hashing every element.
+    ///
+    /// Only `changed` needs to be presented again: an element equal at the same span draws exactly
+    /// as it did, and its artifact is the one to keep. Both lists are in source order and
+    /// `unchanged` is disjoint, so a caller can merge them against another sorted span list.
+    public func elementDiff(comparedTo other: PresentationStore) -> (changed: [SourceSpan], unchanged: [SourceSpan]) {
+        var changed: [SourceSpan] = [], unchanged: [SourceSpan] = []
         var a = 0, b = 0
         while a < elements.count, b < other.elements.count {
             let left = elements[a], right = other.elements[b]
-            if left.span.location < right.span.location { a += 1 }
-            else if right.span.location < left.span.location { b += 1 }
+            if left.span.location < right.span.location { changed.append(left.span); a += 1 }
+            else if right.span.location < left.span.location { changed.append(right.span); b += 1 }
             else {
-                if left == right { result.append(left) }
+                if left == right { unchanged.append(left.span) } else { changed.append(left.span); changed.append(right.span) }
                 a += 1; b += 1
             }
         }
-        return result
+        changed += elements[a...].map(\.span)
+        changed += other.elements[b...].map(\.span)
+        return (changed, unchanged)
     }
 
     /// The first index whose value satisfies a predicate that is false then true across the array.

@@ -15,6 +15,13 @@ import AirMarkCore
 }
 
 @Suite(.serialized) @MainActor struct EditorTests {
+    struct LCG {
+        var state: UInt64
+        mutating func next(_ bound: Int) -> Int {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return bound <= 0 ? 0 : Int((state >> 33) % UInt64(bound))
+        }
+    }
     func make(_ source: String) async throws -> EditorController {
         _ = NSApplication.shared
         let editor = EditorController(source: source)
@@ -279,6 +286,70 @@ import AirMarkCore
         editor.textView.unmarkText()
     }
 
+    /// A parse that finishes after further typing is installed moved through the later edits, as
+    /// the drawn presentation was, while `parsed` keeps waiting for a parse of the current text.
+    @Test func staleParseIsInstalledMovedThroughLaterEdits() async throws {
+        let editor = try await make("hello\n\nworld\n")
+        editor.performEdit(range: NSRange(location: 7, length: 0), replacement: "# ")
+        let older = editor.source, olderRevision = editor.revision, olderEdit = editor.editSequence
+        #expect(!editor.presentationStyles(intersecting: NSRange(location: 7, length: 7)).contains { $0.kind == .heading(1) })
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "abc ")
+        let store = PresentationStore(MarkdownParser.parse(older, revision: olderRevision))
+        #expect(await editor.installStaleParse(store, revision: olderRevision, parsedAtEdit: olderEdit))
+        #expect(editor.presentationRevision == olderRevision)
+        #expect(editor.parsed.revision != editor.revision, "renders and lookups still wait for a current parse")
+        let heading = editor.presentationStyles(intersecting: NSRange(location: 11, length: 7)).first { $0.kind == .heading(1) }
+        #expect(heading?.span.location == 11)
+        #expect(Data(editor.source.utf8) == Data("abc hello\n\n# world\n".utf8))
+    }
+
+    /// Typing with parses landing in between, most of them reparsing a window: once the text settles,
+    /// the drawn presentation and `parsed` are exactly a whole parse of the text.
+    @Test func windowedParsesDrawWhatAWholeParseDraws() async throws {
+        let blocks = ["## Heading", "A paragraph with **bold** and `code`.", "- [ ] task\n- item", "> quote\n> more", "```swift\nlet x = 1\n```", "$$\nx^2\n$$", "| a | b |\n| - | - |\n| 1 | 2 |"]
+        let source = (0..<60).map { blocks[$0 % blocks.count] }.joined(separator: "\n\n") + "\n"
+        let editor = try await make(source)
+        var generator = LCG(state: 3)
+        let insertions = ["x", " ", "**", "`", "\n", "\n\n", "# ", "- ", "> ", "```", "$$", "한", "😀"]
+        func settle() async throws {
+            for _ in 0..<400 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(5)) }
+            try #require(editor.parsed.revision == editor.revision)
+        }
+        for round in 0..<40 {
+            for _ in 0..<(1 + generator.next(4)) {
+                let text = editor.textView.string as NSString
+                var range = NSRange(location: generator.next(text.length + 1), length: 0)
+                if generator.next(4) == 0 { range.length = generator.next(min(12, text.length - range.location) + 1) }
+                if text.length > 0 { range = text.rangeOfComposedCharacterSequences(for: range) }
+                editor.performEdit(range: range, replacement: generator.next(5) == 0 ? "" : insertions[generator.next(insertions.count)])
+                if generator.next(3) == 0 { try await Task.sleep(for: .milliseconds(generator.next(60))) }
+            }
+            try await settle()
+            let whole = MarkdownParser.parse(editor.source, revision: editor.revision)
+            let drawn = PresentationStore(whole)
+            let everything = NSRange(location: 0, length: (editor.source as NSString).length)
+            #expect(editor.presentationStyles(intersecting: everything).map { "\($0.span) \($0.kind) \($0.markers)" }.sorted()
+                    == drawn.styles.map { "\($0.span) \($0.kind) \($0.markers)" }.sorted(), "round \(round)")
+            #expect(editor.parsed.elements == whole.elements && editor.parsed.checkboxes == whole.checkboxes && editor.parsed.blocks == whole.blocks, "round \(round)")
+        }
+        #expect(editor.windowedInstallCount > 10, "windowed installs: \(editor.windowedInstallCount)")
+    }
+
+    /// A parse from before the text was replaced cannot be moved to it, and none is installed
+    /// during composition.
+    @Test func staleParseIsDroppedAcrossReplacementAndComposition() async throws {
+        let editor = try await make("hello\n")
+        let older = editor.source, olderRevision = editor.revision, olderEdit = editor.editSequence
+        editor.replaceSource("# replaced\n")
+        #expect(!(await editor.installStaleParse(PresentationStore(MarkdownParser.parse(older, revision: olderRevision)), revision: olderRevision, parsedAtEdit: olderEdit)))
+        let current = editor.source, currentRevision = editor.revision, currentEdit = editor.editSequence
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "x")
+        editor.textView.setSelectedRange(NSRange(location: 1, length: 0))
+        editor.textView.setMarkedText("ㅎ", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(!(await editor.installStaleParse(PresentationStore(MarkdownParser.parse(current, revision: currentRevision)), revision: currentRevision, parsedAtEdit: currentEdit)))
+        editor.textView.unmarkText()
+    }
+
     /// Cmd-Return right after typing, before the next parse lands, must toggle the box on the
     /// caret's line at its current position, never at the previous parse's coordinates.
     @Test func toggleTaskBeforeReparseUsesCurrentCoordinates() async throws {
@@ -443,5 +514,25 @@ import AirMarkCore
         for _ in 0..<100 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(20)) }
         #expect(editor.parsed.elements.first?.span == span)
         #expect(editor.renderedElementCount == 0, "old pixels must not survive a changed reference target")
+    }
+    /// Recorded render failures follow edits: one before a failed element keeps its record, so
+    /// typing elsewhere does not resubmit it, and one inside the element drops the record so the
+    /// changed source is tried again. The records live in a span list; this is its behaviour at the
+    /// editor's level, without a renderer.
+    @Test func renderFailuresFollowEdits() async throws {
+        let source = "text\n\n$a$ and $b$ and $c$\n"
+        let editor = try await make(source)
+        try #require(editor.parsed.elements.count == 3)
+        let spans = editor.parsed.elements.map(\.span)
+        editor.seedRenderFailures()
+        #expect(editor.renderErrorCount == 3)
+        editor.performEdit(range: NSRange(location: 0, length: 0), replacement: "more ")
+        #expect(editor.renderErrorCount == 3, "an edit before every failure must move the records, not drop them")
+        // The records moved with the elements, so the middle one is found at its new span.
+        editor.performEdit(range: NSRange(location: spans[1].location + 5 + 1, length: 0), replacement: "x")
+        #expect(editor.renderErrorCount == 2, "an edit inside a failed element must drop its record")
+        editor.performEdit(range: NSRange(location: spans[2].location + 5 + 1, length: 1), replacement: "")
+        #expect(editor.renderErrorCount == 1)
+        #expect(editor.source.hasPrefix("more text"))
     }
 }

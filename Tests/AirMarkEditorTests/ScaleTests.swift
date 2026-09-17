@@ -121,6 +121,64 @@ import AirMarkRender
         try await measureReturnKeystrokes(bytes: 10_000_000, label: "RETURN_SCALE_10MB")
     }
 
+    /// Time from the last key of a typing burst until the presentation shows that revision, which
+    /// is what "typing stopped, formatting caught up" means to a reader. 100KB and 1MB; the burst
+    /// types at 80ms, near a fast typist's cadence.
+    @Test func typingSettleTimes() async throws {
+        _ = try await measureTypingSettle(bytes: 100_000, label: "SETTLE_100KB")
+        _ = try await measureTypingSettle(bytes: 1_000_000, label: "SETTLE_1MB")
+    }
+
+    /// The same measurement at 10MB, where a parse takes seconds. Slow to set up, so it runs only
+    /// when AIRMARK_SCALE_10MB=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_10MB"] == "1"))
+    func tenMegabyteTypingSettleTime() async throws {
+        _ = try await measureTypingSettle(bytes: 10_000_000, label: "SETTLE_10MB")
+    }
+
+    /// Types `keys` characters `interval` apart in the middle of the document, then waits for the
+    /// parse of the final text to be applied. Polled at 2ms, so the resolution is 2ms; this is the
+    /// time until the editor holds a current parse, not key-to-display latency. Reports the parses
+    /// each burst started and how many of those were already stale when they finished.
+    @discardableResult
+    func measureTypingSettle(bytes: Int, label: String, keys: Int = 15, interval: Duration = .milliseconds(80), rounds: Int = 3) async throws
+        -> (settle: [Duration], parses: [Int], stale: [Int]) {
+        _ = NSApplication.shared
+        let document = MarkdownDocument()
+        let source = Self.source(bytes: bytes)
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+        document.makeWindowControllers()
+        defer { document.close() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        try #require(editor.parsed.revision == editor.revision)
+        let text = editor.textView.textStorage!.mutableString
+        let clock = ContinuousClock()
+        var settles: [Duration] = [], parses: [Int] = [], stale: [Int] = []
+        for round in 0..<rounds {
+            let offset = text.paragraphRange(for: NSRange(location: text.length / 2, length: 0)).location
+            let parsesBefore = editor.parseCompletedCount, staleBefore = editor.staleParseCount
+            for number in 0..<keys {
+                editor.performEdit(range: NSRange(location: offset + number, length: 0), replacement: "x")
+                if number + 1 < keys { try await Task.sleep(for: interval) }
+            }
+            let last = clock.now
+            for _ in 0..<15_000 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(2)) }
+            settles.append(last.duration(to: clock.now))
+            parses.append(editor.parseCompletedCount - parsesBefore)
+            stale.append(editor.staleParseCount - staleBefore)
+            #expect(editor.parsed.revision == editor.revision, "round \(round)")
+        }
+        print(String(format: "%@ bytes=%d keys=%d interval=%.0fms delay=%.0fms staleness_limit=%.0fms settle p50=%.0fms max=%.0fms parses=%@ stale=%@",
+                     label, source.utf8.count, keys, Self.ms(interval), Self.ms(editor.parseDelay), Self.ms(editor.parseStalenessLimit),
+                     Self.percentile(settles, 0.5), Self.ms(settles.max()!), "\(parses)", "\(stale)"))
+        #expect(editor.textKitFallbackCount == 0)
+        return (settles, parses, stale)
+    }
+
     /// The artifact store alone, with a long history of measured elements whose pixels are mostly
     /// released: single-character edits at the head, middle and tail, and the release that follows
     /// each render completing while scrolling. Main-thread time per call.
@@ -168,6 +226,66 @@ import AirMarkRender
             line += String(format: " store p50=%.4fms p95=%.4fms release p50=%.4fms p95=%.4fms max=%.4fms samples=%d", Self.percentile(stores, 0.5), Self.percentile(stores, 0.95), Self.percentile(releases, 0.5), Self.percentile(releases, 0.95), Self.ms(releases.max() ?? .zero), releases.count)
             print(line)
         }
+    }
+
+    /// Keystrokes on a document with 50,000 formulas where every one of them failed to render, as
+    /// scrolling through a document of broken images or invalid formulas leaves behind, against the
+    /// same document with no failures. Slow to set up, so it runs only when AIRMARK_SCALE_HISTORY=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_HISTORY"] == "1"))
+    func renderFailureKeystrokeCosts() async throws {
+        for failures in [false, true] { try await measureRenderFailures(elements: 50_000, failures: failures) }
+    }
+
+    func measureRenderFailures(elements count: Int, failures: Bool) async throws {
+        _ = NSApplication.shared
+        let block = "## Heading\n\nA paragraph with **bold**, *emphasis*, [link](https://example.org) and 한글. Inline $x_{n}^2$ formula.\n\n- [ ] Task\n\n"
+        let source = String(repeating: block, count: count)
+        let label = failures ? "FAILURES_SCALE failures=all" : "FAILURES_SCALE failures=none"
+        let document = MarkdownDocument()
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+        document.makeWindowControllers()
+        let window = try #require(document.windowControllers.first?.window)
+        window.orderFront(nil)
+        defer { document.close(); EditorPhases.shared.isRecording = false; EditorPhases.shared.reset() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        let phases = EditorPhases.shared
+        func waitForParse() async throws {
+            for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            #expect(editor.parsed.revision == editor.revision)
+        }
+        try await waitForParse()
+        #expect(editor.parsed.elements.count == count)
+        if failures {
+            editor.seedRenderFailures()
+            #expect(editor.renderErrorCount == count)
+        }
+        print("\(label) elements=\(count) bytes=\(source.utf8.count) errors=\(editor.renderErrorCount)")
+        let text = editor.textView.textStorage!.mutableString
+        let clock = ContinuousClock()
+        for (name, target) in [("head", 0), ("middle", source.utf16.count / 2), ("tail", source.utf16.count)] {
+            phases.reset(); phases.isRecording = true
+            try await waitForParse()
+            phases.isRecording = false
+            let applyParse = Self.ms(phases.total(.applyParse))
+            let offset = text.paragraphRange(for: NSRange(location: min(target, text.length), length: 0)).location
+            var costs: [Duration] = []
+            var split: [[EditorPhases.Phase: Duration]] = []
+            for number in 0..<30 {
+                phases.reset(); phases.isRecording = true
+                let start = clock.now
+                editor.performEdit(range: NSRange(location: offset + number, length: 0), replacement: "x")
+                costs.append(start.duration(to: clock.now))
+                phases.isRecording = false
+                split.append(Dictionary(uniqueKeysWithValues: EditorPhases.Phase.allCases.map { ($0, phases.total($0)) }))
+            }
+            print(String(format: "%@ position=%@ samples=%d p50=%.3fms p95=%.3fms max=%.3fms previous_applyParse=%.2fms errors=%d", label, name, costs.count,
+                         Self.percentile(costs, 0.5), Self.percentile(costs, 0.95), Self.ms(costs.max()!), applyParse, editor.renderErrorCount))
+            print("\(label)_PHASES position=\(name) \(Self.phaseSummary(split))")
+        }
+        #expect(editor.textKitFallbackCount == 0)
     }
 
     /// W1's document keystrokes and scrolling on a document with 50,000 formulas, without and with a

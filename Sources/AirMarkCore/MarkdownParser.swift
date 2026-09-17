@@ -31,8 +31,16 @@ public struct ParsedDocument: Sendable {
     public var styles: [StyleRun]
     public var elements: [RenderElement]
     public var checkboxes: [SourceSpan]
-    public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = []) {
+    /// Spans of the top-level blocks in order, which `MarkdownParser.reparse` cuts between. Empty when
+    /// a block has no source range or the document exceeded a nesting limit.
+    public var blocks: [SourceSpan]
+    /// The source contains `]:`, so it may define link references, which change links anywhere in the
+    /// document and rule out reparsing part of it.
+    public var mayDefineReferences: Bool
+    public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = [],
+                blocks: [SourceSpan] = [], mayDefineReferences: Bool = false) {
         self.source = source; self.revision = revision; self.styles = styles; self.elements = elements; self.checkboxes = checkboxes
+        self.blocks = blocks; self.mayDefineReferences = mayDefineReferences
     }
 }
 
@@ -49,6 +57,11 @@ public actor MarkdownParsingWorker {
     static let stackSize = 16 << 20
     private var busy = false
     private var waiting: [(id: UUID, continuation: CheckedContinuation<Void, any Error>)] = []
+    /// The last parse and the caller's edit number it was made at, which the next request's edits start from.
+    private var last: (document: ParsedDocument, sequence: Int)?
+    /// The parse before `last`, released when the next one replaces it. The caller still holds it when
+    /// a parse arrives, and releasing a large parse costs milliseconds, so the last release happens here.
+    private var retired: ParsedDocument?
     public init() {}
     public func parse(_ source: String, revision: UInt64) async throws -> ParsedDocument {
         try await takeTurn()
@@ -56,15 +69,31 @@ public actor MarkdownParsingWorker {
         try Task.checkCancellation()
         return await onLargeStack { MarkdownParser.parse(source, revision: revision) }
     }
-    /// The parse and the presentation built from it, so neither is constructed on the main actor.
-    public func parsePresentation(_ source: String, revision: UInt64) async throws -> (ParsedDocument, PresentationStore) {
+    /// The parse and the presentation built from it, so neither is constructed on the main actor,
+    /// with what the work itself took. `cost` excludes waiting for a parse already running, so a
+    /// caller can pace its requests by what a parse of this document costs rather than by how long
+    /// it happened to wait.
+    ///
+    /// `sequence` numbers this request among the caller's edits. When `edits` are those made since the
+    /// request numbered `since`, which this worker parsed last, only the blocks they touched are parsed
+    /// again (`MarkdownParser.reparse`) and `changed` is the span outside which the result is that
+    /// parse moved by the edits; otherwise the document is parsed whole and `changed` is nil.
+    public func parsePresentation(_ source: String, revision: UInt64, sequence: Int? = nil, edits: (since: Int, edits: [PresentationEdit])? = nil)
+        async throws -> (document: ParsedDocument, store: PresentationStore, cost: Duration, changed: SourceSpan?) {
         try await takeTurn()
         defer { endTurn() }
         try Task.checkCancellation()
-        return await onLargeStack {
-            let document = MarkdownParser.parse(source, revision: revision)
-            return (document, PresentationStore(document))
+        let previous = last.flatMap { last in edits.flatMap { $0.since == last.sequence ? last.document : nil } }
+        let result = await onLargeStack {
+            let started = ContinuousClock.now
+            let reparsed = previous.flatMap { MarkdownParser.reparse(source, revision: revision, previous: $0, edits: edits?.edits ?? []) }
+            let document = reparsed?.document ?? MarkdownParser.parse(source, revision: revision)
+            let store = PresentationStore(document)
+            return (document: document, store: store, cost: started.duration(to: ContinuousClock.now), changed: reparsed?.changed)
         }
+        retired = last?.document
+        last = sequence.map { (result.document, $0) }
+        return result
     }
     /// A parse that skips the nesting limit, for tests that compare the estimate with real depth.
     func parseIgnoringLimit(_ source: String) async throws -> ParsedDocument {
@@ -239,6 +268,21 @@ public enum MarkdownParser {
         }
     }
 
+    /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
+    /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+    nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+
+    /// Whether `source` contains `]:`, which every link reference definition does.
+    static func mayDefineReferences(_ source: String) -> Bool {
+        var previous: UInt8 = 0
+        for byte in source.utf8 {
+            if byte == 58, previous == 93 { return true }
+            previous = byte
+        }
+        return false
+    }
+
     private static func withBytes<Result>(_ source: String, _ body: ([UInt8]) -> Result) -> Result {
         body(Array(source.utf8))
     }
@@ -340,15 +384,29 @@ public enum MarkdownParser {
             if node is SoftBreak || node is LineBreak { return " " }
             return node.children.map { plain($0) }.joined()
         }
-        func walk(_ node: any Markup) {
+        // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
+        // anyway, except for a paragraph, whose own span it has no other use for.
+        var blockSpansComplete = true
+        func walk(_ node: any Markup, topLevel: Bool = false) {
             if let paragraph = node as? Paragraph {
+                if topLevel {
+                    if let span = span(paragraph) { output.blocks.append(span) } else { blockSpansComplete = false }
+                }
                 let outer = inlineColumnShift
                 inlineColumnShift = continuationShifts(paragraph)
                 for child in node.children { walk(child) }
                 inlineColumnShift = outer
                 return
             }
-            guard let s = span(node) else { for child in node.children { walk(child) }; return }
+            // Plain text and line breaks are most nodes and add no style; their spans have no side
+            // effects (no delimiters to match), so skip computing them and the casts below.
+            if node is Text || node is SoftBreak || node is LineBreak { return }
+            guard let s = span(node) else {
+                if topLevel { blockSpansComplete = false }
+                for child in node.children { walk(child) }
+                return
+            }
+            if topLevel { output.blocks.append(s) }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch node {
@@ -387,7 +445,7 @@ public enum MarkdownParser {
             case is BlockQuote:
                 let raw = index.text(in: s)
                 var markers: [SourceSpan] = []
-                if let regex = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines) {
+                if let regex = quoteMarker {
                     for match in regex.matches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
                         markers.append(SourceSpan(s.location + match.range.location, match.range.length))
                     }
@@ -396,7 +454,7 @@ public enum MarkdownParser {
             case is ListItem:
                 let raw = index.text(in: s)
                 var extra: [StyleRun] = [], markers: [SourceSpan] = []
-                if let regex = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?"),
+                if let regex = listItemMarker,
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
                     let marker = m.range(at: 1), box = m.range(at: 2)
                     // Only bulleted items are tasks. An ordered item keeps its number visible and
@@ -440,7 +498,9 @@ public enum MarkdownParser {
             }
             for child in node.children { walk(child) }
         }
-        walk(document)
+        for child in document.children { walk(child, topLevel: true) }
+        if !blockSpansComplete { output.blocks.removeAll() }
+        output.mayDefineReferences = mayDefineReferences(source)
         // Sorted by start, containers before their contents, so presentation can binary-search.
         output.styles.sort { $0.span.location != $1.span.location ? $0.span.location < $1.span.location : $0.span.length > $1.span.length }
         output.elements += mathSpans(source, excluding: protected)
@@ -504,6 +564,14 @@ public enum MarkdownParser {
         let excluded = excluding.sorted { $0.location < $1.location }
         func escaped(_ n: Int) -> Bool { var j = n - 1, c = 0; while j >= 0 && units[j] == 92 { c += 1; j -= 1 }; return c % 2 == 1 }
         func whitespace(_ u: UInt16) -> Bool { u == 32 || u == 9 || u == 10 || u == 13 }
+        /// A line break at `n` followed by a line of only spaces and tabs: a paragraph break, which ends
+        /// display math as it does in TeX, so an opening `$$` cannot pair across paragraphs.
+        func blankLineAfter(_ n: Int) -> Bool {
+            guard units[n] == 10 || units[n] == 13 else { return false }
+            var k = n + (units[n] == 13 && n + 1 < units.count && units[n + 1] == 10 ? 2 : 1)
+            while k < units.count && (units[k] == 32 || units[k] == 9) { k += 1 }
+            return k < units.count && (units[k] == 10 || units[k] == 13)
+        }
         while i < units.count {
             while protectedIndex < excluded.count && excluded[protectedIndex].end <= i { protectedIndex += 1 }
             if protectedIndex < excluded.count && excluded[protectedIndex].contains(i) { i = excluded[protectedIndex].end; continue }
@@ -513,7 +581,7 @@ public enum MarkdownParser {
             if i < (display ? displayFailsBefore : inlineFailsBefore) { i += delimiter; continue }
             var j = i + delimiter, found: Int?
             while j < units.count {
-                if !display && (units[j] == 10 || units[j] == 13) { break }
+                if (!display && (units[j] == 10 || units[j] == 13)) || (display && blankLineAfter(j)) { break }
                 if protectedIndex < excluded.count && j >= excluded[protectedIndex].location { break }
                 if units[j] == 36 && !escaped(j) {
                     if display {

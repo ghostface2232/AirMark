@@ -1,0 +1,52 @@
+latency/settle columns: p50 p95 max (ms), pooled over runs; per-run max in brackets
+
+### 100KB
+[main] runs=3 standalone parse p50=26ms
+  idle 1-key -> applied       113     114     119  per-run max [114, 119, 116]  parses/sample max=1
+  slow 200-400ms 35s     key latency     117     124     127  per-run max [125, 127, 126]  settle [112, 114, 115]  parses [117, 117, 117] stale [0, 0, 0] applied [117, 117, 117] max_apply_gap [423, 413, 422] keys [117, 117, 117] key_gap_max [413, 406, 424]
+  fast 80ms 35s          key latency     647    3523    7366  per-run max [7366, 2800, 4879]  settle [87, 87, 88]  parses [438, 438, 438] stale [405, 399, 402] applied [33, 39, 36] max_apply_gap [7367, 2802, 4881] keys [438, 438, 438] key_gap_max [95, 95, 91]
+  bursts 15x80ms settle        86      88      89  key latency     400    1051    1215  parses/burst [15] (mean 15.00) stale/burst [11, 12, 13, 14] (mean 12.92) n=36
+[s3] runs=3 standalone parse p50=16ms
+  idle 1-key -> applied        93      95      98  per-run max [95, 94, 98]  parses/sample max=1
+  slow 200-400ms 35s     key latency      99     105     109  per-run max [105, 108, 109]  settle [94, 87, 94]  parses [117, 117, 117] stale [0, 0, 0] applied [117, 117, 117] max_apply_gap [415, 420, 417] keys [117, 117, 117] key_gap_max [414, 411, 409]
+  fast 80ms 35s          key latency      77      87     103  per-run max [103, 96, 102]  settle [74, 74, 76]  parses [438, 438, 438] stale [130, 112, 140] applied [438, 438, 438] max_apply_gap [147, 146, 148] keys [438, 438, 438] key_gap_max [90, 90, 90]
+  bursts 15x80ms settle        74      79      81  key latency      77     100     105  parses/burst [15] (mean 15.00) stale/burst [3, 4, 5, 6, 7] (mean 5.28) n=36
+[win] runs=3 standalone parse p50=17ms
+  idle 1-key -> applied        51      52      57  per-run max [55, 57, 52]  parses/sample max=1
+  slow 200-400ms 35s     key latency      58      60      61  per-run max [61, 61, 61]  settle [52, 51, 49]  parses [117, 117, 117] stale [0, 0, 0] applied [117, 117, 117] max_apply_gap [414, 416, 417] keys [117, 117, 117] key_gap_max [412, 410, 415]
+  fast 80ms 35s          key latency      54      60      61  per-run max [61, 61, 61]  settle [49, 50, 51]  parses [438, 438, 438] stale [0, 0, 0] applied [438, 438, 438] max_apply_gap [95, 93, 94] keys [438, 438, 438] key_gap_max [90, 91, 91]
+  bursts 15x80ms settle        51      54      54  key latency      55      60      61  parses/burst [15] (mean 15.00) stale/burst [0] (mean 0.00) n=36
+
+### 1000KB
+[main] runs=3 standalone parse p50=267ms
+  idle 1-key -> applied       382     388     390  per-run max [385, 384, 390]  parses/sample max=1
+  slow 200-400ms 35s     key latency    1994    9085   14240  per-run max [7261, 7266, 14240]  settle [359, 377, 356]  parses [114, 114, 114] stale [100, 98, 103] applied [14, 16, 11] max_apply_gap [7284, 7276, 14251] keys [117, 117, 117] key_gap_max [417, 416, 420]
+  fast 80ms 35s          key latency   18055   33862   35577  per-run max [35577, 35544, 35547]  settle [616, 577, 586]  parses [108, 111, 111] stale [107, 110, 110] applied [1, 1, 1] max_apply_gap [35577, 35544, 35547] keys [438, 438, 438] key_gap_max [100, 90, 85]
+  bursts 15x80ms settle       501     508     509  key latency    1060    1618    1629  parses/burst [5] (mean 5.00) stale/burst [4] (mean 4.00) n=36
+[s3] runs=3 standalone parse p50=164ms
+  idle 1-key -> applied       273     278     315  per-run max [282, 315, 273]  parses/sample max=1
+  slow 200-400ms 35s     key latency     258     278     300  per-run max [300, 282, 284]  settle [256, 250, 246]  parses [117, 117, 117] stale [31, 32, 31] applied [117, 117, 117] max_apply_gap [467, 482, 485] keys [117, 117, 117] key_gap_max [416, 412, 408]
+  fast 80ms 35s          key latency     292     380     415  per-run max [415, 414, 413]  settle [333, 335, 382]  parses [175, 180, 181] stale [174, 179, 180] applied [175, 180, 181] max_apply_gap [287, 284, 268] keys [438, 438, 438] key_gap_max [87, 90, 89]
+  bursts 15x80ms settle       320     360     368  key latency     303     393     417  parses/burst [6, 7] (mean 6.86) stale/burst [5, 6] (mean 5.86) n=36
+[win] runs=3 standalone parse p50=170ms
+  idle 1-key -> applied        56      57      58  per-run max [58, 58, 57]  parses/sample max=1
+  slow 200-400ms 35s     key latency      60      65      68  per-run max [63, 68, 62]  settle [56, 56, 56]  parses [117, 117, 117] stale [0, 0, 0] applied [117, 117, 117] max_apply_gap [418, 404, 417] keys [117, 117, 117] key_gap_max [413, 406, 416]
+  fast 80ms 35s          key latency      58      63      68  per-run max [61, 68, 62]  settle [56, 58, 57]  parses [438, 438, 438] stale [0, 0, 0] applied [438, 438, 438] max_apply_gap [89, 96, 89] keys [438, 438, 438] key_gap_max [87, 92, 87]
+  bursts 15x80ms settle        55      59      59  key latency      58      65      67  parses/burst [15] (mean 15.00) stale/burst [0] (mean 0.00) n=36
+
+### 10000KB
+[main] runs=3 standalone parse p50=2793ms
+  idle 1-key -> applied      3149    3185    3231  per-run max [3168, 3231, 3163]  parses/sample max=1
+  slow 200-400ms 35s     key latency   21899   37670   39422  per-run max [39414, 39422, 38997]  settle [4219, 4221, 3796]  parses [13, 13, 13] stale [12, 12, 12] applied [1, 1, 1] max_apply_gap [39414, 39422, 38997] keys [117, 117, 117] key_gap_max [415, 417, 402]
+  fast 80ms 35s          key latency   22048   37818   39694  per-run max [39578, 39694, 39329]  settle [4614, 4749, 4375]  parses [13, 13, 13] stale [12, 12, 12] applied [1, 1, 1] max_apply_gap [39578, 39694, 39329] keys [438, 438, 438] key_gap_max [90, 90, 90]
+  bursts 15x80ms settle      5069    5158    5158  key latency    5639    6179    6268  parses/burst [2] (mean 2.00) stale/burst [1] (mean 1.00) n=18
+[s3] runs=3 standalone parse p50=1688ms
+  idle 1-key -> applied      2008    2065    2069  per-run max [2027, 2008, 2069]  parses/sample max=1
+  slow 200-400ms 35s     key latency    2909    3799    3935  per-run max [3903, 3859, 3935]  settle [2023, 3409, 2634]  parses [19, 20, 19] stale [18, 19, 18] applied [19, 20, 19] max_apply_gap [2036, 2010, 2075] keys [117, 117, 117] key_gap_max [417, 405, 405]
+  fast 80ms 35s          key latency    3034    3921    4098  per-run max [4058, 4034, 4098]  settle [3096, 2935, 3938]  parses [19, 19, 19] stale [18, 18, 18] applied [19, 19, 19] max_apply_gap [2108, 2088, 2108] keys [438, 438, 438] key_gap_max [114, 110, 107]
+  bursts 15x80ms settle      2875    2967    2967  key latency    3358    3903    3997  parses/burst [2] (mean 2.00) stale/burst [1] (mean 1.00) n=18
+[win] runs=3 standalone parse p50=1772ms
+  idle 1-key -> applied        93     100     107  per-run max [107, 100, 96]  parses/sample max=1
+  slow 200-400ms 35s     key latency      97     105     112  per-run max [107, 112, 107]  settle [94, 94, 82]  parses [117, 117, 117] stale [0, 0, 0] applied [117, 117, 117] max_apply_gap [432, 420, 433] keys [117, 117, 117] key_gap_max [420, 407, 425]
+  fast 80ms 35s          key latency      75      87     101  per-run max [100, 98, 101]  settle [71, 71, 73]  parses [438, 438, 438] stale [109, 152, 115] applied [438, 438, 438] max_apply_gap [147, 147, 149] keys [438, 438, 438] key_gap_max [90, 90, 90]
+  bursts 15x80ms settle        29      75      75  key latency      75      97     111  parses/burst [15] (mean 15.00) stale/burst [4, 5, 6, 7] (mean 5.67) n=18

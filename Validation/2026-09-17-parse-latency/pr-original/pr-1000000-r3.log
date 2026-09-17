@@ -1,0 +1,13 @@
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite ParsePacingBench started.
+◇ Test parsePacing() started.
+PACING pr-1000000-r3 bytes=1000090 standalone_parse n=5 p50=278 p95=282 max=282
+PACING pr-1000000-r3 idle latency n=20 p50=583 p95=586 max=589 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING pr-1000000-r3 slow(200-400ms, 35s) keys=117 latency n=117 p50=18426 p95=34305 max=35764 settle=555ms parses=77 stale=76 applied=1 max_apply_gap=35764ms
+PACING pr-1000000-r3 bursts(15x80ms) settle_after_last_key n=12 p50=583 p95=588 max=588 key_latency n=180 p50=1142 p95=1705 max=1713 parses=[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] stale=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+PACING pr-1000000-r3 sustained(80ms, 35s) keys=438 latency n=438 p50=18023 p95=33863 max=35541 settle=583ms parses=26 stale=25 applied=1 max_apply_gap=35541ms key_gap_max=91ms
+✔ Test parsePacing() passed after 140.769 seconds.
+✔ Suite ParsePacingBench passed after 140.770 seconds.
+✔ Test run with 1 test in 1 suite passed after 140.770 seconds.

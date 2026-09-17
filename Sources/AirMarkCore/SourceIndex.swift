@@ -22,6 +22,9 @@ public struct SourceIndex: Sendable {
     }
     private var checkpoints: [Checkpoint] = []
     private var lineByteOffsets: [Int] = []
+    /// Leading UTF-16 units of each line below U+0080. A column within them is the same number of
+    /// UTF-16 units, so most parser locations need neither a checkpoint search nor a scalar walk.
+    private var lineASCIIPrefix: [Int] = []
     private var byteCount = 0
     public var utf16Count: Int { units.count }
     public init(_ source: String) {
@@ -37,10 +40,15 @@ public struct SourceIndex: Sendable {
         checkpoints = [Checkpoint(utf8: 0, utf16: 0)]
         lineByteOffsets = []
         lineByteOffsets.reserveCapacity(lines.count)
-        var offset = 0, bytes = 0, line = 0
+        lineASCIIPrefix = []
+        lineASCIIPrefix.reserveCapacity(lines.count)
+        var offset = 0, bytes = 0, line = 0, asciiRun = false
         while offset < units.count {
             if line < lines.count, lines[line].location == offset {
-                lineByteOffsets.append(bytes); line += 1
+                lineByteOffsets.append(bytes); lineASCIIPrefix.append(0); line += 1; asciiRun = true
+            }
+            if asciiRun {
+                if units[offset] < 0x80 { lineASCIIPrefix[line - 1] += 1 } else { asciiRun = false }
             }
             if offset - checkpoints.last!.utf16 >= 64 {
                 checkpoints.append(Checkpoint(utf8: bytes, utf16: offset))
@@ -48,14 +56,14 @@ public struct SourceIndex: Sendable {
             let width = scalarWidth(at: offset)
             offset += width.utf16; bytes += width.utf8
         }
-        if line < lines.count { lineByteOffsets.append(bytes) }
+        if line < lines.count { lineByteOffsets.append(bytes); lineASCIIPrefix.append(0) }
         byteCount = bytes
     }
     private func scalarWidth(at offset: Int) -> (utf8: Int, utf16: Int) {
         let unit = units[offset]
         if unit < 0x80 { return (1, 1) }
         if unit < 0x800 { return (2, 1) }
-        if (0xD800...0xDBFF).contains(unit) { return (4, 2) }
+        if unit >= 0xD800 && unit <= 0xDBFF { return (4, 2) }
         return (3, 1)
     }
     private static func lineRanges(_ units: [UInt16]) -> [SourceSpan] {
@@ -77,6 +85,7 @@ public struct SourceIndex: Sendable {
         let end = line < lines.count ? lineByteOffsets[line] : byteCount
         let count = utf8Column - 1
         guard count <= end - start else { return nil }
+        if count <= lineASCIIPrefix[line - 1] { return lines[line - 1].location + count }
         let target = start + count
         var low = 0, high = checkpoints.count
         while low < high {

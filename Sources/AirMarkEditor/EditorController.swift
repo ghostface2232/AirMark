@@ -14,6 +14,9 @@ import os
     public var fileURL: URL?
     public private(set) var revision: UInt64 = 0
     public private(set) var parsed = ParsedDocument(source: "")
+    /// The revision of the source the presentation was last parsed from. Ahead of `parsed.revision`
+    /// when a parse finished after further typing and was installed moved through those edits.
+    public private(set) var presentationRevision: UInt64 = 0
     public private(set) var textKitFallbackCount = 0
     public var showsMarkers = false { didSet { invalidatePresentation(); scheduleRenders() } }
     public var fontSize: CGFloat = 16 { didSet { artifacts.removeAll(); invalidatePresentation(); scheduleRenders() } }
@@ -25,6 +28,22 @@ import os
     static let nearScreens: CGFloat = 1
     static let aheadScreens: CGFloat = 3
     private var parseTask: Task<Void, Never>?
+    /// A parse is at the worker. Keystrokes meanwhile do not queue another: its completion starts
+    /// the next one, so at most one parse exists at a time and none waits behind a stale one.
+    private var parseRunning = false
+    /// Character edits since the last parse started, numbered by `editSequence`, so a parse that
+    /// finishes after further typing can be moved through them and installed. Trimmed as each parse
+    /// finishes, so it holds at most the edits made during one parse and the wait before it.
+    private var editLog: [(sequence: Int, edit: PresentationEdit)] = []
+    private(set) var editSequence = 0
+    /// Edits numbered at or below this are not in `editLog`: a parse of a source older than it cannot
+    /// be moved to the current text and is dropped.
+    private var editLogStart = 0
+    /// The edit number of the last parse the worker finished, which it can reparse from.
+    private var workerSequence: Int?
+    /// The edit number of the parse the drawn presentation came from. When it is the parse the worker
+    /// reparsed from, the two differ only inside the window the worker reports.
+    private var presentationSequence: Int?
     private let parsingWorker = MarkdownParsingWorker()
     private var renderTasks: [SourceSpan: Task<Void, Never>] = [:]
     /// Layout metrics for rendered elements, and their pixels while near the viewport.
@@ -36,7 +55,10 @@ import os
         var retryAt: ContinuousClock.Instant?
     }
     /// Keyed like `artifacts` and moved with edits, so typing elsewhere does not resubmit failures.
-    private var errors: [SourceSpan: RenderIssue] = [:]
+    /// A sorted span list rather than a dictionary: a document scrolled through with thousands of
+    /// broken images or invalid formulas kept one entry each, and rebuilding that dictionary on
+    /// every keystroke made a keystroke cost as much as the failures visited so far.
+    private var errors = SpanList<RenderIssue>()
     private var editingElement: SourceSpan?
     /// What paragraphs are drawn from. Follows each edit in place until the next parse replaces it.
     private var presentation = PresentationStore()
@@ -57,6 +79,23 @@ import os
     /// Set by the text view around keyboard movement so selection changes know which way the caret went.
     var caretDirection = CaretDirection.none
     private var firstPendingParse: ContinuousClock.Instant?
+    /// What the last completed parse of this document cost, excluding any wait for the parse before
+    /// it. Recorded for measurement; pacing does not follow it. Measured on 1MB and 10MB documents,
+    /// a wait of `clamp(lastParseCost, 45ms, 250ms)` delayed a single keystroke's parse by about 200ms
+    /// and left slow typing (200–400ms between keys) with no parse applied for the whole burst, while
+    /// continuous typing stayed unrefreshed either way (Validation/2026-09-17-parse-latency).
+    private(set) var lastParseCost: Duration = .zero
+    /// How long a keystroke waits before parsing.
+    let parseDelay: Duration = .milliseconds(45)
+    /// How long changes may stay unparsed while typing continues before one parse starts anyway.
+    let parseStalenessLimit: Duration = .milliseconds(150)
+    /// Parses that finished, and those whose source was already stale when they did; test hooks.
+    public private(set) var parseCompletedCount = 0
+    public private(set) var staleParseCount = 0
+    /// Stale parses installed after moving them through the edits made while they ran; a test hook.
+    public private(set) var rebasedParseCount = 0
+    /// Parses installed by comparing only the window the worker reparsed; a test hook.
+    public private(set) var windowedInstallCount = 0
     private let signposter = OSSignposter(subsystem: "com.airmark.AirMark", category: "Editor")
     public var source: String { isViewLoaded ? textView.string : sourceForInitialLoad }
     public var selection: SourceSpan { SourceSpan(textView.selectedRange()) }
@@ -117,6 +156,7 @@ import os
             MainActor.assumeIsolated { self?.viewportDidChange(); self?.onSelectionChange?() }
         })
         textView.string = sourceForInitialLoad
+        forgetEdits()
         scheduleParse(immediate: true)
     }
     public override func viewDidLayout() {
@@ -133,6 +173,7 @@ import os
         sourceForInitialLoad = source
         guard isViewLoaded else { return }
         textView.string = source; revision += 1
+        forgetEdits()
         textView.undoManager?.removeAllActions()
         if let selection { textView.setSelectedRange(NSRange(location: min(selection.location, textView.string.utf16.count), length: 0)) }
         scheduleParse(immediate: true)
@@ -143,7 +184,7 @@ import os
     public func fileLocationChanged(to url: URL?) {
         fileURL = url
         let images = Set(parsed.elements.filter { $0.kind == .image }.map(\.span))
-        for span in images { artifacts.remove(span); errors[span] = nil; renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
+        for span in images { artifacts.remove(span); setIssue(nil, at: span); renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
         invalidatePresentation(spans: Array(images))
         scheduleRenders()
     }
@@ -183,54 +224,150 @@ import os
         if parsed.revision != revision { scheduleParse() }
     }
     public func compositionEnded() { scheduleParse() }
+    /// Waits `parseDelay` after the last change and then parses the current source. A keystroke
+    /// within the wait replaces the pending parse. Changes that stay unparsed for
+    /// `parseStalenessLimit` start a parse without waiting. While a parse runs, keystrokes schedule
+    /// nothing; when it finishes it is installed, moved through the edits made meanwhile if it is
+    /// stale, and the next parse starts at once if the text changed. A running parse cannot be
+    /// stopped, so discarding a stale one left continuous typing on a document whose parse outlasts
+    /// the gap between keys with no parse installed at all (35 s of typing on a 1MB document).
     private func scheduleParse(immediate: Bool = false) {
+        guard !parseRunning else { return }
         parseTask?.cancel()
         let clock = ContinuousClock()
         if firstPendingParse == nil { firstPendingParse = clock.now }
-        let overdue = firstPendingParse.map { $0.duration(to: clock.now) > .milliseconds(150) } ?? false
+        let overdue = firstPendingParse.map { $0.duration(to: clock.now) > parseStalenessLimit } ?? false
+        let delay = parseDelay
         parseTask = Task { [weak self] in
-            if !immediate && !overdue { try? await Task.sleep(for: .milliseconds(45)) }
-            guard !Task.isCancelled, let self, !textView.hasMarkedText() else { return }
-            firstPendingParse = nil
-            let source = textView.string, revision = self.revision
-            let state = signposter.beginInterval("Parse")
-            guard let (result, store) = try? await parsingWorker.parsePresentation(source, revision: revision) else { return }
-            signposter.endInterval("Parse", state)
-            guard !Task.isCancelled else { return }
-            applyParsedDocument(result, store: store)
+            if !immediate && !overdue { try? await Task.sleep(for: delay) }
+            guard !Task.isCancelled, let self else { return }
+            await runParse()
         }
     }
+    private func runParse() async {
+        guard !parseRunning, !textView.hasMarkedText() else { return }
+        firstPendingParse = nil
+        parseRunning = true
+        let source = textView.string, revision = self.revision, sequence = editSequence
+        let base = workerSequence.flatMap { $0 >= editLogStart ? $0 : nil }
+        let edits = base.map { base in (since: base, edits: editLog.filter { $0.sequence > base }.map(\.edit)) }
+        let state = signposter.beginInterval("Parse")
+        let finished = try? await parsingWorker.parsePresentation(source, revision: revision, sequence: sequence, edits: edits)
+        signposter.endInterval("Parse", state)
+        guard let (result, store, cost, changed) = finished else { parseRunning = false; return }
+        workerSequence = sequence
+        lastParseCost = cost
+        parseCompletedCount += 1
+        // The window says what differs from the parse the worker started from; it bounds what differs
+        // from the drawn presentation only when that came from the same parse.
+        let window = base != nil && presentationSequence == base ? changed : nil
+        if result.revision == self.revision {
+            applyParsedDocument(result, store: store, changed: window, sequence: sequence)
+        } else {
+            staleParseCount += 1
+            if await installStaleParse(store, revision: revision, parsedAtEdit: sequence, changed: window) { rebasedParseCount += 1 }
+        }
+        // Later parses start from later text, so edits this one saw are no longer needed.
+        editLog.removeAll { $0.sequence <= sequence }
+        editLogStart = max(editLogStart, sequence)
+        parseRunning = false
+        if parsed.revision != self.revision { scheduleParse(immediate: true) }
+    }
+    /// Installs the presentation of a parse whose source is `sequence` edits old, moved through the
+    /// edits made since, exactly as the drawn presentation was moved by them. Its structure is newer
+    /// than what is drawn everywhere but in the edited ranges, which both leave as the edits left
+    /// them. `parsed` stays at its revision, so renders and element lookups still wait for a parse
+    /// of the current text. Most of the moving runs off the main actor; edits made during it are
+    /// applied here. Returns false when the edits are unknown or composition is in progress.
+    @discardableResult func installStaleParse(_ store: PresentationStore, revision parsedRevision: UInt64, parsedAtEdit sequence: Int, changed: SourceSpan? = nil) async -> Bool {
+        guard sequence >= editLogStart, !textView.hasMarkedText() else { return false }
+        let target = editSequence
+        let edits = editLog.filter { $0.sequence > sequence }.map(\.edit)
+        var moved = edits.isEmpty ? store : await Task.detached { var store = store; for edit in edits { store.apply(edit) }; return store }.value
+        guard sequence >= editLogStart, !textView.hasMarkedText() else { return false }
+        for entry in editLog where entry.sequence > target { moved.apply(entry.edit) }
+        var window = changed
+        for entry in editLog where entry.sequence > sequence {
+            window = window.map { entry.edit.enclosing($0) ?? SourceSpan(entry.edit.range.location, 0) }
+        }
+        EditorPhases.shared.measure(.applyParse) { installPresentation(moved, changed: window) }
+        presentationRevision = parsedRevision
+        presentationSequence = sequence
+        onParseApplied?()
+        return true
+    }
+    private func forgetEdits() {
+        editLog.removeAll()
+        editLogStart = editSequence
+    }
     /// `store` is the presentation built from `result` off the main thread; tests may omit it.
-    @discardableResult func applyParsedDocument(_ result: ParsedDocument, store: PresentationStore? = nil) -> Bool {
+    /// `changed` bounds where it differs from the drawn presentation, when known; `sequence` is the
+    /// edit number it was parsed at.
+    @discardableResult func applyParsedDocument(_ result: ParsedDocument, store: PresentationStore? = nil, changed: SourceSpan? = nil, sequence: Int? = nil) -> Bool {
         guard result.revision == revision, !textView.hasMarkedText() else { return false }
-        EditorPhases.shared.measure(.applyParse) { installParse(result, store: store ?? PresentationStore(result)) }
+        EditorPhases.shared.measure(.applyParse) { installParse(result, store: store ?? PresentationStore(result), changed: changed) }
+        presentationSequence = sequence
         scheduleRenders()
         onParseApplied?()
         return true
     }
-    private func installParse(_ result: ParsedDocument, store next: PresentationStore) {
+    private func installParse(_ result: ParsedDocument, store next: PresentationStore, changed: SourceSpan?) {
+        parsed = result
+        presentationRevision = result.revision
+        installPresentation(next, changed: changed)
+    }
+    /// Draws `next` in place of the current presentation. With `changed`, the two are known to differ
+    /// only inside it, so only its elements are compared and only its paragraphs are drawn again;
+    /// without it, every style and element is compared.
+    private func installPresentation(_ next: PresentationStore, changed window: SourceSpan?) {
         let old = presentation
+        if let window {
+            windowedInstallCount += 1
+            let kept = Set(next.elements(intersecting: window))
+            for element in old.elements(intersecting: window) where !kept.contains(element) {
+                artifacts.remove(element.span); setIssue(nil, at: element.span)
+            }
+            presentation = next
+            invalidatePresentation(spans: [window, SourceSpan(textView.selectedRange())])
+            return
+        }
         // A distant reference definition can change an image's content without moving its span.
-        // Source coordinates alone do not identify a reusable artifact.
-        let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
-        artifacts.retain(spans)
-        errors = errors.filter { spans.contains($0.key) }
-        parsed = result; presentation = next
+        // Source coordinates alone do not identify a reusable artifact, so elements are compared by
+        // value; the ones equal at the same span keep their artifact and their recorded failure,
+        // and present exactly as they did, so only the rest are drawn again. Invalidating every
+        // element instead made applying a parse cost as much as the document is long, whether or
+        // not anything changed.
+        let difference = old.elementDiff(comparedTo: next)
+        artifacts.retain(difference.unchanged)
+        _ = errors.retainAll(in: difference.unchanged)
+        presentation = next
         let changed = old.changedStyleSpans(comparedTo: next)
-        invalidatePresentation(spans: changed + old.elements.map(\.span) + next.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
+        invalidatePresentation(spans: changed + difference.changed + [SourceSpan(textView.selectedRange())])
     }
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }
         let previous = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
         let replacement = textStorage.mutableString.substring(with: editedRange)
         let edit = PresentationEdit(range: previous, replacement: replacement)
+        editSequence += 1
+        editLog.append((editSequence, edit))
         EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
-        EditorPhases.shared.measure(.artifacts) { artifacts.apply(edit) }
-        errors = Dictionary(uniqueKeysWithValues: errors.compactMap { span, issue in
-            edit.unchanged(span).map { ($0, issue) }
-        })
+        EditorPhases.shared.measure(.artifacts) { artifacts.apply(edit); _ = errors.apply(edit) }
         editingElement = editingElement.flatMap(edit.enclosing)
+    }
+    /// The recorded failure of the element at `span`, if there is one.
+    private func issue(at span: SourceSpan) -> RenderIssue? {
+        errors.index(of: span).map { errors.payloads[$0] }
+    }
+    /// Records or clears the failure of the element at `span`. Elements never overlap, so the entry
+    /// is found, replaced or inserted by a binary search.
+    private func setIssue(_ issue: RenderIssue?, at span: SourceSpan) {
+        if let index = errors.index(of: span) {
+            if let issue { errors.payloads[index] = issue } else { _ = errors.remove(at: index) }
+        } else if let issue {
+            _ = errors.insert(issue, at: span)
+        }
     }
     private func isEditing(_ span: SourceSpan) -> Bool {
         showsMarkers || editingElement.map { $0.intersects(span) } == true
@@ -267,7 +404,7 @@ import os
         }
         let now = ContinuousClock.now
         for element in candidates where !isEditing(element.span) && artifacts.needsPixels(at: element.span, environment: environment) && renderTasks[element.span] == nil
-                && errors[element.span].map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
+                && issue(at: element.span).map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
             guard renderTasks.count < 12 else { break }
             let token = UUID(); renderTokens[element.span] = token
             renderRequestCount += 1
@@ -282,7 +419,7 @@ import os
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
                     guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
                     artifacts.store(artifact, at: element.span, environment: environment)
-                    errors[element.span] = nil
+                    setIssue(nil, at: element.span)
                     releaseDistantPixels()
                     if let onFirstRender { self.onFirstRender = nil; onFirstRender() }
                 } catch {
@@ -290,14 +427,14 @@ import os
                     // Not a failure of the element: the window is hidden or the request was dropped.
                     // Rendering resumes when the window returns or the viewport asks again.
                     if error is CancellationError || error as? RenderFailure == .suspended { return }
-                    if (error as? RenderFailure)?.isTransient == true, errors[element.span] == nil {
-                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1))
+                    if (error as? RenderFailure)?.isTransient == true, issue(at: element.span) == nil {
+                        setIssue(RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1)), at: element.span)
                         Task { [weak self] in
                             try? await Task.sleep(for: .seconds(1))
                             self?.scheduleRenders()
                         }
                     } else {
-                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: nil)
+                        setIssue(RenderIssue(message: error.localizedDescription, retryAt: nil), at: element.span)
                         // A render is requested only when the element has no pixels here, so metrics left
                         // from a released render would draw an empty space of the old size for good. Show
                         // the source and the failure, as for an element that never rendered. A first
@@ -375,6 +512,13 @@ import os
     }
     /// Requests renders for elements near the viewport that lack pixels; for tests.
     func requestRenders() { scheduleRenders() }
+    /// Records a permanent failure for every parsed element, as scrolling through a document whose
+    /// images are all missing or whose formulas are all invalid leaves behind; for tests of a long
+    /// failure history. Elements are in source order, so each entry appends.
+    func seedRenderFailures(message: String = "Invalid formula") {
+        errors.removeAll()
+        for element in parsed.elements { setIssue(RenderIssue(message: message, retryAt: nil), at: element.span) }
+    }
     /// Records `artifact` for every parsed element, as if each had been rendered once while scrolling
     /// through the document, then releases pixels beyond the budget; for tests of a long render history.
     func seedArtifactHistory(_ artifact: RenderArtifact) {
@@ -404,6 +548,10 @@ import os
     /// Styles intersecting `range`, in document order.
     private func styles(intersecting range: NSRange) -> [StyleRun] {
         presentation.styles(intersecting: SourceSpan(range))
+    }
+    /// The drawn presentation's styles intersecting `range`; for tests.
+    func presentationStyles(intersecting range: NSRange) -> [StyleRun] {
+        styles(intersecting: range)
     }
     private func elements(intersecting range: NSRange) -> ArraySlice<RenderElement> {
         presentation.elements(intersecting: SourceSpan(range))
@@ -537,7 +685,7 @@ import os
                     let collapsed = NSMutableParagraphStyle(); collapsed.minimumLineHeight = 0.01; collapsed.maximumLineHeight = 0.01
                     result.addAttribute(.paragraphStyle, value: collapsed, range: entire)
                 }
-            } else if let message = errors[element.span]?.message {
+            } else if let message = issue(at: element.span)?.message {
                 result.addAttributes([.foregroundColor: NSColor.secondaryLabelColor, .toolTip: message], range: entire)
             }
         }

@@ -12,6 +12,12 @@ struct MathScannerTests {
             let excluded = excluding.sorted { $0.location < $1.location }
             func escaped(_ n: Int) -> Bool { var j = n - 1, c = 0; while j >= 0 && units[j] == 92 { c += 1; j -= 1 }; return c % 2 == 1 }
             func whitespace(_ u: UInt16) -> Bool { u == 32 || u == 9 || u == 10 || u == 13 }
+            func blankLineAfter(_ n: Int) -> Bool {
+                guard units[n] == 10 || units[n] == 13 else { return false }
+                var k = n + (units[n] == 13 && n + 1 < units.count && units[n + 1] == 10 ? 2 : 1)
+                while k < units.count && (units[k] == 32 || units[k] == 9) { k += 1 }
+                return k < units.count && (units[k] == 10 || units[k] == 13)
+            }
             while i < units.count {
                 while protectedIndex < excluded.count && excluded[protectedIndex].end <= i { protectedIndex += 1 }
                 if protectedIndex < excluded.count && excluded[protectedIndex].contains(i) { i = excluded[protectedIndex].end; continue }
@@ -20,7 +26,7 @@ struct MathScannerTests {
                 if !display && whitespace(units[i + 1]) { i += 1; continue }
                 var j = i + delimiter, found: Int?
                 while j < units.count {
-                    if !display && (units[j] == 10 || units[j] == 13) { break }
+                    if (!display && (units[j] == 10 || units[j] == 13)) || (display && blankLineAfter(j)) { break }
                     if protectedIndex < excluded.count && j >= excluded[protectedIndex].location { break }
                     if units[j] == 36 && !escaped(j) {
                         if display {
@@ -41,8 +47,20 @@ struct MathScannerTests {
         }
     }
 
+    /// Display math ends at a blank line, even one of spaces or tabs or with CRLF endings, so typing an
+    /// opening `$$` does not pair it with the next formula several paragraphs away.
+    @Test func displayMathDoesNotCrossBlankLines() {
+        func math(_ source: String) -> [String] { MarkdownParser.mathSpans(source, excluding: []).map(\.content) }
+        #expect(math("$$\n\\frac{a}{b}\n$$") == ["\n\\frac{a}{b}\n"])
+        #expect(math("$$a\n\nb$$") == [])
+        #expect(math("$$a\n \t\nb$$") == [])
+        #expect(math("$$a\r\n\r\nb$$") == [])
+        #expect(math("$$a\r\rb$$") == [])
+        #expect(math("$$ open\n\ntext\n\n$$x$$") == ["x"])
+    }
+
     @Test func matchesTheRescanningScanner() {
-        let pieces = ["$", "$$", "\\", "\\$", "a", "b ", " ", "1", "\n", "\r\n", "x^2", "\t", "한", "😀"]
+        let pieces = ["$", "$$", "\\", "\\$", "a", "b ", " ", "1", "\n", "\r\n", "\r", "\n \t\n", "x^2", "\t", "한", "😀"]
         var state: UInt64 = 11
         func next(_ bound: Int) -> Int {
             state = state &* 6364136223846793005 &+ 1442695040888963407
