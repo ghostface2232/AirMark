@@ -353,6 +353,28 @@ import AirMarkCore
         }
     }
 
+    /// Backspace after an empty fenced block, whose fences are both hidden, removes the empty block. It
+    /// must never delete only the closing fence, which turned the rest of the document into code.
+    @Test func backspaceAfterEmptyFencedBlockRemovesTheBlock() async throws {
+        for (source, caret, expected) in [("a\n```\n```\nb", 10, "a\nb"), ("```swift\n```", 12, ""), ("a\n```\r\n```\r\nb", 12, "a\nb")] {
+            let editor = try await make(source)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentViewController = editor
+            window.makeFirstResponder(editor.textView)
+            defer { window.orderOut(nil) }
+            editor.textView.setSelectedRange(NSRange(location: caret, length: 0))
+            editor.textView.deleteBackward(nil)
+            #expect(editor.source == expected, "from \(source.debugDescription)")
+            editor.textView.undoManager?.undo()
+            #expect(editor.source == source)
+        }
+        // A block with content still deletes the last content character.
+        let editor = try await make("```\nxy\n```\n")
+        editor.textView.setSelectedRange(NSRange(location: 11, length: 0))
+        editor.textView.deleteBackward(nil)
+        #expect(editor.source == "```\nx\n```\n")
+    }
+
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
         let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = "![picture][id]\n\n[id]: swatch.png\n"

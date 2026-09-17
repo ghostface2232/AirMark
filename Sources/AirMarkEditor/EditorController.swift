@@ -584,8 +584,9 @@ import os
         guard !showsMarkers, !textView.hasMarkedText() else { return [] }
         let text = self.text
         var units: [ConcealUnit] = []
-        // A closing fence marker reaches one line break past its block, hence the slack.
-        let window = NSRange(location: max(0, position - 2), length: 6)
+        // A closing fence marker reaches one line break past its block, two units for CRLF; a caret at
+        // the marker's end must still find the block, hence three units of slack before the position.
+        let window = NSRange(location: max(0, position - 3), length: 7)
         for run in styles(intersecting: window) {
             if case .checkbox = run.kind, run.span.length == 3, run.span.end < text.length {
                 // "☐" stays visible; " ]" is hidden and the following space belongs to the box.
@@ -595,7 +596,14 @@ import os
             for marker in run.markers where marker.length > 0 && marker.end <= text.length {
                 let afterBreak = marker.location == 0 || [10, 13, 0x2029].contains(text.character(at: marker.location - 1))
                 let kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
-                units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: marker.nsRange))
+                var removal = marker.nsRange
+                if run.kind == .codeBlock, kind == .opening, marker.location > run.span.location {
+                    // The closing fence of a block with nothing visible starts right after the opening
+                    // fence's line break. Deleting it alone would leave an unterminated fence that turns
+                    // the rest of the document into code, so the whole empty block goes.
+                    removal = NSRange(location: run.span.location, length: marker.end - run.span.location)
+                }
+                units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: removal))
             }
         }
         let environment = environment
