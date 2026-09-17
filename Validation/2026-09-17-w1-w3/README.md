@@ -84,3 +84,8 @@ Each has its reproduction test in the commit; they changed no measured path.
 ### Nesting limit, second pass
 
 Review of 86c3a9d crashed the worker three more ways: an 8KB run of `*` or 2,050 levels of nested emphasis (inline nesting was not estimated), a byte order mark before 3,000 `>` (the estimate skipped the first line), and tabs after `>` (a real depth of 336 estimated as 255). Inline nesting now has its own estimate and a limit of 1,000; leading byte order marks are skipped; tabs expand from the real column. Property tests compare each estimate with the depth the parser builds on 20,000 random inputs; the inline one failed twice during development (shared counters, escaped delimiters). At 1MB the block estimate costs 0.43 ms and the inline one 1.09 ms, against a 341 ms parse (load average 5.7); the showcase fixture estimates 2 and 4.
+
+### Measured and left unchanged
+
+- `edits-after-delete-before.txt`: `AirMarkBench --edits` with 2,000 caret-sized queries right after deleting the middle half of the document. Removed styles all start at the deletion point, so queries there visit them: 111–225 ms per 2,000 at 1MB, noisy growth (exponents 0.40–1.67). The cost lasts only until the next parse lands and is about 60 µs per query; not changed.
+- `adversarial-depth-limit.txt`: `AirMarkBench --adversarial` for nested lists and quotes at the 256-level limit, repeated to 1MB. Parse exponents settle at 0.93–1.15 as size grows; with depth capped, parsing is linear in size. Not changed.

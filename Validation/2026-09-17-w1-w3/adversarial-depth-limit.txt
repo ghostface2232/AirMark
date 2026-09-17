@@ -1,0 +1,8 @@
+ADVERSARIAL nested-list-depth-256 bytes=67073 styles=512 elements=0 parse_p50=14.092ms query2000_p50=4.643ms
+ADVERSARIAL nested-list-depth-256 bytes=201219 styles=1536 elements=0 parse_p50=42.274ms query2000_p50=5.881ms parse_exponent=1.58 query_exponent=0.34
+ADVERSARIAL nested-list-depth-256 bytes=469511 styles=3584 elements=0 parse_p50=105.132ms query2000_p50=5.645ms parse_exponent=1.31 query_exponent=-0.06
+ADVERSARIAL nested-list-depth-256 bytes=939022 styles=7168 elements=0 parse_p50=200.430ms query2000_p50=6.742ms parse_exponent=0.93 query_exponent=0.26
+ADVERSARIAL nested-quote-depth-256 bytes=103299 styles=768 elements=0 parse_p50=63.096ms query2000_p50=12.972ms
+ADVERSARIAL nested-quote-depth-256 bytes=241031 styles=1792 elements=0 parse_p50=147.125ms query2000_p50=14.885ms parse_exponent=1.22 query_exponent=0.20
+ADVERSARIAL nested-quote-depth-256 bytes=482062 styles=3584 elements=0 parse_p50=313.617ms query2000_p50=19.233ms parse_exponent=1.09 query_exponent=0.37
+ADVERSARIAL nested-quote-depth-256 bytes=998557 styles=7424 elements=0 parse_p50=695.255ms query2000_p50=19.381ms parse_exponent=1.15 query_exponent=0.01

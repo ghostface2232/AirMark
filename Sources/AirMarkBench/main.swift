@@ -70,6 +70,19 @@ if CommandLine.arguments.contains("--edits") {
                 if let before = previous[position] { line += String(format: "(exp %.2f)", log2(p50 / before)) }
                 previous[position] = p50
             }
+            // Delete the middle half, then query around the deletion point until the next parse.
+            var edited = PresentationStore(parsed)
+            let deletion = NSRange(location: length / 4, length: length / 2)
+            edited.apply(PresentationEdit(range: deletion, replacement: ""))
+            var queries: [Double] = []
+            for _ in 0..<5 {
+                queries.append(measure {
+                    for offset in 0..<2_000 { _ = edited.styles(intersecting: SourceSpan(deletion.location - 2 + offset % 5, 6)) }
+                })
+            }
+            line += String(format: " after-delete-query2000=%.3fms", percentile(queries, 0.5))
+            if let before = previous["after-delete"] { line += String(format: "(exp %.2f)", log2(percentile(queries, 0.5) / before)) }
+            previous["after-delete"] = percentile(queries, 0.5)
             print(line)
         }
     }
@@ -91,6 +104,9 @@ if CommandLine.arguments.contains("--adversarial") {
         ("currency-lines", documentSizes, { repeated(String(repeating: "$1 ", count: 300) + "\n", bytes: $0) }),
         ("escaped-dollars", documentSizes, { repeated("\\$a \\$$ ", bytes: $0) }),
         ("unclosed-display", documentSizes, { repeated("$$ a `c` ", bytes: $0) }),
+        // One nested list at the nesting limit, repeated: depth is bounded, so size alone should scale.
+        ("nested-list-depth-256", documentSizes, { repeated((0..<256).map { String(repeating: "  ", count: $0) + "- item\n" }.joined() + "\n", bytes: $0) }),
+        ("nested-quote-depth-256", documentSizes, { repeated((1...256).map { String(repeating: ">", count: $0) + " line\n" }.joined() + "\n", bytes: $0) }),
         ("currency-one-line", [5_000, 10_000, 20_000, 40_000, 80_000], { repeated("$1 ", bytes: $0) }),
         ("dollar-letters-one-line", [5_000, 10_000, 20_000, 40_000, 80_000], { repeated("$a ", bytes: $0) }),
     ]
