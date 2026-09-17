@@ -517,6 +517,14 @@ public enum MarkdownParser {
         let excluded = excluding.sorted { $0.location < $1.location }
         func escaped(_ n: Int) -> Bool { var j = n - 1, c = 0; while j >= 0 && units[j] == 92 { c += 1; j -= 1 }; return c % 2 == 1 }
         func whitespace(_ u: UInt16) -> Bool { u == 32 || u == 9 || u == 10 || u == 13 }
+        /// A line break at `n` followed by a line of only spaces and tabs: a paragraph break, which ends
+        /// display math as it does in TeX, so an opening `$$` cannot pair across paragraphs.
+        func blankLineAfter(_ n: Int) -> Bool {
+            guard units[n] == 10 || units[n] == 13 else { return false }
+            var k = n + (units[n] == 13 && n + 1 < units.count && units[n + 1] == 10 ? 2 : 1)
+            while k < units.count && (units[k] == 32 || units[k] == 9) { k += 1 }
+            return k < units.count && (units[k] == 10 || units[k] == 13)
+        }
         while i < units.count {
             while protectedIndex < excluded.count && excluded[protectedIndex].end <= i { protectedIndex += 1 }
             if protectedIndex < excluded.count && excluded[protectedIndex].contains(i) { i = excluded[protectedIndex].end; continue }
@@ -526,7 +534,7 @@ public enum MarkdownParser {
             if i < (display ? displayFailsBefore : inlineFailsBefore) { i += delimiter; continue }
             var j = i + delimiter, found: Int?
             while j < units.count {
-                if !display && (units[j] == 10 || units[j] == 13) { break }
+                if (!display && (units[j] == 10 || units[j] == 13)) || (display && blankLineAfter(j)) { break }
                 if protectedIndex < excluded.count && j >= excluded[protectedIndex].location { break }
                 if units[j] == 36 && !escaped(j) {
                     if display {
