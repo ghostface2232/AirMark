@@ -181,6 +181,24 @@ import AirMarkCore
         #expect(service.cached(key) == nil, "the dropped render ran anyway")
     }
 
+    /// A caller whose task is already cancelled when it reaches the render still cancels it: an
+    /// environment change cancels render tasks that may not have started waiting yet.
+    @Test func alreadyCancelledCallerDropsTheQueuedRender() async throws {
+        let (window, host) = Self.window()
+        defer { window.close() }
+        let service = RenderService()
+        let blocker = Task { @MainActor in try await service.render(Self.slowDiagram(200, salt: 22), environment: Self.environment, baseURL: nil, host: host) }
+        let element = RenderElement(span: SourceSpan(0, 1), kind: .mermaid, content: "graph LR\nAlready-->Cancelled")
+        let caller = Task { @MainActor in try await service.render(element, environment: Self.environment, baseURL: nil, host: host) }
+        caller.cancel()
+        let outcome = await caller.result
+        _ = await blocker.result
+        let key = service.key(element, environment: Self.environment, baseURL: nil)
+        for _ in 0..<50 where service.cached(key) == nil { try await Task.sleep(for: .milliseconds(20)) }
+        print("LIFECYCLE already cancelled: \(String(describing: outcome.map(\.size))) cached \(service.cached(key) != nil)")
+        #expect(service.cached(key) == nil, "the render of an already cancelled caller ran anyway")
+    }
+
     /// A caller arriving just after an earlier request for the same content was cancelled must get a
     /// render, not the earlier caller's cancellation.
     @Test func requestAfterACancelledShareStillRenders() async throws {
@@ -191,11 +209,17 @@ import AirMarkCore
         let shared = RenderElement(span: SourceSpan(0, 1), kind: .mermaid, content: "graph LR\nLate-->Joiner")
         let early = Task { @MainActor in try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
         try await Task.sleep(for: .milliseconds(20))
+        let key = service.key(shared, environment: Self.environment, baseURL: nil)
+        #expect(service.waiterCount(for: key) == 1)
         early.cancel()
-        await Task.yield()
+        // Wait until the cancellation has been processed: the entry is still pending, its work cancelled,
+        // and no one is waiting. The later request then joins that entry and must still get a render.
+        for _ in 0..<100 where service.waiterCount(for: key) != 0 { await Task.yield() }
+        #expect(service.waiterCount(for: key) == 0)
+        let rendered = service.renderedCount
         let late = await Self.within(20) { try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
         _ = await blocker.result
-        print("LIFECYCLE late joiner: \(String(describing: late.map { $0.map(\.size) }))")
+        print("LIFECYCLE late joiner: \(String(describing: late.map { $0.map(\.size) })) renders \(service.renderedCount - rendered)")
         guard case .success = late else { Issue.record("the later request failed: \(String(describing: late))"); return }
     }
 

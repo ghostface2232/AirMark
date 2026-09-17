@@ -68,18 +68,17 @@ public enum RenderFailure: LocalizedError, Equatable {
         let task: Task<RenderArtifact, any Error>
         private var waiters: [UUID: CheckedContinuation<RenderArtifact, any Error>] = [:]
         private var outcome: Result<RenderArtifact, any Error>?
-        /// Every caller left before the work ended, and the work was cancelled. The entry stays in
-        /// `pending` until its watcher settles, but new callers must not join it.
-        private(set) var abandoned = false
         init(_ task: Task<RenderArtifact, any Error>) { self.task = task }
+        var waiterCount: Int { waiters.count }
 
         func wait() async throws -> RenderArtifact {
             let id = UUID()
             return try await withTaskCancellationHandler {
+                // Registered even when this caller is already cancelled: its cancellation hop, which
+                // runs after this main-actor stretch, then finds it, resumes it and cancels the work
+                // if no one else is waiting.
                 try await withCheckedThrowingContinuation { continuation in
-                    if let outcome { continuation.resume(with: outcome) }
-                    else if Task.isCancelled { continuation.resume(throwing: CancellationError()) }
-                    else { waiters[id] = continuation }
+                    if let outcome { continuation.resume(with: outcome) } else { waiters[id] = continuation }
                 }
             } onCancel: {
                 Task { @MainActor in self.cancel(id) }
@@ -88,7 +87,7 @@ public enum RenderFailure: LocalizedError, Equatable {
         private func cancel(_ id: UUID) {
             guard let continuation = waiters.removeValue(forKey: id) else { return }
             continuation.resume(throwing: CancellationError())
-            if waiters.isEmpty && outcome == nil { abandoned = true; task.cancel() }
+            if waiters.isEmpty && outcome == nil { task.cancel() }
         }
         func finish(_ outcome: Result<RenderArtifact, any Error>) {
             self.outcome = outcome
@@ -115,11 +114,27 @@ public enum RenderFailure: LocalizedError, Equatable {
         return SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }
     public func cached(_ key: String) -> RenderArtifact? { cache[key] }
+    /// Callers waiting on the in-flight render for `key`, or nil when none is in flight; for tests.
+    func waiterCount(for key: String) -> Int? { pending[key]?.waiterCount }
     public func render(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?, host: NSView) async throws -> RenderArtifact {
         let identifier = key(element, environment: environment, baseURL: baseURL)
         if let result = cache[identifier] { touch(identifier); return labeled(result, for: element, baseURL: baseURL) }
+        let result: RenderArtifact
+        do { result = try await sharedRender(identifier, element, environment: environment, baseURL: baseURL, host: host) }
+        catch is CancellationError where !Task.isCancelled {
+            // This caller joined a render whose earlier callers had all been cancelled, so the work was
+            // cancelled before it could start. The entry is settled by now; render afresh.
+            if let cached = cache[identifier] { touch(identifier); return labeled(cached, for: element, baseURL: baseURL) }
+            result = try await sharedRender(identifier, element, environment: environment, baseURL: baseURL, host: host)
+        }
+        // Checked for every caller, including those that joined a render another caller started.
+        guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
+        return labeled(result, for: element, baseURL: baseURL)
+    }
+    /// Joins the in-flight render for `identifier`, or starts one.
+    private func sharedRender(_ identifier: String, _ element: RenderElement, environment: RenderEnvironment, baseURL: URL?, host: NSView) async throws -> RenderArtifact {
         let entry: Pending
-        if let shared = pending[identifier], !shared.abandoned {
+        if let shared = pending[identifier] {
             entry = shared
         } else {
             let task = Task<RenderArtifact, any Error> { [self] in
@@ -138,13 +153,9 @@ public enum RenderFailure: LocalizedError, Equatable {
                 entry.finish(outcome)
             }
         }
-        let result = try await entry.wait()
-        // Checked for every caller, including those that joined a render another caller started.
-        guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
-        return labeled(result, for: element, baseURL: baseURL)
+        return try await entry.wait()
     }
-    /// Removes a finished entry and caches its result. An abandoned entry may already have been replaced
-    /// by a newer one for the same key, which this leaves alone.
+    /// Removes a finished entry and caches its result.
     private func settle(_ identifier: String, _ entry: Pending, _ result: RenderArtifact?) {
         guard pending[identifier] === entry else { return }
         pending[identifier] = nil
