@@ -290,6 +290,10 @@ import os
                     // Not a failure of the element: the window is hidden or the request was dropped.
                     // Rendering resumes when the window returns or the viewport asks again.
                     if error is CancellationError || error as? RenderFailure == .suspended { return }
+                    // A render is requested only when the element has no pixels here, so metrics left
+                    // from a released render would draw an empty space of the old size. Show the source
+                    // and the failure instead, as for an element that never rendered.
+                    artifacts.remove(element.span)
                     if (error as? RenderFailure)?.isTransient == true, errors[element.span] == nil {
                         errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1))
                         Task { [weak self] in

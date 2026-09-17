@@ -38,10 +38,10 @@ import AirMarkCore
         return (frame, colored)
     }
 
-    static func make(_ source: String) async throws -> (EditorController, NSWindow) {
+    static func make(_ source: String, fileURL: URL = repository.appendingPathComponent("Fixtures/Showcase.md")) async throws -> (EditorController, NSWindow) {
         _ = NSApplication.shared
         let editor = EditorController(source: source)
-        editor.fileURL = repository.appendingPathComponent("Fixtures/Showcase.md")
+        editor.fileURL = fileURL
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         window.contentViewController = editor; window.orderFront(nil)
         editor.view.frame = NSRect(x: 0, y: 0, width: 800, height: 600); editor.view.layoutSubtreeIfNeeded(); editor.viewDidAppear()
@@ -131,5 +131,30 @@ import AirMarkCore
         #expect(store.drawable(for: id) == nil)
         #expect(store.count == spans.count - 1)
         #expect(store.pixelBytes == one * 2)
+    }
+
+    /// If an element whose pixels were released fails to render again, it shows its source with the
+    /// error, as an element that never rendered does, instead of an empty space of the old size.
+    @Test func failedRerenderAfterReleaseShowsSourceAndError() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkRerender-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let image = directory.appendingPathComponent("swatch.png")
+        try FileManager.default.copyItem(at: Self.repository.appendingPathComponent("Fixtures/swatch.png"), to: image)
+        let (editor, window) = try await Self.make("Before\n\n![Two color swatches](swatch.png)\n\nAfter\n", fileURL: directory.appendingPathComponent("Note.md"))
+        defer { window.orderOut(nil) }
+        try #require(editor.renderedElementCount == 1)
+        let element = try #require(editor.parsed.elements.first)
+        editor.releaseAllPixels()
+        try FileManager.default.removeItem(at: image)
+        editor.requestRenders()
+        for _ in 0..<250 where editor.renderErrorCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(editor.renderErrorCount == 1)
+        let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        let range = editor.textView.textStorage!.mutableString.paragraphRange(for: element.span.nsRange)
+        let shown = try #require(editor.textContentStorage(storage, textParagraphWith: range)).attributedString
+        #expect(shown.attribute(.attachment, at: element.span.location - range.location, effectiveRange: nil) == nil, "an empty space stands in for the element")
+        #expect(shown.attribute(.toolTip, at: 0, effectiveRange: nil) != nil, "the failure is not shown")
+        #expect(editor.measuredElementCount == 0)
     }
 }
