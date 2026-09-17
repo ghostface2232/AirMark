@@ -305,8 +305,13 @@ import os
                         artifacts.remove(element.span)
                     }
                 }
-                renderTasks[element.span] = nil
+                // Reached only when the render settled for the current revision and environment; a
+                // cancelled or postponed render returns above and leaves scheduling to whoever stopped it.
+                if renderTokens[element.span] == token { renderTasks[element.span] = nil; renderTokens[element.span] = nil }
                 invalidatePresentation(spans: [element.span])
+                // The slot is free: start the next element waiting for one. This runs in the task, never
+                // inside `scheduleRenders`, and an element that now has pixels or an error is skipped there.
+                scheduleRenders()
             }
         }
     }

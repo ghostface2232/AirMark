@@ -241,6 +241,45 @@ import AirMarkCore
         #expect(succeeded == 40)
     }
 
+    /// More elements on screen than the editor renders at once: each finished render frees a slot for the
+    /// next, so every element renders without scrolling or another layout pass, each exactly once.
+    @Test func elementsBeyondTheInFlightLimitRenderWithoutScrolling() async throws {
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let count = 30
+        // One paragraph, so the whole run lies within the fragment at the top of the viewport.
+        let source = (0..<count).map { "![swatch \($0)](swatch.png)" }.joined(separator: "\n") + "\n"
+        let editor = EditorController(source: source)
+        editor.fileURL = repository.appendingPathComponent("Fixtures/Showcase.md")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor; window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        editor.view.frame = NSRect(x: 0, y: 0, width: 800, height: 600); editor.view.layoutSubtreeIfNeeded()
+        for _ in 0..<250 where editor.parsed.elements.count < count { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(editor.parsed.elements.count == count)
+        editor.viewDidAppear()
+        for _ in 0..<250 where editor.renderedElementCount + editor.renderErrorCount < count { try await Task.sleep(for: .milliseconds(20)) }
+        print("LIFECYCLE beyond in-flight limit: rendered \(editor.renderedElementCount) of \(count), requests \(editor.renderRequestCount), errors \(editor.renderErrorCount)")
+        #expect(editor.renderedElementCount == count)
+        #expect(editor.renderErrorCount == 0)
+        #expect(editor.renderRequestCount == count, "each element is requested once")
+        #expect(editor.pendingRenderCount == 0)
+        // Again from a known start: one request fills the slots, and completions drain the rest in turn.
+        editor.releaseAllPixels()
+        editor.requestRenders()
+        #expect(editor.pendingRenderCount == 12)
+        var inFlight = editor.pendingRenderCount
+        for _ in 0..<250 where editor.renderedElementCount < count {
+            await Task.yield()
+            inFlight = max(inFlight, editor.pendingRenderCount)
+        }
+        for _ in 0..<50 where editor.renderedElementCount < count { try await Task.sleep(for: .milliseconds(20)) }
+        print("LIFECYCLE refill after release: rendered \(editor.renderedElementCount) of \(count), requests \(editor.renderRequestCount - count), max in flight \(inFlight)")
+        #expect(editor.renderedElementCount == count)
+        #expect(editor.renderRequestCount == 2 * count, "each element is requested once more")
+        #expect(inFlight <= 12)
+        #expect(editor.pendingRenderCount == 0)
+    }
+
     /// A render that starts while its window is minimized is postponed, not recorded as a failure.
     @Test func minimizedWindowPostponesInsteadOfFailing() async throws {
         let (window, host) = Self.window()

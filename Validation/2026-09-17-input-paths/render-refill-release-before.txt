@@ -1,0 +1,10 @@
+MEMORY measured=150 images=150 start=26.9MB afterDown=41.6MB afterUp=29.9MB peak=98.2MB growth=71.2MB held=14/10 pixels=83.1MB/59.3MB requestsDown=178 requestsUp=138 errors=0
+LIFECYCLE beyond in-flight limit: rendered 12 of 30, requests 12, errors 0
+✘ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() recorded an issue at RenderLifecycleTests.swift:262:9: Expectation failed: editor.renderedElementCount == count
+✘ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() recorded an issue at RenderLifecycleTests.swift:264:9: Expectation failed: editor.renderRequestCount == count
+LIFECYCLE refill after release: rendered 12 of 30, requests -6, max in flight 12
+✘ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() recorded an issue at RenderLifecycleTests.swift:277:9: Expectation failed: editor.renderedElementCount == count
+✘ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() recorded an issue at RenderLifecycleTests.swift:278:9: Expectation failed: editor.renderRequestCount == 2 * count
+✘ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() failed after 8.650 seconds with 4 issues.
+✘ Suite RenderLifecycleTests failed after 8.651 seconds with 4 issues.
+✘ Test run with 2 tests in 2 suites failed after 8.651 seconds with 4 issues.

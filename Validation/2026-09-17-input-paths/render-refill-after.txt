@@ -1,0 +1,5 @@
+LIFECYCLE beyond in-flight limit: rendered 30 of 30, requests 30, errors 0
+LIFECYCLE refill after release: rendered 30 of 30, requests 30, max in flight 12
+✔ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() passed after 0.119 seconds.
+✔ Suite RenderLifecycleTests passed after 0.119 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.120 seconds.

@@ -1,0 +1,11 @@
+$ swift test --disable-sandbox --filter RenderLifecycleTests/elementsBeyondTheInFlightLimitRenderWithoutScrolling
+(at 85943dc plus the new test only)
+LIFECYCLE beyond in-flight limit: rendered 24 of 30, requests 24, errors 0, max in flight 12
+✘ Expectation failed: editor.renderedElementCount == count (24 vs 30)
+✘ Expectation failed: editor.renderRequestCount == count (24 vs 30)
+✘ Test failed after 6.191 seconds with 2 issues.
+
+Second run with the strengthened test (release all pixels, one synchronous request, then wait):
+LIFECYCLE beyond in-flight limit: rendered 24 of 30, requests 24, errors 0
+LIFECYCLE refill after release: rendered 12 of 30, requests 12 (printed as "requests 6": the test subtracted 30 from 36), max in flight 12
+✘ renderedElementCount 24 (first pass), 12 (after release); renderRequestCount 36 vs 60 expected
