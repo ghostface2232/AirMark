@@ -1,0 +1,7 @@
+ARTIFACT_STORE measured=1000 resident=1000 seed=0.2ms edit_head p50=0.0533ms p95=0.0606ms max=0.0804ms edit_middle p50=0.0566ms p95=0.0632ms max=0.0750ms edit_tail p50=0.0529ms p95=0.0999ms max=0.1166ms store p50=0.0001ms p95=0.0002ms release p50=0.0000ms p95=0.0000ms max=0.0020ms samples=997
+ARTIFACT_STORE measured=10000 resident=6553 seed=4.7ms edit_head p50=0.6921ms p95=0.8998ms max=0.9534ms edit_middle p50=0.6853ms p95=0.8133ms max=1.4521ms edit_tail p50=0.6072ms p95=0.6868ms max=0.7029ms store p50=0.0002ms p95=0.0006ms release p50=1.8950ms p95=2.3104ms max=13.8552ms samples=2400
+ARTIFACT_STORE measured=50000 resident=6553 seed=30.6ms edit_head p50=3.5323ms p95=3.8847ms max=4.6910ms edit_middle p50=3.5554ms p95=4.0028ms max=4.7130ms edit_tail p50=3.3032ms p95=3.6256ms max=3.7991ms store p50=0.0004ms p95=0.0016ms release p50=2.0759ms p95=3.2536ms max=10.7282ms samples=2400
+✔ Test artifactStoreHistoryCosts() passed after 12.710 seconds.
+✔ Suite ScaleTests passed after 12.711 seconds.
+✔ Test run with 1 test in 1 suite passed after 12.711 seconds.
+15:06  up 6 days, 14:07, 1 user, load averages: 2.84 2.04 1.76

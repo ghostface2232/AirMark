@@ -1,0 +1,51 @@
+15:09  up 6 days, 14:10, 1 user, load averages: 3.95 3.54 2.49
+DOCUMENT_SCALE position=head samples=30 p50=0.87ms p95=1.11ms max=3.03ms layout p50=0.09ms p95=0.12ms
+DOCUMENT_SCALE_PHASES position=head rebase p50=0.33 p95=0.37 | paragraph p50=0.03 p95=0.04 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+DOCUMENT_SCALE position=middle samples=30 p50=0.43ms p95=0.56ms max=0.56ms layout p50=0.19ms p95=0.25ms
+DOCUMENT_SCALE_PHASES position=middle rebase p50=0.17 p95=0.21 | paragraph p50=0.07 p95=0.09 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+DOCUMENT_SCALE position=tail samples=30 p50=0.12ms p95=0.15ms max=0.23ms layout p50=0.15ms p95=0.18ms
+DOCUMENT_SCALE_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.07 p95=0.08 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test documentKeystrokeCostsIncludeSnapshotAndDirtyState() passed after 1.271 seconds.
+HISTORY_SCALE history=none elements=50000 bytes=6500000 measured=0 resident=0 pixels=0
+HISTORY_SCALE history=none position=head samples=30 p50=2.72ms p95=2.95ms max=4.46ms layout p50=0.09ms p95=0.13ms previous_applyParse=0.00ms measured=0
+HISTORY_SCALE history=none_PHASES position=head rebase p50=2.16 p95=2.27 | paragraph p50=0.03 p95=0.05 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none position=middle samples=30 p50=1.53ms p95=1.68ms max=1.98ms layout p50=0.19ms p95=0.27ms previous_applyParse=47.99ms measured=0
+HISTORY_SCALE history=none_PHASES position=middle rebase p50=1.25 p95=1.36 | paragraph p50=0.07 p95=0.10 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none position=tail samples=30 p50=0.13ms p95=0.20ms max=0.55ms layout p50=0.16ms p95=0.22ms previous_applyParse=48.78ms measured=0
+HISTORY_SCALE history=none_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.07 p95=0.09 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=none scroll steps=20 p50=15.59ms p95=22.89ms max=24.48ms release calls=1168 p50=0.0001ms p95=0.0003ms max=0.0065ms measured=554 resident=554 errors=0
+HISTORY_SCALE history=all seed=25.0ms
+HISTORY_SCALE history=all elements=50000 bytes=6500000 measured=50000 resident=6553 pixels=67102720
+HISTORY_SCALE history=all position=head samples=30 p50=2.66ms p95=2.91ms max=4.55ms layout p50=0.08ms p95=0.12ms previous_applyParse=0.00ms measured=50000
+HISTORY_SCALE history=all_PHASES position=head rebase p50=2.30 p95=2.45 | paragraph p50=0.03 p95=0.05 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.01 p95=0.02
+HISTORY_SCALE history=all position=middle samples=30 p50=1.41ms p95=1.63ms max=1.84ms layout p50=0.22ms p95=0.29ms previous_applyParse=49.43ms measured=50000
+HISTORY_SCALE history=all_PHASES position=middle rebase p50=1.09 p95=1.19 | paragraph p50=0.08 p95=0.11 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.01 p95=0.01
+HISTORY_SCALE history=all position=tail samples=30 p50=0.13ms p95=0.21ms max=0.57ms layout p50=0.18ms p95=0.30ms previous_applyParse=49.65ms measured=50000
+HISTORY_SCALE history=all_PHASES position=tail rebase p50=0.00 p95=0.00 | paragraph p50=0.08 p95=0.10 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+HISTORY_SCALE history=all scroll steps=20 p50=19.21ms p95=22.73ms max=22.97ms release calls=708 p50=0.0002ms p95=0.0030ms max=0.0087ms measured=50000 resident=6472 errors=0
+✔ Test artifactHistoryKeystrokeAndScrollCosts() passed after 19.243 seconds.
+✔ Suite ScaleTests passed after 20.514 seconds.
+✔ Test run with 2 tests in 1 suite passed after 20.514 seconds.
+15:10  up 6 days, 14:11, 1 user, load averages: 3.55 3.48 2.49
+# run 2 15:10  up 6 days, 14:11, 1 user, load averages: 3.23 3.41 2.48
+HISTORY_SCALE history=none position=head samples=30 p50=2.88ms p95=3.20ms max=5.49ms layout p50=0.09ms p95=0.14ms previous_applyParse=0.00ms measured=0
+HISTORY_SCALE history=none position=middle samples=30 p50=1.40ms p95=1.54ms max=2.13ms layout p50=0.19ms p95=0.28ms previous_applyParse=61.08ms measured=0
+HISTORY_SCALE history=none position=tail samples=30 p50=0.13ms p95=0.19ms max=0.60ms layout p50=0.15ms p95=0.20ms previous_applyParse=47.26ms measured=0
+HISTORY_SCALE history=none scroll steps=20 p50=15.34ms p95=23.95ms max=24.42ms release calls=1138 p50=0.0001ms p95=0.0003ms max=0.0069ms measured=539 resident=539 errors=0
+HISTORY_SCALE history=all position=head samples=30 p50=2.76ms p95=2.99ms max=4.80ms layout p50=0.08ms p95=0.13ms previous_applyParse=0.00ms measured=50000
+HISTORY_SCALE history=all position=middle samples=30 p50=1.41ms p95=1.57ms max=2.02ms layout p50=0.22ms p95=0.31ms previous_applyParse=48.41ms measured=50000
+HISTORY_SCALE history=all position=tail samples=30 p50=0.14ms p95=0.22ms max=0.70ms layout p50=0.19ms p95=0.27ms previous_applyParse=48.40ms measured=50000
+HISTORY_SCALE history=all scroll steps=20 p50=19.69ms p95=23.29ms max=23.49ms release calls=708 p50=0.0002ms p95=0.0033ms max=0.0086ms measured=50000 resident=6472 errors=0
+✔ Test artifactHistoryKeystrokeAndScrollCosts() passed after 19.235 seconds.
+✔ Test run with 1 test in 1 suite passed after 19.235 seconds.
+# run 3 15:10  up 6 days, 14:11, 1 user, load averages: 3.29 3.41 2.51
+HISTORY_SCALE history=none position=head samples=30 p50=2.83ms p95=3.16ms max=5.31ms layout p50=0.10ms p95=0.14ms previous_applyParse=0.00ms measured=0
+HISTORY_SCALE history=none position=middle samples=30 p50=1.34ms p95=1.61ms max=1.83ms layout p50=0.19ms p95=0.27ms previous_applyParse=50.19ms measured=0
+HISTORY_SCALE history=none position=tail samples=30 p50=0.13ms p95=0.25ms max=0.55ms layout p50=0.15ms p95=0.18ms previous_applyParse=48.21ms measured=0
+HISTORY_SCALE history=none scroll steps=20 p50=15.75ms p95=22.69ms max=24.49ms release calls=1168 p50=0.0001ms p95=0.0003ms max=0.0069ms measured=554 resident=554 errors=0
+HISTORY_SCALE history=all position=head samples=30 p50=2.47ms p95=2.88ms max=4.48ms layout p50=0.08ms p95=0.13ms previous_applyParse=0.00ms measured=50000
+HISTORY_SCALE history=all position=middle samples=30 p50=1.46ms p95=1.67ms max=1.92ms layout p50=0.22ms p95=0.31ms previous_applyParse=49.46ms measured=50000
+HISTORY_SCALE history=all position=tail samples=30 p50=0.13ms p95=0.21ms max=0.54ms layout p50=0.18ms p95=0.23ms previous_applyParse=49.65ms measured=50000
+HISTORY_SCALE history=all scroll steps=20 p50=18.71ms p95=22.70ms max=26.91ms release calls=708 p50=0.0002ms p95=0.0032ms max=0.0085ms measured=50000 resident=6472 errors=0
+✔ Test artifactHistoryKeystrokeAndScrollCosts() passed after 19.407 seconds.
+✔ Test run with 1 test in 1 suite passed after 19.408 seconds.

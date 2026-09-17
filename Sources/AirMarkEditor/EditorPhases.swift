@@ -13,6 +13,8 @@ import os
         case snapshot
         /// Comparing and installing a finished parse.
         case applyParse
+        /// Moving held artifacts with an edit, and releasing pixels after a render or scroll.
+        case artifacts
     }
     public static let shared = EditorPhases()
     public var isRecording = false
@@ -40,6 +42,7 @@ import os
         case .paragraph: "Paragraph"
         case .snapshot: "Snapshot"
         case .applyParse: "ApplyParse"
+        case .artifacts: "Artifacts"
         }
     }
 }

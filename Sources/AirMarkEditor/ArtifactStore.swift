@@ -19,17 +19,29 @@ struct ArtifactMetrics: Equatable {
 /// ever scrolled past held every decoded pixel. Pixels are now kept for elements near the viewport
 /// and, beyond that, only within a byte budget, released farthest first. Metrics stay, and drawing
 /// asks the store for pixels by a stable identity that survives edits moving the span.
+///
+/// Metrics accumulate for every element rendered in the environment, which in a long document is far
+/// more than the pixels held. So the two are separate collections: every operation that runs per
+/// keystroke, per render or per scroll costs at most a binary search plus the entries after an edit,
+/// shifted as integers, and pixel release looks only at elements holding pixels.
 @MainActor final class ArtifactStore {
-    private struct Entry {
+    private struct Record {
         let id: Int
         var metrics: ArtifactMetrics
-        var image: CGImage?
+    }
+    private struct Pixels {
+        var image: CGImage
         var cost: Int
+        var size: CGSize
+        var label: String
         /// Created on first draw; wraps `image` without copying.
         var drawable: NSImage?
     }
-    private var entries: [SourceSpan: Entry] = [:]
-    private var spansByID: [Int: SourceSpan] = [:]
+    /// Every measured element.
+    private var measured = SpanList<Record>()
+    /// The elements holding pixels, by identity; a subset of `measured` at the same spans.
+    private var resident = SpanList<Int>()
+    private var pixels: [Int: Pixels] = [:]
     private var nextID = 0
     /// Pixels held outside the protected range are released beyond this many bytes.
     let pixelBudget: Int
@@ -37,102 +49,198 @@ struct ArtifactMetrics: Equatable {
 
     init(pixelBudget: Int = 64 * 1024 * 1024) { self.pixelBudget = pixelBudget }
 
-    var count: Int { entries.count }
-    var residentCount: Int { entries.values.reduce(0) { $1.image == nil ? $0 : $0 + 1 } }
-    var residentImages: [CGImage] { entries.values.compactMap(\.image) }
+    var count: Int { measured.count }
+    var residentCount: Int { resident.count }
+    var residentImages: [CGImage] { pixels.values.map(\.image) }
 
     func store(_ artifact: RenderArtifact, at span: SourceSpan, environment: RenderEnvironment) {
         let metrics = ArtifactMetrics(size: artifact.size, baseline: artifact.baseline, label: artifact.label, environment: environment)
-        if var entry = entries[span] {
-            pixelBytes -= entry.image == nil ? 0 : entry.cost
-            entry.metrics = metrics; entry.image = artifact.image; entry.cost = artifact.cost; entry.drawable = nil
-            entries[span] = entry
+        let id: Int
+        if let index = measured.index(of: span) {
+            id = measured.payloads[index].id
+            measured.payloads[index].metrics = metrics
         } else {
             nextID += 1
-            entries[span] = Entry(id: nextID, metrics: metrics, image: artifact.image, cost: artifact.cost)
-            spansByID[nextID] = span
+            id = nextID
+            // Elements never overlap, so nothing is displaced in practice; a displaced entry is forgotten.
+            for (removedSpan, record) in measured.insert(Record(id: id, metrics: metrics), at: span) { forget(record.id, at: removedSpan) }
         }
+        if let held = pixels[id] { pixelBytes -= held.cost } else { _ = resident.insert(id, at: span) }
+        pixels[id] = Pixels(image: artifact.image, cost: artifact.cost, size: artifact.size, label: artifact.label)
         pixelBytes += artifact.cost
     }
 
     /// Metrics and drawing identity for an element, only if measured in `environment`.
     func layout(at span: SourceSpan, environment: RenderEnvironment) -> (metrics: ArtifactMetrics, id: Int)? {
-        guard let entry = entries[span], entry.metrics.environment == environment else { return nil }
-        return (entry.metrics, entry.id)
+        guard let index = measured.index(of: span) else { return nil }
+        let record = measured.payloads[index]
+        guard record.metrics.environment == environment else { return nil }
+        return (record.metrics, record.id)
     }
 
     /// True when the element has no pixels for `environment` and should be rendered.
     func needsPixels(at span: SourceSpan, environment: RenderEnvironment) -> Bool {
-        guard let entry = entries[span], entry.metrics.environment == environment else { return true }
-        return entry.image == nil
+        guard let index = measured.index(of: span), measured.payloads[index].metrics.environment == environment else { return true }
+        return pixels[measured.payloads[index].id] == nil
     }
 
-    func hasPixels(at span: SourceSpan) -> Bool { entries[span]?.image != nil }
+    func hasPixels(at span: SourceSpan) -> Bool {
+        guard let index = measured.index(of: span) else { return false }
+        return pixels[measured.payloads[index].id] != nil
+    }
 
     /// The image to draw for an attachment, or nil while its pixels are released.
     func drawable(for id: Int) -> NSImage? {
-        guard let span = spansByID[id], var entry = entries[span], let image = entry.image else { return nil }
-        if let drawable = entry.drawable { return drawable }
-        let drawable = NSImage(cgImage: image, size: entry.metrics.size)
-        drawable.accessibilityDescription = entry.metrics.label
-        entry.drawable = drawable
-        entries[span] = entry
+        guard var held = pixels[id] else { return nil }
+        if let drawable = held.drawable { return drawable }
+        let drawable = NSImage(cgImage: held.image, size: held.size)
+        drawable.accessibilityDescription = held.label
+        held.drawable = drawable
+        pixels[id] = held
         return drawable
     }
 
     /// While over budget, releases pixels outside `protected`, farthest from it first. Metrics are kept.
+    ///
+    /// Resident spans are sorted and disjoint, so those before `protected` get nearer from the first
+    /// one on and those after it get nearer from the last one back: the farthest remaining element is
+    /// always at one of the two ends, and what is released is a prefix and a suffix.
     func releasePixels(protecting protected: NSRange, budget: Int? = nil) {
         let pixelBudget = budget ?? self.pixelBudget
         guard pixelBytes > pixelBudget else { return }
-        var candidates: [(span: SourceSpan, distance: Int)] = []
-        for (span, entry) in entries where entry.image != nil {
-            if span.location < NSMaxRange(protected) && span.end > protected.location { continue }
-            candidates.append((span, span.location >= NSMaxRange(protected) ? span.location - NSMaxRange(protected) : protected.location - span.end))
+        let before = resident.firstEnding(after: protected.location)
+        let after = max(before, resident.firstStarting(atOrAfter: NSMaxRange(protected)))
+        var prefix = 0, suffix = resident.count
+        while pixelBytes > pixelBudget, prefix < before || suffix > after {
+            let left = prefix < before ? protected.location - resident.spans[prefix].end : -1
+            let right = suffix > after ? resident.spans[suffix - 1].location - NSMaxRange(protected) : -1
+            let index: Int
+            if left >= right { index = prefix; prefix += 1 } else { suffix -= 1; index = suffix }
+            if let held = pixels.removeValue(forKey: resident.payloads[index]) { pixelBytes -= held.cost }
         }
-        for candidate in candidates.sorted(by: { $0.distance > $1.distance }) {
-            guard pixelBytes > pixelBudget else { break }
-            release(candidate.span)
-        }
-    }
-
-    private func release(_ span: SourceSpan) {
-        guard var entry = entries[span], entry.image != nil else { return }
-        pixelBytes -= entry.cost
-        entry.image = nil; entry.drawable = nil
-        entries[span] = entry
+        resident.removeSubrange(suffix..<resident.count)
+        resident.removeSubrange(0..<prefix)
     }
 
     /// Moves entries with an edit; an entry the edit touches is removed.
     func apply(_ edit: PresentationEdit) {
-        var moved: [SourceSpan: Entry] = [:]
-        moved.reserveCapacity(entries.count)
-        for (span, entry) in entries {
-            if let span = edit.unchanged(span) {
-                moved[span] = entry
-                spansByID[entry.id] = span
-            } else {
-                forget(entry)
-            }
+        for (_, record) in measured.apply(edit) {
+            if let held = pixels.removeValue(forKey: record.id) { pixelBytes -= held.cost }
         }
-        entries = moved
+        _ = resident.apply(edit)
     }
 
     /// Keeps only entries whose spans are in `spans`.
     func retain(_ spans: Set<SourceSpan>) {
-        for (span, entry) in entries where !spans.contains(span) { entries[span] = nil; forget(entry) }
+        for (span, record) in measured.removeAll(where: { !spans.contains($0) }) { forget(record.id, at: span) }
     }
 
     func remove(_ span: SourceSpan) {
-        guard let entry = entries.removeValue(forKey: span) else { return }
-        forget(entry)
+        guard let index = measured.index(of: span) else { return }
+        let record = measured.remove(at: index)
+        forget(record.id, at: span)
     }
 
     func removeAll() {
-        entries.removeAll(); spansByID.removeAll(); pixelBytes = 0
+        measured.removeAll(); resident.removeAll(); pixels.removeAll(); pixelBytes = 0
     }
 
-    private func forget(_ entry: Entry) {
-        spansByID[entry.id] = nil
-        if entry.image != nil { pixelBytes -= entry.cost }
+    private func forget(_ id: Int, at span: SourceSpan) {
+        guard let held = pixels.removeValue(forKey: id) else { return }
+        pixelBytes -= held.cost
+        if let index = resident.index(of: span) { _ = resident.remove(at: index) }
+    }
+}
+
+/// Sorted, disjoint source spans, each with a payload. Render elements never overlap, so the entries
+/// an edit touches are contiguous and only those after them move, by integer arithmetic on `spans`.
+struct SpanList<Payload> {
+    private(set) var spans: [SourceSpan] = []
+    var payloads: [Payload] = []
+
+    var count: Int { spans.count }
+
+    /// The first index whose span ends after `location`.
+    func firstEnding(after location: Int) -> Int {
+        var low = 0, high = spans.count
+        while low < high {
+            let middle = (low + high) / 2
+            if spans[middle].end > location { high = middle } else { low = middle + 1 }
+        }
+        return low
+    }
+
+    /// The first index whose span starts at or after `location`.
+    func firstStarting(atOrAfter location: Int) -> Int {
+        var low = 0, high = spans.count
+        while low < high {
+            let middle = (low + high) / 2
+            if spans[middle].location >= location { high = middle } else { low = middle + 1 }
+        }
+        return low
+    }
+
+    func index(of span: SourceSpan) -> Int? {
+        let index = firstStarting(atOrAfter: span.location)
+        return index < spans.count && spans[index] == span ? index : nil
+    }
+
+    /// Inserts `payload` at `span` in order and returns the entries it overlapped, which it replaces.
+    mutating func insert(_ payload: Payload, at span: SourceSpan) -> [(SourceSpan, Payload)] {
+        let low = min(firstEnding(after: span.location), firstStarting(atOrAfter: span.location))
+        var high = low
+        while high < spans.count, spans[high].location < span.end || spans[high].location == span.location { high += 1 }
+        let removed = Array(zip(spans[low..<high], payloads[low..<high]))
+        spans.replaceSubrange(low..<high, with: CollectionOfOne(span))
+        payloads.replaceSubrange(low..<high, with: CollectionOfOne(payload))
+        return removed
+    }
+
+    mutating func remove(at index: Int) -> Payload {
+        spans.remove(at: index)
+        return payloads.remove(at: index)
+    }
+
+    mutating func removeSubrange(_ range: Range<Int>) {
+        guard !range.isEmpty else { return }
+        spans.removeSubrange(range)
+        payloads.removeSubrange(range)
+    }
+
+    mutating func removeAll() { spans.removeAll(); payloads.removeAll() }
+
+    /// Removes the entries whose spans satisfy `predicate`, keeping order, and returns them.
+    mutating func removeAll(where predicate: (SourceSpan) -> Bool) -> [(SourceSpan, Payload)] {
+        var removed: [(SourceSpan, Payload)] = []
+        var kept = 0
+        for index in spans.indices {
+            if predicate(spans[index]) {
+                removed.append((spans[index], payloads[index]))
+            } else {
+                if kept != index { spans.swapAt(kept, index); payloads.swapAt(kept, index) }
+                kept += 1
+            }
+        }
+        spans.removeSubrange(kept...)
+        payloads.removeSubrange(kept...)
+        return removed
+    }
+
+    /// Moves spans exactly as `PresentationEdit.unchanged` does and returns the entries it removes.
+    mutating func apply(_ edit: PresentationEdit) -> [(SourceSpan, Payload)] {
+        let low = firstEnding(after: edit.range.location)
+        var high = low
+        while high < spans.count, spans[high].location < edit.range.end { high += 1 }
+        var removed: [(SourceSpan, Payload)] = []
+        if high > low {
+            removed = Array(zip(spans[low..<high], payloads[low..<high]))
+            removeSubrange(low..<high)
+        }
+        let delta = edit.replacementLength - edit.range.length
+        guard delta != 0 else { return removed }
+        spans.withUnsafeMutableBufferPointer { buffer in
+            for index in low..<buffer.count { buffer[index].location += delta }
+        }
+        return removed
     }
 }

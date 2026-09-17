@@ -1,0 +1,18 @@
+# pair 1 old  1.90 2.90 2.74
+PROBE HISTORY_SCALE history=all layoutViewport=1.14 pending=0.03 schedule=3.17 | release=0.474 windows=0.616 candidates=0.001 n=399
+HISTORY_SCALE history=all scroll steps=20 p50=17.08ms p95=24.14ms max=25.14ms (scrollRangeToVisible p50=12.36ms, paragraphs p50=5.78ms) release calls=718 p50=0.
+# pair 1 new  1.85 2.82 2.72
+PROBE HISTORY_SCALE history=all layoutViewport=1.23 pending=0.03 schedule=4.16 | release=0.685 windows=1.035 candidates=0.001 n=396
+HISTORY_SCALE history=all scroll steps=20 p50=18.60ms p95=22.07ms max=25.88ms (scrollRangeToVisible p50=12.63ms, paragraphs p50=5.76ms) release calls=712 p50=0.
+# pair 2 old  2.93 2.95 2.76
+PROBE HISTORY_SCALE history=all layoutViewport=1.16 pending=0.03 schedule=3.06 | release=0.471 windows=0.572 candidates=0.001 n=394
+HISTORY_SCALE history=all scroll steps=20 p50=17.47ms p95=19.65ms max=25.47ms (scrollRangeToVisible p50=12.61ms, paragraphs p50=5.87ms) release calls=708 p50=0.
+# pair 2 new  2.71 2.87 2.74
+PROBE HISTORY_SCALE history=all layoutViewport=1.25 pending=0.03 schedule=4.11 | release=0.658 windows=0.982 candidates=0.002 n=394
+HISTORY_SCALE history=all scroll steps=20 p50=19.12ms p95=22.70ms max=26.33ms (scrollRangeToVisible p50=13.02ms, paragraphs p50=5.89ms) release calls=708 p50=0.
+# pair 3 old  3.21 2.99 2.79
+PROBE HISTORY_SCALE history=all layoutViewport=1.11 pending=0.03 schedule=3.25 | release=0.478 windows=0.589 candidates=0.001 n=396
+HISTORY_SCALE history=all scroll steps=20 p50=17.63ms p95=19.80ms max=25.35ms (scrollRangeToVisible p50=12.64ms, paragraphs p50=5.99ms) release calls=712 p50=0.
+# pair 3 new  3.24 3.04 2.81
+PROBE HISTORY_SCALE history=all layoutViewport=1.28 pending=0.03 schedule=4.33 | release=0.719 windows=1.120 candidates=0.002 n=394
+HISTORY_SCALE history=all scroll steps=20 p50=19.25ms p95=22.68ms max=22.83ms (scrollRangeToVisible p50=13.02ms, paragraphs p50=5.86ms) release calls=708 p50=0.

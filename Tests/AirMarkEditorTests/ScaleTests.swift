@@ -2,6 +2,7 @@ import AppKit
 import Testing
 import AirMarkCore
 @testable import AirMarkEditor
+import AirMarkRender
 
 /// Behaviour on a 1MB document: parsing stays off the main thread, only elements near the viewport
 /// are rendered, in-flight renders are capped, and a keystroke's main-thread work stays small.
@@ -118,6 +119,150 @@ import AirMarkCore
     @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_10MB"] == "1"))
     func tenMegabyteReturnKeystrokeCosts() async throws {
         try await measureReturnKeystrokes(bytes: 10_000_000, label: "RETURN_SCALE_10MB")
+    }
+
+    /// The artifact store alone, with a long history of measured elements whose pixels are mostly
+    /// released: single-character edits at the head, middle and tail, and the release that follows
+    /// each render completing while scrolling. Main-thread time per call.
+    @Test func artifactStoreHistoryCosts() {
+        let environment = RenderEnvironment(width: 680, fontSize: 16, scale: 2, dark: false)
+        let artifact = ArtifactResidencyTests.artifact(width: 64, height: 40)
+        let clock = ContinuousClock()
+        for count in [1_000, 10_000, 50_000] {
+            let spacing = 130, length = count * spacing
+            let started = clock.now
+            let store = ArtifactStore()
+            for index in 0..<count { store.store(artifact, at: SourceSpan(index * spacing + 40, 9), environment: environment) }
+            store.releasePixels(protecting: NSRange(location: 0, length: 5_000))
+            let seeded = started.duration(to: clock.now)
+            #expect(store.count == count)
+            #expect(store.pixelBytes <= store.pixelBudget)
+            var line = String(format: "ARTIFACT_STORE measured=%d resident=%d seed=%.1fms", count, store.residentCount, Self.ms(seeded))
+            for (name, location) in [("head", 0), ("middle", length / 2 + 3), ("tail", length)] {
+                var costs: [Duration] = []
+                for number in 0..<200 {
+                    let start = clock.now
+                    store.apply(PresentationEdit(range: NSRange(location: location + number, length: 0), replacement: "x"))
+                    costs.append(start.duration(to: clock.now))
+                }
+                line += String(format: " edit_%@ p50=%.4fms p95=%.4fms max=%.4fms", name, Self.percentile(costs, 0.5), Self.percentile(costs, 0.95), Self.ms(costs.max()!))
+            }
+            #expect(store.count == count)
+            // Scrolling from the top to the end: at each step twelve elements near the viewport render
+            // and each completion releases the farthest pixels.
+            var stores: [Duration] = [], releases: [Duration] = []
+            for step in 0..<200 {
+                let first = count * step / 200
+                let window = NSRange(location: first * spacing, length: 12 * spacing)
+                for index in first..<min(count, first + 12) {
+                    let span = SourceSpan(index * spacing + 40 + 600, 9)
+                    guard store.needsPixels(at: span, environment: environment) else { continue }
+                    let start = clock.now
+                    store.store(artifact, at: span, environment: environment)
+                    let stored = clock.now
+                    store.releasePixels(protecting: window)
+                    stores.append(start.duration(to: stored)); releases.append(stored.duration(to: clock.now))
+                }
+            }
+            #expect(store.pixelBytes <= store.pixelBudget)
+            line += String(format: " store p50=%.4fms p95=%.4fms release p50=%.4fms p95=%.4fms max=%.4fms samples=%d", Self.percentile(stores, 0.5), Self.percentile(stores, 0.95), Self.percentile(releases, 0.5), Self.percentile(releases, 0.95), Self.ms(releases.max() ?? .zero), releases.count)
+            print(line)
+        }
+    }
+
+    /// W1's document keystrokes and scrolling on a document with 50,000 formulas, without and with a
+    /// render history for every one of them (metrics kept, pixels bounded by the budget). Slow to set
+    /// up, so it runs only when AIRMARK_SCALE_HISTORY=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_HISTORY"] == "1"))
+    func artifactHistoryKeystrokeAndScrollCosts() async throws {
+        for history in [false, true] { try await measureArtifactHistory(elements: 50_000, history: history) }
+    }
+
+    func measureArtifactHistory(elements count: Int, history: Bool) async throws {
+        _ = NSApplication.shared
+        let block = "## Heading\n\nA paragraph with **bold**, *emphasis*, [link](https://example.org) and 한글. Inline $x_{n}^2$ formula.\n\n- [ ] Task\n\n"
+        let source = String(repeating: block, count: count)
+        let label = history ? "HISTORY_SCALE history=all" : "HISTORY_SCALE history=none"
+        let document = MarkdownDocument()
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+        document.makeWindowControllers()
+        let window = try #require(document.windowControllers.first?.window)
+        window.orderFront(nil)
+        defer { document.close(); EditorPhases.shared.isRecording = false; EditorPhases.shared.reset() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        let phases = EditorPhases.shared
+        func waitForParse() async throws {
+            for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            #expect(editor.parsed.revision == editor.revision)
+        }
+        try await waitForParse()
+        #expect(editor.parsed.elements.count == count)
+        let clock = ContinuousClock()
+        if history {
+            let start = clock.now
+            editor.seedArtifactHistory(ArtifactResidencyTests.artifact(width: 64, height: 40, label: "x_{n}^2"))
+            print(String(format: "%@ seed=%.1fms", label, Self.ms(start.duration(to: clock.now))))
+            #expect(editor.measuredElementCount == count)
+        }
+        print("\(label) elements=\(count) bytes=\(source.utf8.count) measured=\(editor.measuredElementCount) resident=\(editor.renderedElementCount) pixels=\(editor.retainedPixelBytes)")
+        let text = editor.textView.textStorage!.mutableString
+        let manager = try #require(editor.textView.textLayoutManager)
+        let content = try #require(manager.textContentManager)
+        for (name, target) in [("head", 0), ("middle", source.utf16.count / 2), ("tail", source.utf16.count)] {
+            phases.reset(); phases.isRecording = true
+            try await waitForParse()
+            phases.isRecording = false
+            let applyParse = Self.ms(phases.total(.applyParse))
+            let offset = text.paragraphRange(for: NSRange(location: min(target, text.length), length: 0)).location
+            var costs: [Duration] = [], layouts: [Duration] = []
+            var split: [[EditorPhases.Phase: Duration]] = []
+            for number in 0..<30 {
+                phases.reset(); phases.isRecording = true
+                let start = clock.now
+                editor.performEdit(range: NSRange(location: offset + number, length: 0), replacement: "x")
+                costs.append(start.duration(to: clock.now))
+                let paragraph = text.paragraphRange(for: NSRange(location: offset + number, length: 0))
+                let layoutStart = clock.now
+                if let from = content.location(content.documentRange.location, offsetBy: paragraph.location),
+                   let to = content.location(from, offsetBy: paragraph.length), let range = NSTextRange(location: from, end: to) {
+                    manager.ensureLayout(for: range)
+                }
+                layouts.append(layoutStart.duration(to: clock.now))
+                phases.isRecording = false
+                split.append(Dictionary(uniqueKeysWithValues: EditorPhases.Phase.allCases.map { ($0, phases.total($0)) }))
+            }
+            print(String(format: "%@ position=%@ samples=%d p50=%.2fms p95=%.2fms max=%.2fms layout p50=%.2fms p95=%.2fms previous_applyParse=%.2fms measured=%d", label, name, costs.count,
+                         Self.percentile(costs, 0.5), Self.percentile(costs, 0.95), Self.ms(costs.max()!),
+                         Self.percentile(layouts, 0.5), Self.percentile(layouts, 0.95), applyParse, editor.measuredElementCount))
+            print("\(label)_PHASES position=\(name) \(Self.phaseSummary(split))")
+        }
+        try await waitForParse()
+        // Scroll through the document. `scroll` is the synchronous viewport update; `release` is each
+        // pixel release that follows, including those after renders completing while the step settles.
+        var scrolls: [Duration] = [], moves: [Duration] = [], paragraphs: [Duration] = [], releases: [Duration] = []
+        let length = text.length
+        for step in 1...20 {
+            let location = text.paragraphRange(for: NSRange(location: length * step / 21, length: 0)).location
+            phases.reset(); phases.isRecording = true
+            let start = clock.now
+            editor.textView.scrollRangeToVisible(NSRange(location: location, length: 0))
+            let moved = clock.now
+            editor.viewportDidChange()
+            scrolls.append(start.duration(to: clock.now))
+            moves.append(start.duration(to: moved))
+            paragraphs.append(phases.total(.paragraph))
+            for _ in 0..<150 where editor.pendingRenderCount > 0 { try await Task.sleep(for: .milliseconds(20)) }
+            phases.isRecording = false
+            releases += phases.durations[.artifacts] ?? []
+        }
+        print(String(format: "%@ scroll steps=%d p50=%.2fms p95=%.2fms max=%.2fms (scrollRangeToVisible p50=%.2fms, paragraphs p50=%.2fms) release calls=%d p50=%.4fms p95=%.4fms max=%.4fms measured=%d resident=%d errors=%d", label, scrolls.count,
+                     Self.percentile(scrolls, 0.5), Self.percentile(scrolls, 0.95), Self.ms(scrolls.max()!), Self.percentile(moves, 0.5), Self.percentile(paragraphs, 0.5),
+                     releases.count, releases.isEmpty ? 0 : Self.percentile(releases, 0.5), releases.isEmpty ? 0 : Self.percentile(releases, 0.95), Self.ms(releases.max() ?? .zero),
+                     editor.measuredElementCount, editor.renderedElementCount, editor.renderErrorCount))
+        #expect(editor.textKitFallbackCount == 0)
     }
 
     static func ms(_ value: Duration) -> Double { Double(value.components.seconds) * 1000 + Double(value.components.attoseconds) / 1e15 }

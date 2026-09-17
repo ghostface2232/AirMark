@@ -226,7 +226,7 @@ import os
         let edit = PresentationEdit(range: previous, replacement: replacement)
         EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
-        artifacts.apply(edit)
+        EditorPhases.shared.measure(.artifacts) { artifacts.apply(edit) }
         errors = Dictionary(uniqueKeysWithValues: errors.compactMap { span, issue in
             edit.unchanged(span).map { ($0, issue) }
         })
@@ -321,7 +321,7 @@ import os
     /// metrics stay, so the document does not move, and scrolling back renders them again.
     func releaseDistantPixels() {
         guard let near = sourceRange(screensAroundVisible: Self.nearScreens) else { return }
-        artifacts.releasePixels(protecting: near)
+        EditorPhases.shared.measure(.artifacts) { artifacts.releasePixels(protecting: near) }
     }
     /// Where renders start: `near` always, `ahead` while under budget.
     private func renderWindows() -> (near: NSRange, ahead: NSRange) {
@@ -375,6 +375,15 @@ import os
     }
     /// Requests renders for elements near the viewport that lack pixels; for tests.
     func requestRenders() { scheduleRenders() }
+    /// Records `artifact` for every parsed element, as if each had been rendered once while scrolling
+    /// through the document, then releases pixels beyond the budget; for tests of a long render history.
+    func seedArtifactHistory(_ artifact: RenderArtifact) {
+        scheduleRenders()
+        guard let environment = renderEnvironment else { return }
+        for element in parsed.elements { artifacts.store(artifact, at: element.span, environment: environment) }
+        releaseDistantPixels()
+        invalidatePresentation(spans: parsed.elements.map(\.span))
+    }
 
     /// The laid-out range plus `margin` UTF-16 units on either side, in source coordinates.
     private func viewportWindow(margin: Int) -> NSRange {
