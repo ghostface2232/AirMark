@@ -9,3 +9,5 @@ mkdir -p ../Sources/AirMarkRender/Resources/fonts ../Licenses
 cp node_modules/katex/dist/fonts/*.woff2 ../Sources/AirMarkRender/Resources/fonts/
 cp node_modules/katex/LICENSE ../Licenses/KaTeX.txt
 cp node_modules/mermaid/LICENSE ../Licenses/Mermaid.txt
+cd ..
+python3 Scripts/licenses.py Tooling > Licenses/JavaScript-dependencies.txt

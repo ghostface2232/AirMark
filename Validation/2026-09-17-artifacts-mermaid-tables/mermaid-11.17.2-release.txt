@@ -1,0 +1,85 @@
+15:38  up 6 days, 14:39, 1 user, load averages: 4.93 3.45 2.96
+◇ Test run started.
+LIFECYCLE stale termination callback: loads 1
+✔ Test callbacksFromAReplacedPageAreIgnored() passed after 0.532 seconds.
+MERMAID_CORPUS well-formed flowchart renders size=553x78 ink=0.058 ms=531 injected="undefined"
+✔ Test offlineMathAndDiagramSnapshots() passed after 0.606 seconds.
+✔ Test layoutFragmentsDoNotOverlap() passed after 0.613 seconds.
+MERMAID_CORPUS well-formed flowchart-shapes-subgraph renders size=243x581 ink=0.057 ms=36 injected="undefined"
+✔ Test displayMathAfterInlineKeepsNaturalWidth() passed after 0.023 seconds.
+✔ Test localImageIsDownsampledToTheColumn() passed after 0.003 seconds.
+✔ Test snapshotsUseTheRequestedBackground() passed after 0.040 seconds.
+✔ Test nativeTableHasContentAndDimensions() passed after 0.005 seconds.
+MERMAID_CORPUS well-formed flowchart-hangul renders size=171x286 ink=0.041 ms=51 injected="undefined"
+MERMAID_CORPUS well-formed sequence renders size=458x623 ink=0.075 ms=20 injected="undefined"
+MERMAID_CORPUS well-formed class renders size=214x362 ink=0.059 ms=41 injected="undefined"
+MERMAID_CORPUS well-formed state renders size=145x563 ink=0.044 ms=22 injected="undefined"
+MERMAID_CORPUS well-formed er renders size=201x526 ink=0.048 ms=20 injected="undefined"
+MERMAID_CORPUS well-formed gantt renders size=688x107 ink=0.126 ms=15 injected="undefined"
+MERMAID_CORPUS well-formed pie renders size=559x458 ink=0.037 ms=39 injected="undefined"
+MERMAID_CORPUS well-formed journey renders size=688x533 ink=0.020 ms=15 injected="undefined"
+MERMAID_CORPUS well-formed gitgraph renders size=282x184 ink=0.123 ms=26 injected="undefined"
+MERMAID_CORPUS well-formed mindmap renders size=489x244 ink=0.199 ms=37 injected="undefined"
+MERMAID_CORPUS well-formed timeline renders size=688x374 ink=0.152 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed quadrant renders size=508x508 ink=0.024 ms=11 injected="undefined"
+MERMAID_CORPUS well-formed xychart renders size=688x494 ink=0.015 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed sankey renders size=608x408 ink=0.865 ms=17 injected="undefined"
+MERMAID_CORPUS well-formed block renders size=159x106 ink=0.076 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed requirement renders size=176x393 ink=0.095 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed c4 renders size=688x413 ink=0.090 ms=18 injected="undefined"
+MERMAID_CORPUS well-formed packet renders size=688x50 ink=0.051 ms=9 injected="undefined"
+MERMAID_CORPUS well-formed architecture renders size=454x270 ink=0.119 ms=26 injected="undefined"
+MERMAID_CORPUS well-formed kanban renders size=433x107 ink=0.359 ms=11 injected="undefined"
+MERMAID_CORPUS well-formed radar renders size=688x688 ink=0.155 ms=18 injected="undefined"
+LIFECYCLE slow diagram alone: 0.385460334 seconds
+MERMAID_CORPUS well-formed treemap renders size=688x262 ink=0.905 ms=15 injected="undefined"
+✔ Test everyDiagramTypeRenders() passed after 1.471 seconds.
+MERMAID_CORPUS malformed empty fails invalid("UnknownDiagramE ms=129 injected="undefined" message=UnknownDiagramError: No diagram type detected matching given configuration for text: 
+MERMAID_CORPUS malformed unknown-type fails invalid("UnknownDiagramE ms=4 injected="undefined" message=UnknownDiagramError: No diagram type detected matching given configuration for text: notADiagram   A --> B
+MERMAID_CORPUS malformed dangling-edge fails invalid("Error: Parse er ms=5 injected="undefined" message=Error: Parse error on line 3: graph LR  A --> ---------------^ Expecting 'AMP', 'COLON', 'PIPE', 'TESTSTR', 'DOWN', 'DEFAULT', 'NUM', 'COMMA', 'NODE_STRING', 'B
+MERMAID_CORPUS malformed unclosed-label fails invalid("Error: Parse er ms=2 injected="undefined" message=Error: Parse error on line 3: ...  A[unclosed --> B ---------------------^ Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', 'PIPE'
+MERMAID_CORPUS malformed sequence-incomplete fails invalid("Error: Parse er ms=3 injected="undefined" message=Error: Parse error on line 2: ...ceDiagram  Alice->> ----------------------^ Expecting '+', '-', '()', 'ACTOR', got 'NEWLINE'
+MERMAID_CORPUS malformed class-unclosed-body fails invalid("Error: Parse er ms=5 injected="undefined" message=Error: Parse error on line 3: ...lass A {    +int x ---------------------^ Expecting 'STRUCT_STOP', 'MEMBER', got 'EOF_IN_STRUCT'
+MERMAID_CORPUS malformed pie-bad-value fails invalid("Error: Parsing  ms=23 injected="undefined" message=Error: Parsing failed: Lexer error on line 2, column 9: unexpected character: ->n<- at offset: 12, skipped 12 characters. Parse error on line 2, column 21: Expe
+MERMAID_CORPUS malformed state-bad-arrow fails invalid("Error: Parse er ms=6 injected="undefined" message=Error: Parse error on line 2: stateDiagram-v2  A -> -> B -------------------^ Expecting 'SPACE', 'NL', 'DESCR', '-->', 'HIDE_EMPTY', 'scale', 'COMPOSIT_STATE', 
+LIFECYCLE killed: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 9.0))) after 0.657931167 seconds
+LIFECYCLE after kill: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((626.0, 78.0))) loads 2
+✔ Test killedContentProcessEndsTheRenderAndRecovers() passed after 1.273 seconds.
+✔ Test malformedSourcesAreSourceErrors() passed after 0.508 seconds.
+MERMAID_CORPUS adversarial edges-over-limit fails invalid("Error: Edge lim ms=134 injected="undefined" message=Error: Edge limit exceeded. 500 edges found, but the limit is 500.  Initialize mermaid with maxEdges set to a higher number to allow more edges. You cannot set 
+MERMAID_CORPUS adversarial text-over-limit renders size=284x102 ink=0.712 ms=13 injected="undefined"
+MERMAID_CORPUS adversarial init-raises-limits fails invalid("Error: Edge lim ms=11 injected="undefined" message=Error: Edge limit exceeded. 500 edges found, but the limit is 500.  Initialize mermaid with maxEdges set to a higher number to allow more edges. You cannot set 
+MERMAID_CORPUS adversarial label-html-onerror renders size=285x78 ink=0.034 ms=18 injected="undefined"
+MERMAID_CORPUS adversarial click-callback renders size=215x78 ink=0.041 ms=12 injected="undefined"
+MERMAID_CORPUS adversarial init-loose-html renders size=239x78 ink=0.052 ms=11 injected="undefined"
+MERMAID_CORPUS adversarial sequence-script-note renders size=688x252 ink=0.084 ms=16 injected="undefined"
+MERMAID_CORPUS adversarial remote-image-and-icon renders size=300x78 ink=0.035 ms=15 injected="undefined"
+MERMAID_CORPUS adversarial style-remote-url fails invalid("Error: Parse er ms=2 injected="undefined" message=Error: Parse error on line 3: ...B  style A fill:url(https://example.org ----------------------^ Expecting 'SEMI', 'NEWLINE', 'SPACE', 'EOF', 'COLON', 'STYLE', 
+MERMAID_CORPUS adversarial css-injection-classdef fails invalid("Error: Lexical  ms=1 injected="undefined" message=Error: Lexical error on line 3. Unrecognized text. ...classDef x fill:#f00}</style><script>win -----------------------^
+LIFECYCLE closed host: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+LIFECYCLE other window: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((633.0, 78.0)))
+✔ Test closingTheHostWindowMidRenderDoesNotStallOthers() passed after 0.532 seconds.
+MERMAID_CORPUS adversarial nested-subgraphs-60 fails invalid("Rendered conten ms=134 injected="undefined" message=Rendered content exceeds the display limit.
+MERMAID_CORPUS adversarial long-label-10k fails invalid("Rendered conten ms=11 injected="undefined" message=Rendered content exceeds the display limit.
+MERMAID_CORPUS adversarial bidi-and-control renders size=308x78 ink=0.054 ms=25 injected="undefined"
+LIFECYCLE timeout: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.timeout)) loads 1 -> 1
+✔ Test adversarialSourcesStayContained() passed after 0.764 seconds.
+✔ Test timedOutScriptReplacesThePage() passed after 0.450 seconds.
+LIFECYCLE cancelled queued: 10 of 10
+✔ Test cancelledQueuedRequestsDoNotRun() passed after 0.443 seconds.
+LIFECYCLE shared cancel: ["cancelled", "cancelled"] rendered 1 cached false
+✔ Test cancellingEverySharingCallerDropsTheQueuedRender() passed after 0.856 seconds.
+LIFECYCLE already cancelled: failure(Swift.CancellationError()) cached false
+✔ Test alreadyCancelledCallerDropsTheQueuedRender() passed after 1.533 seconds.
+LIFECYCLE late joiner: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((271.0, 78.0))) renders 2
+✔ Test requestAfterACancelledShareStillRenders() passed after 0.365 seconds.
+LIFECYCLE concurrent: Optional(Swift.Result<Swift.String, Swift.Error>.success("40 of 40"))
+✔ Test manyConcurrentRequestsAllComplete() passed after 0.171 seconds.
+LIFECYCLE beyond in-flight limit: rendered 30 of 30, requests 30, errors 0
+LIFECYCLE refill after release: rendered 30 of 30, requests 30, max in flight 12
+✔ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() passed after 0.049 seconds.
+LIFECYCLE minimized: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+✔ Test minimizedWindowPostponesInsteadOfFailing() passed after 1.284 seconds.
+LIFECYCLE failed element requests: 0, errors 1
+✔ Test failedElementIsNotRetriedByUnrelatedEdits() passed after 1.210 seconds.
+✔ Test run with 21 tests in 4 suites passed after 8.703 seconds.

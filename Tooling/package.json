@@ -2,5 +2,9 @@
   "name": "airmark-renderer-build",
   "private": true,
   "version": "1.0.0",
-  "dependencies": { "mermaid": "11.12.0", "katex": "0.16.22", "esbuild": "0.25.10" }
+  "dependencies": {
+    "esbuild": "0.25.10",
+    "katex": "0.16.22",
+    "mermaid": "11.17.2"
+  }
 }

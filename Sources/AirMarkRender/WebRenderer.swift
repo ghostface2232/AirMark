@@ -159,6 +159,13 @@ import AirMarkCore
         return view
     }
 
+    /// Runs `body` on the current page outside the job queue, or returns nil when no page is loaded;
+    /// for tests that inspect what a render left behind.
+    func evaluateOnCurrentPage(_ body: String) async throws -> Data? {
+        guard let web, ready else { return nil }
+        return try await javascript(web, body: body, arguments: [:])
+    }
+
     private func javascript(_ web: WKWebView, body: String, arguments: [String: Any]) async throws -> Data {
         try await wait(budget.script) { shot in
             web.callAsyncJavaScript(body, arguments: arguments, in: nil, in: .page) { result in

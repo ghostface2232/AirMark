@@ -104,7 +104,7 @@ public enum RenderFailure: LocalizedError, Equatable {
     public private(set) var renderedCount = 0
 
     public func key(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?) -> String {
-        var source = "renderer-1|mermaid-11.12.0|katex-0.16.22|\(element.kind.rawValue)|\(element.inline)|\(element.content)|\(environment)"
+        var source = "renderer-1|mermaid-11.17.2|katex-0.16.22|\(element.kind.rawValue)|\(element.inline)|\(element.content)|\(environment)"
         if element.kind == .image {
             source += "|\(baseURL?.path ?? "")"
             if let url = localURL(element.content, baseURL: baseURL), let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]) {
