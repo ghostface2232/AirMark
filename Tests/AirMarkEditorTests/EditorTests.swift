@@ -309,6 +309,33 @@ import AirMarkCore
         }
     }
 
+    /// Return continuing a list item uses the line ending of the caret's line, or of the line before when
+    /// the caret's line is the last and has none. Only CRLF is repeated; anything else inserts LF.
+    @Test func newlineContinuesListItemsWithTheLocalLineEnding() async throws {
+        let cases: [(source: String, caret: Int, expected: String)] = [
+            ("- a", 3, "- a\n- "),
+            ("- a\n- b", 7, "- a\n- b\n- "),
+            ("- a\n- b\n", 7, "- a\n- b\n- \n"),
+            ("- a\r\n- b", 8, "- a\r\n- b\r\n- "),
+            ("- a\r\n- b\r\n", 8, "- a\r\n- b\r\n- \r\n"),
+            ("1. a\r\n", 4, "1. a\r\n2. \r\n"),
+            // Mixed endings: the caret's own line decides, wherever the other kind appears.
+            ("- a\r\n- b\n- c\r\n", 3, "- a\r\n- \r\n- b\n- c\r\n"),
+            ("- a\r\n- b\n- c\r\n", 8, "- a\r\n- b\n- \n- c\r\n"),
+            ("- a\n- b\r\n- c", 12, "- a\n- b\r\n- c\r\n- "),
+            ("- a\r\n- b\n- c", 12, "- a\r\n- b\n- c\n- "),
+            // A lone CR or a paragraph separator is not repeated.
+            ("- a\r- b", 7, "- a\r- b\n- "),
+            ("- a\u{2029}- b", 7, "- a\u{2029}- b\n- "),
+        ]
+        for (source, caret, expected) in cases {
+            let editor = try await make(source)
+            editor.textView.setSelectedRange(NSRange(location: caret, length: 0))
+            editor.textView.insertNewline(nil)
+            #expect(editor.source == expected, "from \(source.debugDescription) at \(caret)")
+        }
+    }
+
     /// An ordered item shows its number and literal brackets; clicking or Cmd-Return changes nothing.
     @Test func orderedItemBracketsAreText() async throws {
         let source = "1. [ ] task\n"

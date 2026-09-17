@@ -57,9 +57,17 @@ import AirMarkCore
                 // them to the next item empty, as a bulleted task's box is carried below.
                 if match.range(at: 4).location != NSNotFound { prefix += "[ ] " }
             } else { prefix = prefix.replacingOccurrences(of: "[x]", with: "[ ]").replacingOccurrences(of: "[X]", with: "[ ]") }
-            let newline = string.contains("\r\n") ? "\r\n" : "\n"
+            let newline = Self.lineEnding(of: paragraph, in: string as NSString)
             editor?.performEdit(range: selected, replacement: newline + prefix)
         } else { super.insertNewline(sender) }
+    }
+    /// "\r\n" when `paragraph` ends with CRLF, or has no ending and the line before it does; otherwise
+    /// "\n". Reads at most four units around the paragraph, never the rest of the document.
+    static func lineEnding(of paragraph: NSRange, in text: NSString) -> String {
+        func endsWithCRLF(_ end: Int) -> Bool { end >= 2 && text.character(at: end - 2) == 13 && text.character(at: end - 1) == 10 }
+        let end = NSMaxRange(paragraph)
+        let terminated = paragraph.length > 0 && [10, 13, 0x2029].contains(text.character(at: end - 1))
+        return endsWithCRLF(terminated ? end : paragraph.location) ? "\r\n" : "\n"
     }
     public override func insertTab(_ sender: Any?) {
         guard !hasMarkedText() else { super.insertTab(sender); return }

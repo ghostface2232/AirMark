@@ -1,0 +1,18 @@
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.449ms p95=0.852ms max=2.382ms
+RETURN_SCALE_PHASES newline=lf rebase p50=0.16 p95=0.17 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.417ms p95=0.556ms max=1.847ms
+RETURN_SCALE_PHASES newline=crlf rebase p50=0.16 p95=0.18 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=2.177ms p95=2.835ms max=4.393ms
+RETURN_SCALE_10MB_PHASES newline=lf rebase p50=1.89 p95=2.04 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=2.169ms p95=3.014ms max=4.165ms
+RETURN_SCALE_10MB_PHASES newline=crlf rebase p50=1.89 p95=1.96 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 2 tests in 1 suite passed after 7.604 seconds.
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.474ms p95=0.952ms max=2.349ms
+RETURN_SCALE_PHASES newline=lf rebase p50=0.18 p95=0.19 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.436ms p95=0.550ms max=1.811ms
+RETURN_SCALE_PHASES newline=crlf rebase p50=0.18 p95=0.20 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=2.140ms p95=2.619ms max=4.281ms
+RETURN_SCALE_10MB_PHASES newline=lf rebase p50=1.83 p95=1.94 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=2.100ms p95=2.746ms max=4.190ms
+RETURN_SCALE_10MB_PHASES newline=crlf rebase p50=1.82 p95=1.93 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 2 tests in 1 suite passed after 7.890 seconds.

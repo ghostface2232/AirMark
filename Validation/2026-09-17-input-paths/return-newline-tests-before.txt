@@ -1,0 +1,8 @@
+✔ Test newlineContinuesTaskItems() passed after 0.159 seconds.
+✘ Test newlineContinuesListItemsWithTheLocalLineEnding() recorded an issue at EditorTests.swift:335:13: Expectation failed: editor.source == expected
+↳ from "- a\r\n- b\n- c\r\n" at 8
+✘ Test newlineContinuesListItemsWithTheLocalLineEnding() recorded an issue at EditorTests.swift:335:13: Expectation failed: editor.source == expected
+↳ from "- a\r\n- b\n- c" at 12
+✘ Test newlineContinuesListItemsWithTheLocalLineEnding() failed after 0.312 seconds with 2 issues.
+✔ Test orderedItemBracketsAreText() passed after 0.026 seconds.
+✘ Test run with 3 tests in 1 suite failed after 0.499 seconds with 2 issues.

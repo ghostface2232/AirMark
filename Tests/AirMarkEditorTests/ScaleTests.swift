@@ -108,6 +108,18 @@ import AirMarkCore
         try await measureSpaceKeystrokes(bytes: 10_000_000, label: "SPACE_SCALE_10MB")
     }
 
+    /// Return at the end of a task item in the middle of the document, which continues the list.
+    /// LF and CRLF documents; main-thread time of one `insertNewline`.
+    @Test func returnKeystrokeCosts() async throws {
+        try await measureReturnKeystrokes(bytes: 1_000_000, label: "RETURN_SCALE")
+    }
+
+    /// The same measurement at 10MB. Slow to set up, so it runs only when AIRMARK_SCALE_10MB=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_10MB"] == "1"))
+    func tenMegabyteReturnKeystrokeCosts() async throws {
+        try await measureReturnKeystrokes(bytes: 10_000_000, label: "RETURN_SCALE_10MB")
+    }
+
     static func ms(_ value: Duration) -> Double { Double(value.components.seconds) * 1000 + Double(value.components.attoseconds) / 1e15 }
     /// Nearest-rank percentile.
     static func percentile(_ values: [Duration], _ fraction: Double) -> Double {
@@ -174,6 +186,48 @@ import AirMarkCore
                      Self.percentile(shortcut, 0.5), Self.percentile(shortcut, 0.95), Self.ms(shortcut.max()!)))
         print("\(label)_PHASES plain \(Self.phaseSummary(split))")
         #expect(editor.textKitFallbackCount == 0)
+    }
+
+    func measureReturnKeystrokes(bytes: Int, label: String) async throws {
+        _ = NSApplication.shared
+        for newline in ["\n", "\r\n"] {
+            let document = MarkdownDocument()
+            let base = Self.source(bytes: bytes)
+            let source = newline == "\n" ? base : base.replacingOccurrences(of: "\n", with: "\r\n")
+            document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+            document.makeWindowControllers()
+            defer { document.close() }
+            let editor = try #require(document.editor)
+            editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+            for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+                try await Task.sleep(for: .milliseconds(25))
+            }
+            #expect(editor.parsed.revision == editor.revision)
+            let text = editor.textView.textStorage!.mutableString
+            let clock = ContinuousClock()
+            let item = text.range(of: "- [ ] Task", options: [], range: NSRange(location: text.length / 2, length: text.length / 2))
+            let end = NSMaxRange(item)
+            var costs: [Duration] = []
+            var split: [[EditorPhases.Phase: Duration]] = []
+            let phases = EditorPhases.shared
+            defer { phases.isRecording = false; phases.reset() }
+            for _ in 0..<30 {
+                editor.textView.setSelectedRange(NSRange(location: end, length: 0))
+                phases.reset(); phases.isRecording = true
+                let start = clock.now
+                editor.textView.insertNewline(nil)
+                costs.append(start.duration(to: clock.now))
+                phases.isRecording = false
+                split.append(Dictionary(uniqueKeysWithValues: EditorPhases.Phase.allCases.map { ($0, phases.total($0)) }))
+            }
+            let inserted = newline + "- [ ] "
+            #expect(text.substring(with: NSRange(location: end, length: inserted.utf16.count)) == inserted)
+            let name = newline == "\n" ? "lf" : "crlf"
+            print(String(format: "%@ newline=%@ bytes=%d samples=%d p50=%.3fms p95=%.3fms max=%.3fms", label, name, source.utf8.count, costs.count,
+                         Self.percentile(costs, 0.5), Self.percentile(costs, 0.95), Self.ms(costs.max()!)))
+            print("\(label)_PHASES newline=\(name) \(Self.phaseSummary(split))")
+            #expect(editor.textKitFallbackCount == 0)
+        }
     }
 
     func measureDocumentKeystrokes(bytes: Int, label: String) async throws {

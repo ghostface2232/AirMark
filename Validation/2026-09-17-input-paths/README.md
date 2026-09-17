@@ -29,3 +29,24 @@ A finished render (stored or recorded as a failure) releases its slot, checked a
 | shortcut Space, 10MB | 1.98–2.04 ms | 2.01–2.05 ms |
 
 The change is not measurable on this host. On macOS 27 with Swift 6.4 the bridge does not copy: `text as String` on a 10MB storage costs about 80 ns, and the check was already size-independent before the change. It is kept because it was asked for and makes the check's cost independent of how the platform bridges `NSString`; no speedup is claimed. What does grow with size is the edit itself: the `_PHASES` lines show `rebase` at 0.17 ms (1MB) and 1.7 ms (10MB) of the plain Space, which is moving every style after a mid-document edit (recorded as linear by design in `2026-09-17-w1-w3/README.md`). That was not changed here.
+
+## 3. Return: line ending from the caret's line
+
+Continuing a list item chose CRLF when `string.contains("\r\n")`, a scan of the document that runs to the end whenever the file has no CRLF. The ending now comes from the caret's paragraph: CRLF if the paragraph ends with CRLF, or, when it is the last line and has no ending, if the line before it does; anything else inserts LF, as before. At most four UTF-16 units are read.
+
+- `return-before.txt` / `return-after.txt`: `AIRMARK_SCALE_10MB=1 swift test -c release --disable-sandbox --filter 'returnKeystrokeCosts|tenMegabyteReturnKeystrokeCosts'`, two runs each. Return at the end of a `- [ ] Task` item in the middle of the document, 30 samples, LF and CRLF copies of the same text.
+
+| Release p50 (two runs) | before | after |
+|---|---:|---:|
+| LF, 1MB | 4.03 ms | 0.45–0.47 ms |
+| CRLF, 1MB | 0.42–0.43 ms | 0.42–0.44 ms |
+| LF, 10MB | 36.5–37.2 ms | 2.14–2.18 ms |
+| CRLF, 10MB | 1.99–2.05 ms | 2.10–2.17 ms |
+
+The CRLF files were fast before because the scan stopped at the first line. What remains at 10MB is the style rebase of a mid-document edit (`rebase` 1.7–1.9 ms in the `_PHASES` lines), not changed here.
+
+- `return-newline-tests-before.txt` / `return-newline-tests-after.txt`: `swift test --disable-sandbox --filter 'newlineContinues|orderedItemBracketsAreText'`. `newlineContinuesListItemsWithTheLocalLineEnding` covers LF, CRLF, a last line without an ending, a lone CR, U+2029, an ordered item, and mixed endings. Before the change the uniform, CR and U+2029 cases already passed, and two mixed cases failed: a line ending in LF in a file that has CRLF elsewhere got CRLF. That is the one behaviour change: in a file with mixed endings, Return follows the caret's line instead of any CRLF in the file. Files with one kind of ending get the same bytes as before. `newlineContinuesTaskItems` (ordered and bulleted task continuation) and `orderedItemBracketsAreText` pass before and after.
+
+A first version of the new test put the caret one unit short on one mixed case, which made that case fail for an unrelated reason (Return on an empty item removes the marker). The records above are from the corrected test, rerun against both implementations.
+
+Full `swift test --disable-sandbox` after this commit: 62 editor/integration and 33 core tests passed.
