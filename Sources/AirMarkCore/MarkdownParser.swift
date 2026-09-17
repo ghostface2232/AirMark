@@ -209,9 +209,15 @@ public enum MarkdownParser {
         return markers
     }
 
-    private static func mathSpans(_ source: String, excluding: [SourceSpan]) -> [RenderElement] {
+    /// `$…$` and `$$…$$` outside protected spans. One pass: a scan that finds no closing delimiter
+    /// stops at a boundary (a line break for inline math, a protected span or the end for both), and
+    /// no later opener of the same kind before that boundary can close either, because whether a `$`
+    /// closes depends only on its own neighbours. Remembering the boundary keeps a line of unclosed
+    /// `$` linear instead of rescanning the rest of the line from each one.
+    static func mathSpans(_ source: String, excluding: [SourceSpan]) -> [RenderElement] {
         let units = Array(source.utf16), text = source as NSString
         var result: [RenderElement] = [], i = 0, protectedIndex = 0
+        var inlineFailsBefore = 0, displayFailsBefore = 0
         let excluded = excluding.sorted { $0.location < $1.location }
         func escaped(_ n: Int) -> Bool { var j = n - 1, c = 0; while j >= 0 && units[j] == 92 { c += 1; j -= 1 }; return c % 2 == 1 }
         func whitespace(_ u: UInt16) -> Bool { u == 32 || u == 9 || u == 10 || u == 13 }
@@ -221,6 +227,7 @@ public enum MarkdownParser {
             guard units[i] == 36, !escaped(i), i + 1 < units.count else { i += 1; continue }
             let display = units[i + 1] == 36, delimiter = display ? 2 : 1
             if !display && whitespace(units[i + 1]) { i += 1; continue }
+            if i < (display ? displayFailsBefore : inlineFailsBefore) { i += delimiter; continue }
             var j = i + delimiter, found: Int?
             while j < units.count {
                 if !display && (units[j] == 10 || units[j] == 13) { break }
@@ -238,7 +245,10 @@ public enum MarkdownParser {
                 let s = SourceSpan(i, close + delimiter - i)
                 result.append(RenderElement(span: s, kind: .math, content: text.substring(with: NSRange(location: i + delimiter, length: close - i - delimiter)), inline: !display))
                 i = s.end
-            } else { i += delimiter }
+            } else {
+                if display { displayFailsBefore = j } else { inlineFailsBefore = j }
+                i += delimiter
+            }
         }
         return result
     }
