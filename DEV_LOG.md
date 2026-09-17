@@ -138,6 +138,9 @@ Host and raw output: `Validation/2026-09-17-parse-latency/` (Release, Mac17,3, m
 
 ## 2026-09-17 — Multi-document recovery, live resize, table raster
 
+(Written before this branch was merged onto `main`; the section after it records what was actually
+run, on the merged code.)
+
 Host: a Linux container with **no Swift toolchain and no macOS SDK**. Nothing in this entry was
 compiled, run or measured. The three changes below are code and tests written against a reading of the
 source at `cb8c3df`; `Validation/2026-09-17-recovery-resize-tables/` says, per test, which assertion the
@@ -218,3 +221,50 @@ in the documents written alongside, which are corrected:
   launches behave exactly as before (three cases do not, now listed), a test described as passing
   before the change that does not compile before it, a `--filter` argument that matches no test, and a
   comment claiming windows restore a remembered frame, which nothing in that method does.
+
+## 2026-09-18 — Recovery sessions, close durability, quit flag
+
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. PR #2 was merged onto
+`main` after the parse-locality work had landed; only `DEV_LOG.md` conflicted, and `EditorController`
+and `ArtifactStore`, changed by both, were read back rather than trusted to the auto-merge. Raw output:
+`Validation/2026-09-18-recovery-sessions/`.
+
+- **The legacy launch record the test never built.** `launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted`
+  came in failing. `RecoveryRecord.init` defaults `state` to `.open`, the state a running document
+  records; `.unknown` is what `RecoveryWriter.load` produces for stored JSON with no `state` field. The
+  helper used the default and asserted the result was `.unknown`, so the two assertions after it
+  compared a plan for twenty `.open` records against a plan for one. Test-only fix.
+- **Sessions.** `state` says a document was open when AirMark stopped, not at which stop, and nothing
+  but that document rewrites its record. A session launched on a file from Finder restores nothing, so
+  it left the session before it with `.open` and `.quit` records untouched and every later launch
+  opened a window for each. A record now carries `sessionID`, one per `RecoveryStore` and one store per
+  launch. No manifest: the newest record belongs to the last session and names it, the same date
+  ordering the "most recently put away document" fallback already used. A record from an older session
+  is excluded from the session restore but joins the closed records as a candidate for that single
+  fallback, so nothing becomes unreachable. A record also carries `order`, the document's place in
+  `NSApplication.shared.orderedDocuments` front first, written with every record rather than only at
+  the quit, so the window that was in front comes back in front whichever document wrote its record
+  last. Records with neither field read as nil and a directory of only those is read whole, as before.
+- **The close record is durable.** `close()` handed the `.closed` record to a detached Task nothing
+  waited for, so Cmd-W then Cmd-Q could exit before it ran and leave a record saying the document was
+  open; the quit does not cover it, because it writes records only for documents still in the document
+  controller. It now goes through `saveImmediately`. A debounced save already suspended in `store.save`
+  cannot undo it: same revision, earlier date, which the writer's ordering gate rejects.
+- **`isTerminating` for the whole quit.** It was cleared by a main-actor Task on the next turn of the
+  run loop. Measured that the flag is load-bearing: with it never set, a real Cmd-Q leaves a `.closed`
+  record, so AppKit does close the documents after `applicationShouldTerminate` returns and before the
+  process exits. The Task is gone and only the `.terminateCancel` path clears the flag. A logout
+  cancelled after this method returns leaves it set on a process that keeps running — a document closed
+  then comes back next launch, which is the better failure and the only one left; no AppKit callback
+  reports that cancellation.
+- **Validated.** `swift test --disable-sandbox`: 99 tests in 15 suites and 52 in 4 suites pass, against
+  a post-merge baseline of 96 + 50 with 3 issues. Each change's new tests were run against the
+  pre-change logic and fail there. The four UI tests that synthesize no typing pass in Release,
+  including the new `testQuitRecordsAnOpenDocumentAsQuitNotClosed`.
+- **Not verified.** The `isTerminating` race was never reproduced: with the clearing Task in place the
+  quit test passed 5/5, so that change removes a dependence on scheduling rather than an observed
+  failure. The multi-launch sequence behind sessions is covered at `LaunchPlan.resolve` and through a
+  real `RecoveryStore`, not by launching the app twice. That `orderedDocuments` reports the stacking a
+  user sees is taken from AppKit, not measured. The two UI tests that type were not run. One
+  full-suite run in five saw `repeatedSavesPreserveBytesWithoutFalseConflicts` miss its 250 ms wait for
+  an undo-group notification under load; it touches nothing changed here.
