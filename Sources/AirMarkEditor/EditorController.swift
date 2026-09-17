@@ -21,7 +21,14 @@ import os
     private let parsingWorker = MarkdownParsingWorker()
     private var renderTasks: [SourceSpan: Task<Void, Never>] = [:]
     private var artifacts: [SourceSpan: RenderArtifact] = [:]
-    private var errors: [SourceSpan: String] = [:]
+    /// A render that failed. A transient failure (timeout, lost renderer) gets one more attempt at
+    /// `retryAt`; a source error stays until the element's content changes.
+    private struct RenderIssue {
+        var message: String
+        var retryAt: ContinuousClock.Instant?
+    }
+    /// Keyed like `artifacts` and moved with edits, so typing elsewhere does not resubmit failures.
+    private var errors: [SourceSpan: RenderIssue] = [:]
     private var editingElement: SourceSpan?
     /// What paragraphs are drawn from. Follows each edit in place until the next parse replaces it.
     private var presentation = PresentationStore()
@@ -49,6 +56,8 @@ import os
     public var renderErrorCount: Int { errors.count }
     public var renderedElementCount: Int { artifacts.count }
     public var pendingRenderCount: Int { renderTasks.count }
+    /// Render requests this editor has started, including ones answered from the cache.
+    public private(set) var renderRequestCount = 0
 
     public init(source: String = "") { sourceForInitialLoad = source; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -82,6 +91,11 @@ import os
         textView.textStorage?.delegate = self
         observations.append(NotificationCenter.default.addObserver(forName: NSTextView.willSwitchToNSLayoutManagerNotification, object: textView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.textKitFallbackCount += 1; assertionFailure("Unexpected TextKit 1 fallback") }
+        })
+        // Renders are not started while the window is minimized; start them when it comes back.
+        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didDeminiaturizeNotification, object: nil, queue: .main) { [weak self] notification in
+            let window = notification.object as? NSWindow
+            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
         })
         scrollView.contentView.postsBoundsChangedNotifications = true
         observations.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
@@ -130,7 +144,7 @@ import os
         revision += 1
         // Discard old coordinates immediately. Unedited paragraphs can retain their native layout until the next parse.
         for task in renderTasks.values { task.cancel() }; renderTasks.removeAll()
-        errors.removeAll(); renderTokens.removeAll()
+        renderTokens.removeAll()
         onChange?()
         if !textView.hasMarkedText() { scheduleParse() }
     }
@@ -185,6 +199,7 @@ import os
         // Source coordinates alone do not identify a reusable artifact.
         let spans = Set(old.unchangedElements(comparedTo: next).map(\.span))
         artifacts = artifacts.filter { spans.contains($0.key) }
+        errors = errors.filter { spans.contains($0.key) }
         parsed = result; presentation = next
         let changed = old.changedStyleSpans(comparedTo: next)
         invalidatePresentation(spans: changed + old.elements.map(\.span) + next.elements.map(\.span) + [SourceSpan(textView.selectedRange())])
@@ -198,6 +213,9 @@ import os
         pendingInvalidation = pendingInvalidation.compactMap { edit.enclosing(SourceSpan($0))?.nsRange }
         artifacts = Dictionary(uniqueKeysWithValues: artifacts.compactMap { span, artifact in
             edit.unchanged(span).map { ($0, artifact) }
+        })
+        errors = Dictionary(uniqueKeysWithValues: errors.compactMap { span, issue in
+            edit.unchanged(span).map { ($0, issue) }
         })
         editingElement = editingElement.flatMap(edit.enclosing)
     }
@@ -228,9 +246,12 @@ import os
         }
         let currentRevision = revision
         let candidates = elements(intersecting: viewportWindow(margin: 2000))
-        for element in candidates where !isEditing(element.span) && artifacts[element.span] == nil && errors[element.span] == nil && renderTasks[element.span] == nil {
+        let now = ContinuousClock.now
+        for element in candidates where !isEditing(element.span) && artifacts[element.span] == nil && renderTasks[element.span] == nil
+                && errors[element.span].map({ $0.retryAt.map { $0 <= now } ?? false }) ?? true {
             guard renderTasks.count < 12 else { break }
             let token = UUID(); renderTokens[element.span] = token
+            renderRequestCount += 1
             renderTasks[element.span] = Task { [weak self] in
                 guard let self else { return }
                 defer {
@@ -242,10 +263,22 @@ import os
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
                     guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
                     artifacts[element.span] = artifact
+                    errors[element.span] = nil
                     if let onFirstRender { self.onFirstRender = nil; onFirstRender() }
                 } catch {
                     guard !Task.isCancelled, revision == currentRevision else { return }
-                    errors[element.span] = error.localizedDescription
+                    // Not a failure of the element: the window is hidden or the request was dropped.
+                    // Rendering resumes when the window returns or the viewport asks again.
+                    if error is CancellationError || error as? RenderFailure == .suspended { return }
+                    if (error as? RenderFailure)?.isTransient == true, errors[element.span] == nil {
+                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: .now + .seconds(1))
+                        Task { [weak self] in
+                            try? await Task.sleep(for: .seconds(1))
+                            self?.scheduleRenders()
+                        }
+                    } else {
+                        errors[element.span] = RenderIssue(message: error.localizedDescription, retryAt: nil)
+                    }
                 }
                 renderTasks[element.span] = nil
                 invalidatePresentation(spans: [element.span])
@@ -404,7 +437,7 @@ import os
                     let collapsed = NSMutableParagraphStyle(); collapsed.minimumLineHeight = 0.01; collapsed.maximumLineHeight = 0.01
                     result.addAttribute(.paragraphStyle, value: collapsed, range: entire)
                 }
-            } else if let message = errors[element.span] {
+            } else if let message = errors[element.span]?.message {
                 result.addAttributes([.foregroundColor: NSColor.secondaryLabelColor, .toolTip: message], range: entire)
             }
         }

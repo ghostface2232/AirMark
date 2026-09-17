@@ -191,4 +191,27 @@ import AirMarkCore
         let restored = await Self.within(15) { try await service.render(Self.math("y^2"), environment: Self.environment, baseURL: nil, host: host) }
         guard case .success = restored else { Issue.record("render after restoring the window: \(String(describing: restored))"); return }
     }
+
+    /// Typing elsewhere must not resubmit a formula that already failed to parse.
+    @Test func failedElementIsNotRetriedByUnrelatedEdits() async throws {
+        let source = "$\\frac{$ bad\n\ntext\n"
+        let editor = EditorController(source: source)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor; window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        editor.view.frame = NSRect(x: 0, y: 0, width: 800, height: 600); editor.view.layoutSubtreeIfNeeded(); editor.viewDidAppear()
+        for _ in 0..<250 where editor.renderErrorCount == 0 { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(editor.renderErrorCount == 1)
+        // Counted on this editor: other suites share RenderService.shared and run in parallel.
+        let attempts = editor.renderRequestCount
+        for index in 0..<3 {
+            editor.performEdit(range: NSRange(location: editor.source.utf16.count, length: 0), replacement: "z\(index)")
+            for _ in 0..<100 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(20)) }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        print("LIFECYCLE failed element requests: \(editor.renderRequestCount - attempts), errors \(editor.renderErrorCount)")
+        #expect(editor.renderRequestCount == attempts)
+        #expect(editor.renderErrorCount == 1)
+    }
 }
+
