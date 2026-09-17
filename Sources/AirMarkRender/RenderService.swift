@@ -15,6 +15,13 @@ public struct RenderEnvironment: Hashable, Sendable {
     public init(width: Double, fontSize: Double, scale: Double, dark: Bool, background: String = "#ffffff") {
         self.width = width; self.fontSize = fontSize; self.scale = scale; self.dark = dark; self.background = background
     }
+    /// True when `other` differs from this only in geometry. The element then renders to the same
+    /// content at another width or raster scale, so a result measured in one can stand in, scaled, as
+    /// temporary geometry until the new one arrives. A different font size, theme or background paints
+    /// something else and cannot stand in.
+    public func matchesAppearance(of other: RenderEnvironment) -> Bool {
+        fontSize == other.fontSize && dark == other.dark && background == other.background
+    }
 }
 public struct RenderArtifact: @unchecked Sendable {
     // CGImage is immutable; no NSImage/AppKit objects cross isolation boundaries.

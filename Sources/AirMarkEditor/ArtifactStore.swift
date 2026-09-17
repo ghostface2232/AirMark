@@ -4,8 +4,9 @@ import AirMarkRender
 
 /// What layout needs from a rendered element. Kept for every element rendered in the current
 /// environment, whether or not its pixels are still held, so releasing pixels never moves text.
-/// Valid only for the environment it was measured in: a different width, font size, scale or
-/// appearance can change the size, so a lookup under another environment finds nothing.
+/// Measured for one environment: a different width, font size, scale or appearance can change the size,
+/// so a lookup under another environment finds nothing unless the store is holding what it has as
+/// temporary geometry for a new environment of the same appearance.
 struct ArtifactMetrics: Equatable {
     var size: CGSize
     var baseline: CGFloat
@@ -28,6 +29,8 @@ struct ArtifactMetrics: Equatable {
     private struct Record {
         let id: Int
         var metrics: ArtifactMetrics
+        /// The generation the metrics were measured in.
+        var generation: Int
     }
     private struct Pixels {
         var image: CGImage
@@ -43,6 +46,10 @@ struct ArtifactMetrics: Equatable {
     private var resident = SpanList<Int>()
     private var pixels: [Int: Pixels] = [:]
     private var nextID = 0
+    /// Raised by `holdGeometry` when the environment changes in a way that leaves what was measured
+    /// usable as temporary geometry. Records from an earlier generation still answer `layout`, so the
+    /// element keeps its place and its last pixels, while `needsPixels` asks for the new render.
+    private var generation = 0
     /// Pixels held outside the protected range are released beyond this many bytes.
     let pixelBudget: Int
     private(set) var pixelBytes = 0
@@ -59,24 +66,34 @@ struct ArtifactMetrics: Equatable {
         if let index = measured.index(of: span) {
             id = measured.payloads[index].id
             measured.payloads[index].metrics = metrics
+            measured.payloads[index].generation = generation
         } else {
             nextID += 1
             id = nextID
             // Elements never overlap, so nothing is displaced in practice; a displaced entry is forgotten.
-            for (removedSpan, record) in measured.insert(Record(id: id, metrics: metrics), at: span) { forget(record.id, at: removedSpan) }
+            for (removedSpan, record) in measured.insert(Record(id: id, metrics: metrics, generation: generation), at: span) { forget(record.id, at: removedSpan) }
         }
         if let held = pixels[id] { pixelBytes -= held.cost } else { _ = resident.insert(id, at: span) }
         pixels[id] = Pixels(image: artifact.image, cost: artifact.cost, size: artifact.size, label: artifact.label)
         pixelBytes += artifact.cost
     }
 
-    /// Metrics and drawing identity for an element, only if measured in `environment`.
+    /// Metrics and drawing identity for an element, if it was measured in `environment` or is held as
+    /// temporary geometry from an earlier one.
     func layout(at span: SourceSpan, environment: RenderEnvironment) -> (metrics: ArtifactMetrics, id: Int)? {
         guard let index = measured.index(of: span) else { return nil }
         let record = measured.payloads[index]
-        guard record.metrics.environment == environment else { return nil }
+        guard record.generation < generation || record.metrics.environment == environment else { return nil }
         return (record.metrics, record.id)
     }
+
+    /// Keeps every measured element as temporary geometry for a new environment of the same appearance.
+    /// Layout finds it at its old size until it is measured again, so a window being dragged does not
+    /// drop each element back to its source text and the text around it does not jump.
+    func holdGeometry() { generation += 1 }
+
+    /// Elements standing in with metrics from an earlier environment.
+    var heldGeometryCount: Int { measured.payloads.reduce(0) { $0 + ($1.generation < generation ? 1 : 0) } }
 
     /// True when the element has no pixels for `environment` and should be rendered.
     func needsPixels(at span: SourceSpan, environment: RenderEnvironment) -> Bool {
