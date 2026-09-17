@@ -325,7 +325,7 @@ public enum MarkdownParser {
                 let prefix = raw.prefix { $0 == "#" || $0 == " " }.utf16.count
                 var markers: [SourceSpan] = []
                 if raw.hasPrefix("#") { markers.append(SourceSpan(s.location, prefix)) }
-                else if let last = raw.lastIndex(where: { $0 == "\n" || $0 == "\r" }) {
+                else if let last = raw.lastIndex(where: { $0.isNewline }) {                // "\r\n" is one Character
                     markers.append(SourceSpan(s.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
                 }
                 add(.heading(heading.level), markers: markers)

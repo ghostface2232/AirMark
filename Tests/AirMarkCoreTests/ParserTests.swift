@@ -237,3 +237,13 @@ import Testing
         }
     }
 }
+
+/// A setext heading's underline is concealed with CRLF line endings too: Swift treats "\r\n" as one
+/// character, which matched neither "\n" nor "\r".
+@Test func setextUnderlineIsAMarkerWithAnyLineEnding() {
+    for (source, underline) in [("Title\n===\n", "\n==="), ("Title\r\n===\r\n", "\r\n==="), ("Title\r===\r", "\r===")] {
+        let index = SourceIndex(source)
+        let heading = MarkdownParser.parse(source).styles.first { $0.kind == .heading(1) }
+        #expect(heading?.markers.map { index.text(in: $0) } == [underline], "\(source.debugDescription)")
+    }
+}
