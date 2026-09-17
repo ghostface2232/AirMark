@@ -1,0 +1,24 @@
+$ swiftc -O bridge.swift && ./bridge   (standalone probe, not committed code; 10MB NSTextStorage, mean of 100 calls)
+
+bridge only 7e-08 seconds
+regex on bridged, 1 unit 1.2834e-07 seconds
+regex on substring 2.9292e-07 seconds
+bridge after edit 4.1e-10 seconds
+plain NSMutableString bridge 2.92e-09 seconds
+
+Probe source:
+    import AppKit
+    let clock = ContinuousClock()
+    func t(_ name: String, _ f: () -> Void) { let s = clock.now; for _ in 0..<100 { f() }; print(name, s.duration(to: clock.now) / 100) }
+    let block = "## Heading\n\nA paragraph with **bold** and 한글.\n\n"
+    let big = String(repeating: block, count: 10_000_000 / block.utf8.count)
+    let storage = NSTextStorage(string: big)
+    let re = try! NSRegularExpression(pattern: "^([ \\t]*)\\[([ xX]?)\\]$")
+    let text = storage.mutableString
+    t("bridge only") { let s = text as String; _ = s.isEmpty }
+    t("regex on bridged, 1 unit") { _ = re.firstMatch(in: text as String, range: NSRange(location: 12, length: 1)) }
+    t("regex on substring") { let p = text.substring(with: NSRange(location: 12, length: 1)); _ = re.firstMatch(in: p, range: NSRange(location: 0, length: 1)) }
+    storage.replaceCharacters(in: NSRange(location: 5, length: 0), with: "x")
+    t("bridge after edit") { let s = text as String; _ = s.isEmpty }
+    let plain = NSMutableString(string: big)
+    t("plain NSMutableString bridge") { let s = plain as String; _ = s.isEmpty }

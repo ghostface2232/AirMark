@@ -1,0 +1,10 @@
+SPACE_SCALE bytes=1000090 check p50=0.0015ms p95=0.0080ms plain p50=0.974ms p95=1.448ms max=5.363ms shortcut p50=0.452ms p95=0.647ms max=0.662ms
+SPACE_SCALE_PHASES plain rebase p50=0.17 p95=0.19 | paragraph p50=0.07 p95=0.44 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0016ms p95=0.0027ms plain p50=2.561ms p95=3.286ms max=6.498ms shortcut p50=2.050ms p95=2.229ms max=2.246ms
+SPACE_SCALE_10MB_PHASES plain rebase p50=1.74 p95=1.81 | paragraph p50=0.07 p95=0.49 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 2 tests in 1 suite passed after 3.974 seconds.
+SPACE_SCALE bytes=1000090 check p50=0.0015ms p95=0.0080ms plain p50=0.969ms p95=1.466ms max=5.353ms shortcut p50=0.460ms p95=0.661ms max=0.665ms
+SPACE_SCALE_PHASES plain rebase p50=0.17 p95=0.19 | paragraph p50=0.07 p95=0.44 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0017ms p95=0.0028ms plain p50=2.526ms p95=2.988ms max=6.818ms shortcut p50=2.007ms p95=2.214ms max=2.278ms
+SPACE_SCALE_10MB_PHASES plain rebase p50=1.69 p95=1.78 | paragraph p50=0.07 p95=0.44 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00
+✔ Test run with 2 tests in 1 suite passed after 4.015 seconds.

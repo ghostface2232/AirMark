@@ -748,10 +748,12 @@ import os
         let line = text.paragraphRange(for: NSRange(location: location, length: 0)).location
         let before = NSRange(location: line, length: location - line)
         guard before.length <= 64,
-              !styles(intersecting: NSRange(location: location, length: 0)).contains(where: { $0.kind == .codeBlock || $0.kind == .code }),
-              let match = Self.taskShortcut.firstMatch(in: text as String, range: before) else { return false }
-        let indent = text.substring(with: match.range(at: 1))
-        let mark = text.substring(with: match.range(at: 2))
+              !styles(intersecting: NSRange(location: location, length: 0)).contains(where: { $0.kind == .codeBlock || $0.kind == .code }) else { return false }
+        // Only the line so far goes to the expression: bridging the storage to a String copies the whole document.
+        let prefix = text.substring(with: before) as NSString
+        guard let match = Self.taskShortcut.firstMatch(in: prefix as String, range: NSRange(location: 0, length: prefix.length)) else { return false }
+        let indent = prefix.substring(with: match.range(at: 1))
+        let mark = prefix.substring(with: match.range(at: 2))
         performEdit(range: before, replacement: indent + "- [" + (mark.isEmpty ? " " : mark) + "] ")
         return true
     }

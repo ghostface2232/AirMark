@@ -96,6 +96,18 @@ import AirMarkCore
         try await measureDocumentKeystrokes(bytes: 10_000_000, label: "DOCUMENT_SCALE_10MB")
     }
 
+    /// A typed Space near the start of a line, where the task shortcut is checked, and one that
+    /// completes the shortcut. Both are main-thread time of one `insertText`.
+    @Test func spaceKeystrokeCosts() async throws {
+        try await measureSpaceKeystrokes(bytes: 1_000_000, label: "SPACE_SCALE")
+    }
+
+    /// The same measurement at 10MB. Slow to set up, so it runs only when AIRMARK_SCALE_10MB=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_10MB"] == "1"))
+    func tenMegabyteSpaceKeystrokeCosts() async throws {
+        try await measureSpaceKeystrokes(bytes: 10_000_000, label: "SPACE_SCALE_10MB")
+    }
+
     static func ms(_ value: Duration) -> Double { Double(value.components.seconds) * 1000 + Double(value.components.attoseconds) / 1e15 }
     /// Nearest-rank percentile.
     static func percentile(_ values: [Duration], _ fraction: Double) -> Double {
@@ -108,6 +120,60 @@ import AirMarkCore
             let values = samples.map { $0[phase] ?? .zero }
             return String(format: "%@ p50=%.2f p95=%.2f", String(describing: phase), percentile(values, 0.5), percentile(values, 0.95))
         }.joined(separator: " | ")
+    }
+
+    func measureSpaceKeystrokes(bytes: Int, label: String) async throws {
+        _ = NSApplication.shared
+        let document = MarkdownDocument()
+        let source = Self.source(bytes: bytes)
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+        document.makeWindowControllers()
+        defer { document.close() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        #expect(editor.parsed.revision == editor.revision)
+        let text = editor.textView.textStorage!.mutableString
+        let none = NSRange(location: NSNotFound, length: 0)
+        let clock = ContinuousClock()
+        // A paragraph line in the middle of the document; Space is checked against the line so far.
+        let line = text.range(of: "A paragraph", options: [], range: NSRange(location: text.length / 2, length: text.length / 2)).location
+        var check: [Duration] = [], plain: [Duration] = [], shortcut: [Duration] = []
+        var split: [[EditorPhases.Phase: Duration]] = []
+        // The shortcut check alone, where it finds no shortcut, apart from the edit that follows it.
+        for _ in 0..<30 {
+            let start = clock.now
+            #expect(!editor.convertToTask(before: line + 1))
+            check.append(start.duration(to: clock.now))
+        }
+        let phases = EditorPhases.shared
+        defer { phases.isRecording = false; phases.reset() }
+        for _ in 0..<30 {
+            editor.textView.setSelectedRange(NSRange(location: line + 1, length: 0))
+            phases.reset(); phases.isRecording = true
+            let start = clock.now
+            editor.textView.insertText(" ", replacementRange: none)
+            plain.append(start.duration(to: clock.now))
+            phases.isRecording = false
+            split.append(Dictionary(uniqueKeysWithValues: EditorPhases.Phase.allCases.map { ($0, phases.total($0)) }))
+        }
+        #expect(text.substring(with: NSRange(location: line, length: 33)) == "A" + String(repeating: " ", count: 31) + "p")
+        for _ in 0..<30 {
+            editor.performEdit(range: NSRange(location: line, length: 0), replacement: "[]\n")
+            editor.textView.setSelectedRange(NSRange(location: line + 2, length: 0))
+            let start = clock.now
+            editor.textView.insertText(" ", replacementRange: none)
+            shortcut.append(start.duration(to: clock.now))
+            #expect(text.substring(with: NSRange(location: line, length: 7)) == "- [ ] \n")
+        }
+        print(String(format: "%@ bytes=%d check p50=%.4fms p95=%.4fms plain p50=%.3fms p95=%.3fms max=%.3fms shortcut p50=%.3fms p95=%.3fms max=%.3fms", label, source.utf8.count,
+                     Self.percentile(check, 0.5), Self.percentile(check, 0.95),
+                     Self.percentile(plain, 0.5), Self.percentile(plain, 0.95), Self.ms(plain.max()!),
+                     Self.percentile(shortcut, 0.5), Self.percentile(shortcut, 0.95), Self.ms(shortcut.max()!)))
+        print("\(label)_PHASES plain \(Self.phaseSummary(split))")
+        #expect(editor.textKitFallbackCount == 0)
     }
 
     func measureDocumentKeystrokes(bytes: Int, label: String) async throws {
