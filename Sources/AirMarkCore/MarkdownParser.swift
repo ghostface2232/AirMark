@@ -244,6 +244,11 @@ public enum MarkdownParser {
         }
     }
 
+    /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
+    /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+    nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+
     private static func withBytes<Result>(_ source: String, _ body: ([UInt8]) -> Result) -> Result {
         body(Array(source.utf8))
     }
@@ -353,6 +358,9 @@ public enum MarkdownParser {
                 inlineColumnShift = outer
                 return
             }
+            // Plain text and line breaks are most nodes and add no style; their spans have no side
+            // effects (no delimiters to match), so skip computing them and the casts below.
+            if node is Text || node is SoftBreak || node is LineBreak { return }
             guard let s = span(node) else { for child in node.children { walk(child) }; return }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
@@ -392,7 +400,7 @@ public enum MarkdownParser {
             case is BlockQuote:
                 let raw = index.text(in: s)
                 var markers: [SourceSpan] = []
-                if let regex = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines) {
+                if let regex = quoteMarker {
                     for match in regex.matches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
                         markers.append(SourceSpan(s.location + match.range.location, match.range.length))
                     }
@@ -401,7 +409,7 @@ public enum MarkdownParser {
             case is ListItem:
                 let raw = index.text(in: s)
                 var extra: [StyleRun] = [], markers: [SourceSpan] = []
-                if let regex = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?"),
+                if let regex = listItemMarker,
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
                     let marker = m.range(at: 1), box = m.range(at: 2)
                     // Only bulleted items are tasks. An ordered item keeps its number visible and
