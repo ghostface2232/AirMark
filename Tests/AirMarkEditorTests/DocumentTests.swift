@@ -209,9 +209,14 @@ import AirMarkCore
         let (document, url, directory) = try makeDocument(Data("saved\n".utf8))
         defer { try? FileManager.default.removeItem(at: directory) }
         append(document, "unsaved")
-        try await Task.sleep(for: .milliseconds(900))
-        // A force quit never reaches close(); the record written after the edit is what survives.
-        let records = await MarkdownDocument.recoveryStore!.records().filter { $0.id == document.identity }
+        // A force quit never reaches close(); the record written after the edit is what survives. It is
+        // written 600ms after the edit, later under load, so wait for it rather than a fixed delay.
+        var records: [RecoveryRecord] = []
+        for _ in 0..<100 {
+            records = await MarkdownDocument.recoveryStore!.records().filter { $0.id == document.identity && $0.source == "saved\nunsaved" }
+            if !records.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
         let plan = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         guard case .recoverDraft(let record) = plan else { Issue.record("expected a draft, got \(plan)"); return }
         #expect(record.source == "saved\nunsaved")
