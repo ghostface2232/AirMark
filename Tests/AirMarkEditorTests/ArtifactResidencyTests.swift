@@ -152,7 +152,13 @@ import AirMarkCore
         try #require(editor.renderErrorCount == 1)
         let storage = try #require(editor.textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
         let range = editor.textView.textStorage!.mutableString.paragraphRange(for: element.span.nsRange)
-        let shown = try #require(editor.textContentStorage(storage, textParagraphWith: range)).attributedString
+        // Read the paragraph TextKit holds, not a freshly built one: the change must have been applied.
+        #expect(editor.pendingInvalidationCount == 0)
+        let start = try #require(storage.location(storage.documentRange.location, offsetBy: range.location))
+        let end = try #require(storage.location(start, offsetBy: range.length))
+        let paragraphRange = try #require(NSTextRange(location: start, end: end))
+        let held = try #require(storage.textElements(for: paragraphRange).first as? NSTextParagraph)
+        let shown = held.attributedString
         #expect(shown.attribute(.attachment, at: element.span.location - range.location, effectiveRange: nil) == nil, "an empty space stands in for the element")
         #expect(shown.attribute(.toolTip, at: 0, effectiveRange: nil) != nil, "the failure is not shown")
         #expect(editor.measuredElementCount == 0)
