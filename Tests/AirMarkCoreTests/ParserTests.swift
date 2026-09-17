@@ -127,3 +127,34 @@ import Testing
         if estimate < depth { return }
     }
 }
+
+/// Typing starts a parse every few hundred milliseconds and cancels the previous one. A parse thread
+/// cannot be stopped, so only one may run at a time, and callers cancelled while waiting must return
+/// at once rather than hold their copy of the source until the running parse ends.
+@Test func parsesRunOneAtATimeAndCancelledWaitersLeave() async throws {
+    let block = "## Heading\n\nA paragraph with **bold**, *emphasis*, [link](https://example.org) and 한글.\n\n- [ ] Task\n\n"
+    let source = String(repeating: block, count: 2_000_000 / block.utf8.count)
+    let worker = MarkdownParsingWorker()
+    var tasks: [Task<Void, Never>] = []
+    let clock = ContinuousClock()
+    var cancelledReturn: [Duration] = []
+    for revision in 0..<12 {
+        tasks.last?.cancel()
+        tasks.append(Task { _ = try? await worker.parsePresentation(source, revision: UInt64(revision)) })
+        try await Task.sleep(for: .milliseconds(40))
+    }
+    // Every task but the last was cancelled; each must finish well before the parse it waited behind.
+    for task in tasks.dropLast() {
+        let start = clock.now
+        await task.value
+        cancelledReturn.append(start.duration(to: clock.now))
+    }
+    await tasks.last?.value
+    // Counted for this worker: other suites' editors parse with their own workers in parallel.
+    let peak = worker.threads.peak
+    let slow = cancelledReturn.filter { $0 > .milliseconds(500) }.count
+    print("PARSE_SERIAL peak threads \(peak), cancelled waits over 500ms \(slow), slowest \(cancelledReturn.max() ?? .zero)")
+    #expect(peak <= 1, "parse threads ran concurrently: \(peak)")
+    // Only a parse that had already started may keep its caller waiting.
+    #expect(slow <= 1)
+}

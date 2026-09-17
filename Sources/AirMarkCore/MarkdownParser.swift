@@ -40,25 +40,69 @@ public struct ParsedDocument: Sendable {
 /// recursively, and a concurrency-pool thread's stack (about 512KB) ran out at about 70 nested block
 /// quotes, which crashed the app. With 16MB, nesting survives past 1,500 levels, far above
 /// `MarkdownParser.nestingLimit`.
+///
+/// A parse thread cannot be stopped, so parses run one at a time: callers wait their turn in order,
+/// and a caller cancelled while waiting leaves the queue at once instead of holding its source until
+/// the running parse ends. Without this, typing in a large document started a new thread every few
+/// hundred milliseconds while earlier ones were still parsing.
 public actor MarkdownParsingWorker {
     static let stackSize = 16 << 20
+    private var busy = false
+    private var waiting: [(id: UUID, continuation: CheckedContinuation<Void, any Error>)] = []
     public init() {}
     public func parse(_ source: String, revision: UInt64) async throws -> ParsedDocument {
+        try await takeTurn()
+        defer { endTurn() }
         try Task.checkCancellation()
-        return await Self.onLargeStack { MarkdownParser.parse(source, revision: revision) }
+        return await onLargeStack { MarkdownParser.parse(source, revision: revision) }
     }
     /// The parse and the presentation built from it, so neither is constructed on the main actor.
     public func parsePresentation(_ source: String, revision: UInt64) async throws -> (ParsedDocument, PresentationStore) {
+        try await takeTurn()
+        defer { endTurn() }
         try Task.checkCancellation()
-        return await Self.onLargeStack {
+        return await onLargeStack {
             let document = MarkdownParser.parse(source, revision: revision)
             return (document, PresentationStore(document))
         }
     }
-    private static func onLargeStack<Result: Sendable>(_ work: @escaping @Sendable () -> Result) async -> Result {
-        await withCheckedContinuation { continuation in
-            let thread = Thread { continuation.resume(returning: work()) }
-            thread.stackSize = stackSize
+    private func takeTurn() async throws {
+        try Task.checkCancellation()
+        guard busy else { busy = true; return }
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in waiting.append((id, continuation)) }
+        } onCancel: {
+            Task { await self.leave(id) }
+        }
+    }
+    private func leave(_ id: UUID) {
+        guard let index = waiting.firstIndex(where: { $0.id == id }) else { return }
+        waiting.remove(at: index).continuation.resume(throwing: CancellationError())
+    }
+    /// Hands the turn to the next waiter, which then owns `busy`.
+    private func endTurn() {
+        if waiting.isEmpty { busy = false } else { waiting.removeFirst().continuation.resume() }
+    }
+    /// This worker's parse threads running now and the most seen at once; a test hook.
+    final class ThreadCount: @unchecked Sendable {
+        private let lock = NSLock()
+        private var running = 0, highest = 0
+        var peak: Int { lock.withLock { highest } }
+        func enter() { lock.withLock { running += 1; highest = max(highest, running) } }
+        func leave() { lock.withLock { running -= 1 } }
+    }
+    nonisolated let threads = ThreadCount()
+    private func onLargeStack<Result: Sendable>(_ work: @escaping @Sendable () -> Result) async -> Result {
+        let threads = threads
+        return await withCheckedContinuation { continuation in
+            let thread = Thread {
+                threads.enter()
+                let result = work()
+                threads.leave()
+                continuation.resume(returning: result)
+            }
+            thread.stackSize = Self.stackSize
             thread.qualityOfService = .userInitiated
             thread.start()
         }
