@@ -35,6 +35,8 @@ public final class DocumentSnapshot: @unchecked Sendable {
     public static var recoveryStore: RecoveryStore?
     /// Launch milestones for Scripts/measure.sh; nil unless AIRMARK_LAUNCH_LOG is set.
     public static var launchTimeline: LaunchTimeline?
+    /// Set while AirMark is quitting, so a document closed by the quit keeps the record the quit wrote.
+    public static var isTerminating = false
     public nonisolated let snapshot = DocumentSnapshot()
     public var editor: EditorController?
     public var identity = UUID()
@@ -60,6 +62,14 @@ public final class DocumentSnapshot: @unchecked Sendable {
         window.contentViewController = controller
         window.tabbingMode = .disallowed
         window.center(); window.setFrameAutosaveName("AirMarkDocument")
+        // A launch that restores several documents must not stack their windows exactly. Each takes the
+        // remembered size, then steps down from the document opened before it; only the first window
+        // writes its frame back, so the remembered position does not drift with every such launch.
+        let others = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.windowControllers.first?.window }
+        if let last = others.last(where: { $0 !== window }) {
+            window.setFrameAutosaveName("")
+            window.setFrameTopLeftPoint(NSPoint(x: last.frame.minX + 24, y: last.frame.maxY - 24))
+        }
         addWindowController(NSWindowController(window: window))
         window.isRestorable = false
         controller.onChange = { [weak self] in
@@ -174,9 +184,17 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// The record's revision is the snapshot's version, not the editor's: the recovery store writes the
     /// source again only when the revision changes, and the snapshot also changes without an editor
     /// edit, as when the file is read again.
-    public func record() -> RecoveryRecord {
+    ///
+    /// `state` says where in the document's life the record is written; a launch restores the documents
+    /// that were still open when AirMark stopped. Whether the text is anywhere but in the record is a
+    /// separate question, answered by the bytes the document last read or wrote.
+    public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
-        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
+        let persisted = snapshot.persistedData()
+        let unsaved = persisted.map { $0 != bytes.data } ?? !bytes.source.isEmpty
+        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version,
+                              selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
+                              state: state, hasUnsavedChanges: unsaved)
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()
@@ -190,8 +208,13 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     public override func close() {
         recoveryTask?.cancel()
-        let saved = record()
-        if let store = Self.recoveryStore { Task { try? await store.save(saved) } }
+        // Quitting writes every open document's record itself, and AppKit may close the documents
+        // afterwards. A close record written then would say the user had closed them and the next
+        // launch would restore nothing.
+        if !Self.isTerminating, let store = Self.recoveryStore {
+            let saved = record(state: .closed)
+            Task { try? await store.save(saved) }
+        }
         super.close()
     }
 }

@@ -53,18 +53,93 @@ private func checkColumns(_ index: SourceIndex) {
     }
 }
 
+/// A record for a document that was open when AirMark stopped, unless `state` says otherwise.
+func launchRecord(_ path: String?, _ source: String, state: RecoveryState = .open, unsaved: Bool = true) -> RecoveryRecord {
+    RecoveryRecord(id: UUID(), filePath: path, source: source, hasBOM: false, revision: 1, selection: SourceSpan(2, 0), scrollY: 0,
+                   state: state, hasUnsavedChanges: unsaved)
+}
+
 @Test func launchPlanPrefersRecoveryThenRecent() {
-    func record(_ path: String?, _ source: String) -> RecoveryRecord {
-        RecoveryRecord(id: UUID(), filePath: path, source: source, hasBOM: false, revision: 1, selection: SourceSpan(2, 0), scrollY: 0)
-    }
-    let matching = record("/notes/a.md", "same")
-    #expect(LaunchPlan.resolve(records: [matching], recentPaths: [], fileData: { _ in Data("same".utf8) }) == .openFile(path: "/notes/a.md", record: matching))
-    let newer = record("/notes/a.md", "edited")
-    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in Data("same".utf8) }) == .recoverDraft(newer))
-    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in nil }) == .recoverDraft(newer))
-    let untitled = record(nil, "draft")
-    #expect(LaunchPlan.resolve(records: [untitled], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == .recoverDraft(untitled))
-    #expect(LaunchPlan.resolve(records: [record("/gone.md", "")], recentPaths: [], fileData: { _ in nil }) == .newDocument)
-    #expect(LaunchPlan.resolve(records: [], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == .openRecent(path: "/notes/b.md"))
-    #expect(LaunchPlan.resolve(records: [], recentPaths: [], fileData: { _ in nil }) == .newDocument)
+    let matching = launchRecord("/notes/a.md", "same")
+    #expect(LaunchPlan.resolve(records: [matching], recentPaths: [], fileData: { _ in Data("same".utf8) }) == [.openFile(path: "/notes/a.md", record: matching)])
+    let newer = launchRecord("/notes/a.md", "edited")
+    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in Data("same".utf8) }) == [.recoverDraft(newer)])
+    #expect(LaunchPlan.resolve(records: [newer], recentPaths: [], fileData: { _ in nil }) == [.recoverDraft(newer)])
+    let untitled = launchRecord(nil, "draft")
+    #expect(LaunchPlan.resolve(records: [untitled], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == [.recoverDraft(untitled)])
+    #expect(LaunchPlan.resolve(records: [launchRecord("/gone.md", "")], recentPaths: [], fileData: { _ in nil }) == [.newDocument])
+    #expect(LaunchPlan.resolve(records: [], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == [.openRecent(path: "/notes/b.md")])
+    #expect(LaunchPlan.resolve(records: [], recentPaths: [], fileData: { _ in nil }) == [.newDocument])
+}
+
+/// Several documents open at once are all restored. Reducing them to the newest record left the other
+/// drafts in the recovery directory with no way to reach them.
+@Test func launchRestoresEveryDocumentThatWasOpen() {
+    let drafts = [launchRecord(nil, "newest draft"), launchRecord(nil, "older draft")]
+    let file = launchRecord("/notes/a.md", "same", unsaved: false)
+    let disk = ["/notes/a.md": Data("same".utf8)]
+    // Newest first, as RecoveryStore returns them.
+    let plans = LaunchPlan.resolve(records: [drafts[0], drafts[1], file], recentPaths: ["/notes/b.md"], fileData: { disk[$0] })
+    #expect(plans == [.openFile(path: "/notes/a.md", record: file), .recoverDraft(drafts[1]), .recoverDraft(drafts[0])],
+            "one window per open document, oldest first so the newest ends up in front")
+    #expect(plans.last?.recordID == drafts[0].id)
+}
+
+/// A document closed cleanly is not restored; it is reopened only when nothing was left open, which is
+/// what a launch did with the single newest record before.
+@Test func launchSkipsClosedDocumentsUnlessNothingWasOpen() {
+    let closed = launchRecord("/notes/closed.md", "text", state: .closed, unsaved: false)
+    let quit = launchRecord("/notes/quit.md", "text", state: .quit, unsaved: false)
+    let disk = ["/notes/closed.md": Data("text".utf8), "/notes/quit.md": Data("text".utf8)]
+    #expect(LaunchPlan.resolve(records: [closed, quit], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/quit.md", record: quit)])
+    #expect(LaunchPlan.resolve(records: [closed], recentPaths: ["/notes/b.md"], fileData: { disk[$0] }) == [.openFile(path: "/notes/closed.md", record: closed)])
+    // An empty untitled document leaves a record with nothing to restore.
+    #expect(LaunchPlan.resolve(records: [launchRecord(nil, "", state: .closed, unsaved: false)], recentPaths: ["/notes/b.md"], fileData: { _ in nil }) == [.openRecent(path: "/notes/b.md")])
+}
+
+/// A file another app changed after a clean exit is not a crashed draft: the text was on disk, so the
+/// file is opened at the recorded position instead of reviving a stale copy as unsaved work.
+@Test func launchSeparatesUnsavedWorkFromAnExternallyChangedFile() {
+    let clean = launchRecord("/notes/a.md", "as closed", state: .quit, unsaved: false)
+    let dirty = launchRecord("/notes/b.md", "typed but never saved", state: .open, unsaved: true)
+    let disk = ["/notes/a.md": Data("changed elsewhere".utf8), "/notes/b.md": Data("on disk".utf8)]
+    #expect(LaunchPlan.resolve(records: [clean], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/a.md", record: clean)])
+    #expect(LaunchPlan.resolve(records: [dirty], recentPaths: [], fileData: { disk[$0] }) == [.recoverDraft(dirty)])
+    // The file is gone. Only work that is on no disk is brought back from its record.
+    #expect(LaunchPlan.resolve(records: [clean], recentPaths: [], fileData: { _ in nil }) == [.newDocument])
+    #expect(LaunchPlan.resolve(records: [dirty], recentPaths: [], fileData: { _ in nil }) == [.recoverDraft(dirty)])
+}
+
+/// Records written before a record carried its state are read as documents that were open, which is how
+/// a launch treated every record before.
+@Test func launchTreatsRecordsWithoutAStateAsOpen() {
+    let legacy = RecoveryRecord(id: UUID(), filePath: nil, source: "draft", hasBOM: false, revision: 1, selection: SourceSpan(0, 0), scrollY: 0)
+    #expect(legacy.state == .open)
+    #expect(legacy.hasUnsavedChanges)
+    #expect(LaunchPlan.resolve(records: [legacy], recentPaths: [], fileData: { _ in nil }) == [.recoverDraft(legacy)])
+}
+
+/// More open documents than one launch restores: unsaved drafts come first, then the newest of the rest,
+/// and the records that do not open a window stay in the recovery directory.
+@Test func launchCapsRestoredSessionsKeepingUnsavedWorkFirst() {
+    let files = (0..<8).map { launchRecord("/notes/file\($0).md", "same", state: .quit, unsaved: false) }
+    let drafts = (0..<3).map { launchRecord(nil, "draft \($0)") }
+    let plans = LaunchPlan.resolve(records: files + drafts, recentPaths: [], fileData: { _ in Data("same".utf8) })
+    #expect(plans.count == LaunchPlan.maximumSessions)
+    #expect(plans.filter(\.isDraft).count == 3)
+    // Order within the kept plans is unchanged: oldest first, the newest record in front.
+    #expect(plans.last == .openFile(path: "/notes/file0.md", record: files[0]))
+    #expect(plans.first == .recoverDraft(drafts[2]))
+}
+
+/// Two records naming one file, or two carrying one document's identity, open one window.
+@Test func launchOpensOneWindowPerDocument() {
+    let newest = launchRecord("/notes/a.md", "same", unsaved: false)
+    let otherDocument = launchRecord("/notes/a.md", "same", unsaved: false)
+    #expect(LaunchPlan.resolve(records: [newest, otherDocument], recentPaths: [], fileData: { _ in Data("same".utf8) })
+            == [.openFile(path: "/notes/a.md", record: newest)])
+    var stale = newest
+    stale.source = "an older revision of the same document"
+    #expect(LaunchPlan.resolve(records: [newest, stale], recentPaths: [], fileData: { _ in Data("same".utf8) })
+            == [.openFile(path: "/notes/a.md", record: newest)])
 }

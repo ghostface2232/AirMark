@@ -217,12 +217,67 @@ import AirMarkCore
             if !records.isEmpty { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let plan = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
-        guard case .recoverDraft(let record) = plan else { Issue.record("expected a draft, got \(plan)"); return }
+        let plans = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        guard case .recoverDraft(let record)? = plans.last else { Issue.record("expected a draft, got \(plans)"); return }
         #expect(record.source == "saved\nunsaved")
         #expect(record.filePath == url.path)
         #expect(record.selection.location == "saved\nunsaved".utf16.count)
         document.close()
+    }
+
+    /// Two documents edited at once are both recovered. A launch used to take the newest record alone,
+    /// so the other draft stayed in the recovery directory with no way to reach it.
+    @Test func everyUnsavedDocumentOpenAtOnceIsRecovered() async throws {
+        let (first, firstURL, directory) = try makeDocument(Data("first saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let secondURL = directory.appendingPathComponent("Second.md")
+        try Data("second saved\n".utf8).write(to: secondURL)
+        let second = try MarkdownDocument(contentsOf: secondURL, ofType: Self.type)
+        second.makeWindowControllers()
+        second.editor?.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        append(first, "one")
+        append(second, "two")
+        var records: [RecoveryRecord] = []
+        for _ in 0..<100 {
+            records = await MarkdownDocument.recoveryStore!.records()
+            if records.contains(where: { $0.id == first.identity && $0.source.hasSuffix("one") }),
+               records.contains(where: { $0.id == second.identity && $0.source.hasSuffix("two") }) { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let plans = LaunchPlan.resolve(records: records, recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        // Other suites run in parallel and write to the same store; select this test's two documents.
+        let mine: Set<UUID> = [first.identity, second.identity]
+        let drafts = plans.compactMap { plan -> RecoveryRecord? in
+            if case .recoverDraft(let record) = plan, mine.contains(record.id) { return record }
+            return nil
+        }
+        #expect(drafts.count == 2, "both open documents are restored, not only the newest record")
+        #expect(drafts.contains { $0.id == first.identity && $0.source == "first saved\none" && $0.filePath == firstURL.path })
+        #expect(drafts.contains { $0.id == second.identity && $0.source == "second saved\ntwo" && $0.filePath == secondURL.path })
+        // Both were open, so both records say so and both hold text that is on no disk.
+        #expect(drafts.allSatisfy { $0.state == .open && $0.hasUnsavedChanges })
+        first.close(); second.close()
+    }
+
+    /// Closing a document records that the user put it away, so the next launch does not reopen every
+    /// document ever closed; the most recent one still comes back when nothing was left open.
+    @Test func closingADocumentRecordsItAsClosed() async throws {
+        let (document, url, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let identity = document.identity
+        _ = try #require(try await recoveryRecord(document) { $0.state == .open })
+        document.close()
+        var closed: RecoveryRecord?
+        for _ in 0..<100 {
+            closed = await MarkdownDocument.recoveryStore!.records().first { $0.id == identity }
+            if closed?.state == .closed { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let record = try #require(closed)
+        #expect(record.state == .closed)
+        #expect(!record.hasUnsavedChanges, "the text was on disk when it was closed")
+        let plans = LaunchPlan.resolve(records: [record], recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: record)], "the last document still reopens when nothing was left open")
     }
 
     /// Waits for this document's recovery record to satisfy `condition`.
