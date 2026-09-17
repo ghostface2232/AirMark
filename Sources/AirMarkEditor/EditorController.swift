@@ -595,13 +595,18 @@ import os
             }
             for marker in run.markers where marker.length > 0 && marker.end <= text.length {
                 let afterBreak = marker.location == 0 || [10, 13, 0x2029].contains(text.character(at: marker.location - 1))
-                let kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
+                var kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
                 var removal = marker.nsRange
-                if run.kind == .codeBlock, kind == .opening, marker.location > run.span.location {
-                    // The closing fence of a block with nothing visible starts right after the opening
-                    // fence's line break. Deleting it alone would leave an unterminated fence that turns
-                    // the rest of the document into code, so the whole empty block goes.
-                    removal = NSRange(location: run.span.location, length: marker.end - run.span.location)
+                if run.kind == .codeBlock {
+                    // A fenced block's markers are its fence lines, not line-start markers. The closing
+                    // fence is a closing marker, except in a block with no content line at all: there both
+                    // fences are hidden with nothing visible between them, so the caret must not rest
+                    // between them, and deleting either fence alone would leave an unterminated fence
+                    // that turns the rest of the document into code. Such a block's fences go together.
+                    // The block span excludes list prefixes, indentation and the final line break.
+                    let empty = Self.isEmptyFencedBlock(run.span, in: text)
+                    if marker.location > run.span.location { kind = empty ? .opening : .closing }
+                    if empty { removal = run.span.nsRange }
                 }
                 units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: removal))
             }
@@ -612,11 +617,22 @@ import os
         }
         return units
     }
+    /// True when a fenced block's closing fence line directly follows its opening fence line.
+    static func isEmptyFencedBlock(_ span: SourceSpan, in text: NSString) -> Bool {
+        guard span.length > 0, span.end <= text.length else { return false }
+        let firstLineEnd = NSMaxRange(text.lineRange(for: NSRange(location: span.location, length: 0)))
+        guard span.end > firstLineEnd else { return false }
+        return text.lineRange(for: NSRange(location: span.end - 1, length: 0)).location == firstLineEnd
+    }
     /// The nearest position that is not inside concealed source, following the caret's direction.
     public func normalizedCaret(_ position: Int, direction: CaretDirection) -> Int {
-        var current = position
+        var current = position, direction = direction
+        var visited: Set<Int> = []
         for _ in 0..<8 {
             guard let unit = concealUnits(near: current).first(where: { $0.avoids(current) }) else { break }
+            // Moving left found no visible position before hidden source at the document's start and
+            // came back; settle after it instead of stopping inside it.
+            if !visited.insert(current).inserted { direction = .right }
             let end = NSMaxRange(unit.range)
             switch (unit.kind, direction) {
             case (.opening, .left): current = unit.range.location > 0 ? unit.range.location - 1 : end

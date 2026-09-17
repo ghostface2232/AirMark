@@ -353,10 +353,22 @@ import AirMarkCore
         }
     }
 
-    /// Backspace after an empty fenced block, whose fences are both hidden, removes the empty block. It
-    /// must never delete only the closing fence, which turned the rest of the document into code.
-    @Test func backspaceAfterEmptyFencedBlockRemovesTheBlock() async throws {
-        for (source, caret, expected) in [("a\n```\n```\nb", 10, "a\nb"), ("```swift\n```", 12, ""), ("a\n```\r\n```\r\nb", 12, "a\nb")] {
+    /// Backspace after an empty fenced block, whose fences are both hidden, removes the fences and keeps
+    /// the line structure around them: list prefixes and indentation stay, and so does the line break
+    /// after the block. It must never delete only one fence, which turned the rest of the document into
+    /// code, nor a visible line.
+    @Test func backspaceAfterEmptyFencedBlockRemovesTheFences() async throws {
+        let cases: [(source: String, caret: Int, expected: String)] = [
+            ("a\n```\n```\nb", 10, "a\n\nb"),
+            ("```swift\n```", 12, ""),
+            ("a\n```\r\n```\r\nb", 12, "a\n\r\nb"),
+            ("- ```\n  ```\n- c", 12, "- \n- c"),
+            ("- x\n  ```\n  ```\n- c", 16, "- x\n  \n- c"),
+            ("~~~\n~~~\nb", 8, "\nb"),
+            // A block whose last content line is blank: Backspace deletes that line, like any last character.
+            ("```\n\n\n```\nb", 10, "```\n\n```\nb"),
+        ]
+        for (source, caret, expected) in cases {
             let editor = try await make(source)
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
             window.contentViewController = editor
@@ -368,11 +380,19 @@ import AirMarkCore
             editor.textView.undoManager?.undo()
             #expect(editor.source == source)
         }
-        // A block with content still deletes the last content character.
         let editor = try await make("```\nxy\n```\n")
         editor.textView.setSelectedRange(NSRange(location: 11, length: 0))
         editor.textView.deleteBackward(nil)
         #expect(editor.source == "```\nx\n```\n")
+    }
+
+    /// With an empty block at the start of the document there is no visible position before it; moving
+    /// left from after it must settle after it rather than inside a hidden fence.
+    @Test func leftFromAfterAnEmptyBlockAtTheStartStaysOutsideTheFences() async throws {
+        let editor = try await make("~~~\n~~~\nb")
+        editor.textView.setSelectedRange(NSRange(location: 8, length: 0))
+        editor.textView.moveLeft(nil)
+        #expect([0, 8].contains(editor.textView.selectedRange().location), "caret at \(editor.textView.selectedRange().location)")
     }
 
     @Test func referenceImageChangeDropsArtifactAtUnchangedSpan() async throws {
