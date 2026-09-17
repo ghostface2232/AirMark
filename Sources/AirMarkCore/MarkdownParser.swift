@@ -170,38 +170,70 @@ public enum MarkdownParser {
     /// An upper bound on inline nesting within a paragraph: the open emphasis delimiters plus the open
     /// brackets, counted separately and added. Every run of `*`, `_` or `~` that could open emphasis (not
     /// followed by whitespace) adds its length, and a run that can only close subtracts it; treating runs
-    /// that could both open and close as openers only overestimates. `[` and `]` add and subtract one. A
-    /// backslash makes the next character literal. Counts restart at blank lines, which end paragraphs.
-    /// Linear; no parse.
+    /// that could both open and close as openers only overestimates. An `_` run inside a word can neither
+    /// open nor close and is skipped. `[` and `]` add and subtract one. A backslash makes the next character
+    /// literal. Lines inside a fenced code block are skipped. Counts restart at blank lines, which end
+    /// paragraphs; CRLF is one line break. Linear; no parse.
     public static func inlineNestingEstimate(_ source: String) -> Int {
         withBytes(source) { bytes in
-            var deepest = 0, emphasis = 0, brackets = 0, lineBlank = true, index = 0
+            var deepest = 0, emphasis = 0, brackets = 0, index = 0
+            var fence: (character: UInt8, length: Int)? = nil
             func isSpace(_ byte: UInt8) -> Bool { byte == 32 || byte == 9 || byte == 10 || byte == 13 }
+            func isWordCharacter(_ byte: UInt8) -> Bool { byte >= 0x80 || (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) }
             while index < bytes.count {
-                let byte = bytes[index]
-                switch byte {
-                case 10, 13:
-                    if lineBlank { emphasis = 0; brackets = 0 }
-                    lineBlank = true
-                    index += 1
-                case 92:                                                             // "\" escapes the next character
-                    lineBlank = false
-                    index += index + 1 < bytes.count && !isSpace(bytes[index + 1]) ? 2 : 1
-                case 42, 95, 126:                                                    // "*", "_", "~"
-                    var end = index
-                    while end < bytes.count, bytes[end] == byte { end += 1 }
-                    let length = end - index
-                    let spaceBefore = index == 0 || isSpace(bytes[index - 1])
-                    let spaceAfter = end >= bytes.count || isSpace(bytes[end])
-                    if !spaceAfter { emphasis += length } else if !spaceBefore { emphasis = max(0, emphasis - length) }
-                    lineBlank = false
-                    index = end
-                case 91: brackets += 1; lineBlank = false; index += 1                  // "["
-                case 93: brackets = max(0, brackets - 1); lineBlank = false; index += 1  // "]"
-                case 32, 9: index += 1
-                default: lineBlank = false; index += 1
+                var lineEnd = index
+                while lineEnd < bytes.count, bytes[lineEnd] != 10, bytes[lineEnd] != 13 { lineEnd += 1 }
+                let next = lineEnd < bytes.count && bytes[lineEnd] == 13 && lineEnd + 1 < bytes.count && bytes[lineEnd + 1] == 10 ? lineEnd + 2 : lineEnd + 1
+                // A fence line opens or closes a code block; neither it nor the block's content can nest inline.
+                var start = index
+                while start < lineEnd, start - index < 3, bytes[start] == 32 { start += 1 }
+                if start < lineEnd, bytes[start] == 96 || bytes[start] == 126 {
+                    var run = start
+                    while run < lineEnd, bytes[run] == bytes[start] { run += 1 }
+                    // A backtick fence's info string cannot contain a backtick; such a line is inline code.
+                    let isFence = run - start >= 3 && (bytes[start] == 126 || fence != nil || !bytes[run..<lineEnd].contains(96))
+                    if isFence {
+                        if let open = fence {
+                            if open.character == bytes[start], run - start >= open.length { fence = nil }
+                        } else {
+                            fence = (bytes[start], run - start)
+                        }
+                        emphasis = 0; brackets = 0
+                        index = next
+                        continue
+                    }
                 }
-                deepest = max(deepest, emphasis + brackets)
+                if fence != nil { index = next; continue }
+                var position = index, blank = true
+                while position < lineEnd {
+                    let byte = bytes[position]
+                    switch byte {
+                    case 92:                                                         // "\" escapes the next character
+                        blank = false
+                        position += position + 1 < lineEnd && !isSpace(bytes[position + 1]) ? 2 : 1
+                    case 42, 95, 126:                                                // "*", "_", "~"
+                        var end = position
+                        while end < lineEnd, bytes[end] == byte { end += 1 }
+                        let length = end - position
+                        let before: UInt8? = position > 0 ? bytes[position - 1] : nil
+                        let after: UInt8? = end < bytes.count ? bytes[end] : nil
+                        let spaceBefore = before.map(isSpace) ?? true
+                        let spaceAfter = after.map(isSpace) ?? true
+                        let intraword = byte == 95 && before.map(isWordCharacter) == true && after.map(isWordCharacter) == true
+                        if !intraword {
+                            if !spaceAfter { emphasis += length } else if !spaceBefore { emphasis = max(0, emphasis - length) }
+                        }
+                        blank = false
+                        position = end
+                    case 91: brackets += 1; blank = false; position += 1               // "["
+                    case 93: brackets = max(0, brackets - 1); blank = false; position += 1  // "]"
+                    case 32, 9: position += 1
+                    default: blank = false; position += 1
+                    }
+                    deepest = max(deepest, emphasis + brackets)
+                }
+                if blank { emphasis = 0; brackets = 0 }
+                index = next
             }
             return deepest
         }

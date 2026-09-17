@@ -188,7 +188,8 @@ import Testing
 /// The inline limit is only safe if the estimate never falls below the inline nesting the parser builds.
 @Test func inlineNestingEstimateIsNotBelowParsedDepth() async throws {
     let worker = MarkdownParsingWorker()
-    let pieces = ["*", "**", "***", "_", "__", "~~", "[", "]", "![", "](u)", "a", "b ", " ", ".", "\n", "\n\n", "\\", "`", "*a", "a*", "_a_"]
+    let pieces = ["*", "**", "***", "_", "__", "~~", "[", "]", "![", "](u)", "a", "b ", " ", ".", "\n", "\n\n", "\\", "`", "*a", "a*", "_a_",
+                  "\r\n", "\r\n\r\n", "\n```\n", "\n~~~\n", "a_b"]
     var state: UInt64 = 17
     func next(_ bound: Int) -> Int { state = state &* 6364136223846793005 &+ 1442695040888963407; return Int((state >> 33) % UInt64(bound)) }
     let inline: Set<String> = ["strong", "emphasis", "strike", "link"]
@@ -246,4 +247,21 @@ import Testing
         let heading = MarkdownParser.parse(source).styles.first { $0.kind == .heading(1) }
         #expect(heading?.markers.map { index.text(in: $0) } == [underline], "\(source.debugDescription)")
     }
+}
+
+/// With CRLF line endings the inline count must carry across a paragraph's line breaks, as with LF.
+@Test func inlineNestingAcrossCRLFLineBreaksDoesNotCrash() async throws {
+    let source = Array(repeating: "![", count: 15_000).joined(separator: "\r\n") + "a" + String(repeating: "](u)", count: 15_000)
+    #expect(MarkdownParser.inlineNestingEstimate(source) > MarkdownParser.inlineNestingLimit)
+    let result = try await MarkdownParsingWorker().parse(source, revision: 1)
+    #expect(result.source == source)
+}
+
+/// Ordinary code must not push a document past the inline limit: underscores inside words and anything
+/// inside a fenced block cannot open emphasis.
+@Test func codeAndSnakeCaseDoNotTripTheInlineLimit() {
+    let block = (0..<220).map { _ in "value_from_the_config_file = other_value_or_default\n" }.joined()
+    let source = "# Title **bold**\n\n```python\n" + block + "```\n\n" + (0..<200).map { _ in "the snake_case_name here" }.joined(separator: " ") + "\n"
+    #expect(MarkdownParser.inlineNestingEstimate(source) < 100, "estimate \(MarkdownParser.inlineNestingEstimate(source))")
+    #expect(MarkdownParser.parse(source).styles.contains { $0.kind == .strong })
 }
