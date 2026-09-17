@@ -156,6 +156,31 @@ import AirMarkCore
         #expect(cancelled == 10)
     }
 
+    /// Callers sharing one in-flight render: when all of them are cancelled while it is still queued,
+    /// the render is dropped instead of running ahead of work that is still wanted.
+    @Test func cancellingEverySharingCallerDropsTheQueuedRender() async throws {
+        let (window, host) = Self.window()
+        defer { window.close() }
+        let service = RenderService()
+        let blocker = Task { @MainActor in try await service.render(Self.slowDiagram(200, salt: 20), environment: Self.environment, baseURL: nil, host: host) }
+        let shared = RenderElement(span: SourceSpan(0, 1), kind: .mermaid, content: "graph LR\nShared-->Twice")
+        let first = Task { @MainActor in try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
+        let second = Task { @MainActor in try await service.render(shared, environment: Self.environment, baseURL: nil, host: host) }
+        try await Task.sleep(for: .milliseconds(20))
+        first.cancel(); second.cancel()
+        var outcomes: [String] = []
+        for task in [first, second] {
+            let result = await Self.within(5) { await task.result }
+            switch result { case .success(.failure(let error)) where error is CancellationError: outcomes.append("cancelled"); default: outcomes.append(String(describing: result)) }
+        }
+        _ = await blocker.result
+        try await Task.sleep(for: .milliseconds(500))
+        let key = service.key(shared, environment: Self.environment, baseURL: nil)
+        print("LIFECYCLE shared cancel: \(outcomes) rendered \(service.renderedCount) cached \(service.cached(key) != nil)")
+        #expect(outcomes == ["cancelled", "cancelled"])
+        #expect(service.cached(key) == nil, "the dropped render ran anyway")
+    }
+
     /// Many distinct formulas at once, as a long document scrolled quickly produces.
     @Test func manyConcurrentRequestsAllComplete() async throws {
         let (window, host) = Self.window()

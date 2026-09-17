@@ -61,12 +61,38 @@ public enum RenderFailure: LocalizedError, Equatable {
     private var order: [String] = []
     private var bytes = 0
     private let memoryLimit = 48 * 1024 * 1024
-    /// In-flight renders shared by every caller asking for the same key. The underlying work is
-    /// cancelled only when all of its callers have been.
+    /// An in-flight render shared by every caller asking for the same key. Each caller waits on its own
+    /// continuation, so a cancelled caller stops waiting at once; when no caller is left the work is
+    /// cancelled, which drops it from the renderer's queue if it has not started.
     @MainActor private final class Pending {
         let task: Task<RenderArtifact, any Error>
-        var callers = 0
+        private var waiters: [UUID: CheckedContinuation<RenderArtifact, any Error>] = [:]
+        private var outcome: Result<RenderArtifact, any Error>?
         init(_ task: Task<RenderArtifact, any Error>) { self.task = task }
+
+        func wait() async throws -> RenderArtifact {
+            let id = UUID()
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    if let outcome { continuation.resume(with: outcome) }
+                    else if Task.isCancelled { continuation.resume(throwing: CancellationError()) }
+                    else { waiters[id] = continuation }
+                }
+            } onCancel: {
+                Task { @MainActor in self.cancel(id) }
+            }
+        }
+        private func cancel(_ id: UUID) {
+            guard let continuation = waiters.removeValue(forKey: id) else { return }
+            continuation.resume(throwing: CancellationError())
+            if waiters.isEmpty && outcome == nil { task.cancel() }
+        }
+        func finish(_ outcome: Result<RenderArtifact, any Error>) {
+            self.outcome = outcome
+            let waiting = waiters.values
+            waiters.removeAll()
+            for continuation in waiting { continuation.resume(with: outcome) }
+        }
     }
     private var pending: [String: Pending] = [:]
     init(budget: WebRenderer.Budget = .init()) {
@@ -89,47 +115,38 @@ public enum RenderFailure: LocalizedError, Equatable {
     public func render(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?, host: NSView) async throws -> RenderArtifact {
         let identifier = key(element, environment: environment, baseURL: baseURL)
         if let result = cache[identifier] { touch(identifier); return labeled(result, for: element, baseURL: baseURL) }
-        if let shared = pending[identifier] { return labeled(try await wait(for: shared), for: element, baseURL: baseURL) }
-        let task = Task<RenderArtifact, any Error> { [self] in
-            if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
-            if element.kind == .table { return try drawTable(element, environment: environment) }
-            let renderer = element.kind == .math ? math : mermaid
-            return try await renderer.render(element, environment: environment, host: host)
+        let entry: Pending
+        if let shared = pending[identifier] {
+            entry = shared
+        } else {
+            let task = Task<RenderArtifact, any Error> { [self] in
+                if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
+                if element.kind == .table { return try drawTable(element, environment: environment) }
+                let renderer = element.kind == .math ? math : mermaid
+                return try await renderer.render(element, environment: environment, host: host)
+            }
+            entry = Pending(task)
+            pending[identifier] = entry
+            // When the work ends, even if every caller stopped waiting: cache a result, drop the entry so
+            // a failure is never handed to a later caller, then wake whoever is still waiting.
+            Task { [self] in
+                let outcome = await task.result
+                settle(identifier, entry, try? outcome.get())
+                entry.finish(outcome)
+            }
         }
-        let entry = Pending(task)
-        pending[identifier] = entry
-        // Settle the entry when the work ends, even if every caller stopped waiting, so a finished
-        // result is cached and a cancelled or failed one is never handed to a later caller.
-        Task { [self] in settle(identifier, entry, try? await task.value) }
-        do {
-            let result = try await wait(for: entry)
-            settle(identifier, entry, result)
-            guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
-            return labeled(result, for: element, baseURL: baseURL)
-        } catch {
-            settle(identifier, entry, nil)
-            throw error
-        }
+        let result = try await entry.wait()
+        // Checked for every caller, including those that joined a render another caller started.
+        guard result.cost <= memoryLimit else { throw RenderFailure.invalid("This image is too large to display.") }
+        return labeled(result, for: element, baseURL: baseURL)
     }
-    /// Removes a finished entry and caches its result. Only the first call for an entry has an effect.
+    /// Removes a finished entry and caches its result.
     private func settle(_ identifier: String, _ entry: Pending, _ result: RenderArtifact?) {
         guard pending[identifier] === entry else { return }
         pending[identifier] = nil
         guard let result, result.cost <= memoryLimit else { return }
         cache[identifier] = result; bytes += result.cost; touch(identifier); renderedCount += 1
         while bytes > memoryLimit, let oldest = order.first { order.removeFirst(); if let removed = cache.removeValue(forKey: oldest) { bytes -= removed.cost } }
-    }
-    private func wait(for entry: Pending) async throws -> RenderArtifact {
-        entry.callers += 1
-        return try await withTaskCancellationHandler {
-            defer { entry.callers -= 1 }
-            return try await entry.task.value
-        } onCancel: {
-            Task { @MainActor in
-                // Late cancellation after the value arrived is harmless: cancelling a finished task does nothing.
-                if entry.callers <= 1 { entry.task.cancel() }
-            }
-        }
     }
     /// Accessibility belongs to the requesting element, while identical pixels remain shared.
     private func labeled(_ artifact: RenderArtifact, for element: RenderElement, baseURL: URL?) -> RenderArtifact {
