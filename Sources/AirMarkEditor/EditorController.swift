@@ -57,6 +57,21 @@ import os
     /// Set by the text view around keyboard movement so selection changes know which way the caret went.
     var caretDirection = CaretDirection.none
     private var firstPendingParse: ContinuousClock.Instant?
+    /// What the last completed parse of this document cost, excluding any wait for the parse before
+    /// it. A running parse cannot be stopped, so one started while typing continues runs to the end
+    /// and the parse of the final text waits behind it: a wasted parse costs the reader a parse.
+    private var lastParseCost: Duration = .zero
+    /// How long a keystroke waits before parsing. Enough to outlast a typing cadence where a wasted
+    /// parse is expensive, and capped so that after a pause the wait stays a small part of what the
+    /// parse itself takes.
+    var parseDelay: Duration { min(max(lastParseCost, .milliseconds(45)), .milliseconds(250)) }
+    /// How long changes may stay unparsed while typing continues before one parse starts anyway.
+    /// Such a parse is stale before it ends, so it is allowed only every four parses' worth of
+    /// time: it then occupies under a fifth of a long burst instead of running back to back.
+    var parseStalenessLimit: Duration { max(lastParseCost * 4, .milliseconds(150)) }
+    /// Parses that finished, and those whose source was already stale when they did; test hooks.
+    public private(set) var parseCompletedCount = 0
+    public private(set) var staleParseCount = 0
     private let signposter = OSSignposter(subsystem: "com.airmark.AirMark", category: "Editor")
     public var source: String { isViewLoaded ? textView.string : sourceForInitialLoad }
     public var selection: SourceSpan { SourceSpan(textView.selectedRange()) }
@@ -183,19 +198,27 @@ import os
         if parsed.revision != revision { scheduleParse() }
     }
     public func compositionEnded() { scheduleParse() }
+    /// Waits `parseDelay` after the last change and then parses the current source. A keystroke
+    /// within the wait replaces the pending parse, and one waiting its turn at the worker leaves
+    /// the queue, so at most one parse runs and at most one waits. Changes that stay unparsed for
+    /// `parseStalenessLimit` start a parse without waiting, so continuous typing still refreshes.
     private func scheduleParse(immediate: Bool = false) {
         parseTask?.cancel()
         let clock = ContinuousClock()
         if firstPendingParse == nil { firstPendingParse = clock.now }
-        let overdue = firstPendingParse.map { $0.duration(to: clock.now) > .milliseconds(150) } ?? false
+        let overdue = firstPendingParse.map { $0.duration(to: clock.now) > parseStalenessLimit } ?? false
+        let delay = parseDelay
         parseTask = Task { [weak self] in
-            if !immediate && !overdue { try? await Task.sleep(for: .milliseconds(45)) }
+            if !immediate && !overdue { try? await Task.sleep(for: delay) }
             guard !Task.isCancelled, let self, !textView.hasMarkedText() else { return }
             firstPendingParse = nil
             let source = textView.string, revision = self.revision
             let state = signposter.beginInterval("Parse")
-            guard let (result, store) = try? await parsingWorker.parsePresentation(source, revision: revision) else { return }
+            guard let (result, store, cost) = try? await parsingWorker.parsePresentation(source, revision: revision) else { return }
             signposter.endInterval("Parse", state)
+            lastParseCost = cost
+            parseCompletedCount += 1
+            if result.revision != self.revision { staleParseCount += 1 }
             guard !Task.isCancelled else { return }
             applyParsedDocument(result, store: store)
         }

@@ -80,3 +80,21 @@ Host and raw output: `Validation/2026-09-17-render-cancel-recovery/` (Release, M
 - **Running renders whose callers left.** Measured first: an obsolete running diagram held the WebKit page until it finished, so the next diagram waited 342 ms after a cancelled 480-edge chain and 1,035 ms after a 490-edge crossing graph. Editing that graph while it rendered showed the new one after 2,270 ms. Replacing a page costs 125–135 ms. `WebRenderer` now abandons a running job, discarding its page, only when no caller waits for it, another job is queued, and it has run 150 ms. The next diagram then waits 250 ms in both cases, and editing the dense graph takes 1,490 ms. A 250-edge chain (about 200 ms) is now abandoned just before finishing, so the next diagram waits 234 ms instead of 140 ms. That regression is bounded by one page load and is recorded, not hidden. `RenderService` passes the shared entry's live waiter count, so a render another caller still waits for, or one rejoined after a keystroke, keeps running. Typing elsewhere during a render caused no page loads at 100 ms or 30 ms per keystroke. Queued cancellation is unchanged.
 - **Recovery writes.** Measured first on a 9.54 MB document: every caret move or scroll followed by a 600 ms pause rewrote a 10.12 MB JSON record, taking 164 ms to encode the bridged source, and ten screens read 1.5 s apart wrote 101 MB. Idle wrote nothing. A record is now `<id>.json`, which holds the metadata and names the file with the source, plus `<id>.<token>.source` with raw UTF-8. A save with the same revision replaces only the JSON, so caret and scroll saves write about 4 KB in 0.3 ms, and the reading session writes 0.04 MB. An edit writes the 9.54 MB source in 17.5 ms. A new source is written before the JSON that names it, and old sources are removed after, so a crash leaves a complete record. Records with the source inline still load. The revision is now `DocumentSnapshot`'s version, not the editor's, because a document without an editor can read new bytes without an editor revision, and deduplicating on the editor's revision kept the stale source (a test fails with it). UI: the two typing tests failed because keys arrived through the Korean input method, and failed identically on the commit before these changes. Only the three non-typing UI tests, including quit and recovery, validated this run.
 
+
+## 2026-09-17 — Parse pacing, parse application, render failures
+
+Nothing in this session was built, run or measured. The work was done in a Linux container with no
+Swift toolchain, no macOS SDK and no network route to one, while `AirMarkEditor` and `AirMarkRender`
+require AppKit and WebKit. `Validation/2026-09-17-parse-latency/` records the reproduction commands
+and what each change is expected to do; the before/after numbers and the test results still have to
+be produced on the development host. Nothing below is a measured result.
+
+- **Parse pacing.** A running parse still cannot be stopped, so one started while typing continues
+  runs to the end and the parse of the final text waits behind it. `ScaleTests/typingSettleTimes`
+  measures what that costs a reader: 15 keystrokes 80 ms apart, then the wait until the editor holds
+  a parse of the final text, with the number of parses each burst started and how many were already
+  stale. `MarkdownParsingWorker.parsePresentation` now also returns what the parse itself took, and
+  the editor paces from it: the wait after a keystroke is `clamp(lastParseCost, 45 ms, 250 ms)` and
+  changes may stay unparsed for `max(4 × lastParseCost, 150 ms)` before one parse starts anyway.
+  At 100KB both are today's values. No parser change; block or incremental parsing stays the long
+  answer.

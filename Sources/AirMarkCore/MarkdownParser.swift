@@ -56,14 +56,19 @@ public actor MarkdownParsingWorker {
         try Task.checkCancellation()
         return await onLargeStack { MarkdownParser.parse(source, revision: revision) }
     }
-    /// The parse and the presentation built from it, so neither is constructed on the main actor.
-    public func parsePresentation(_ source: String, revision: UInt64) async throws -> (ParsedDocument, PresentationStore) {
+    /// The parse and the presentation built from it, so neither is constructed on the main actor,
+    /// with what the work itself took. `cost` excludes waiting for a parse already running, so a
+    /// caller can pace its requests by what a parse of this document costs rather than by how long
+    /// it happened to wait.
+    public func parsePresentation(_ source: String, revision: UInt64) async throws -> (document: ParsedDocument, store: PresentationStore, cost: Duration) {
         try await takeTurn()
         defer { endTurn() }
         try Task.checkCancellation()
         return await onLargeStack {
+            let started = ContinuousClock.now
             let document = MarkdownParser.parse(source, revision: revision)
-            return (document, PresentationStore(document))
+            let store = PresentationStore(document)
+            return (document, store, started.duration(to: ContinuousClock.now))
         }
     }
     /// A parse that skips the nesting limit, for tests that compare the estimate with real depth.

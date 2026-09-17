@@ -121,6 +121,67 @@ import AirMarkRender
         try await measureReturnKeystrokes(bytes: 10_000_000, label: "RETURN_SCALE_10MB")
     }
 
+    /// Time from the last key of a typing burst until the presentation shows that revision, which
+    /// is what "typing stopped, formatting caught up" means to a reader. 100KB and 1MB; the burst
+    /// types at 80ms, near a fast typist's cadence.
+    @Test func typingSettleTimes() async throws {
+        _ = try await measureTypingSettle(bytes: 100_000, label: "SETTLE_100KB")
+        let large = try await measureTypingSettle(bytes: 1_000_000, label: "SETTLE_1MB")
+        // A parse of this document takes longer than the gap between keys, so the burst starts at
+        // most one refresh parse, and the parse after the last key waits behind nothing or it.
+        #expect((large.parses.max() ?? 0) <= 2, "parses per burst: \(large.parses)")
+    }
+
+    /// The same measurement at 10MB, where a parse takes seconds. Slow to set up, so it runs only
+    /// when AIRMARK_SCALE_10MB=1.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AIRMARK_SCALE_10MB"] == "1"))
+    func tenMegabyteTypingSettleTime() async throws {
+        _ = try await measureTypingSettle(bytes: 10_000_000, label: "SETTLE_10MB")
+    }
+
+    /// Types `keys` characters `interval` apart in the middle of the document, then waits for the
+    /// parse of the final text to be applied. Polled at 2ms, so the resolution is 2ms; this is the
+    /// time until the editor holds a current parse, not key-to-display latency. Reports the parses
+    /// each burst started and how many of those were already stale when they finished.
+    @discardableResult
+    func measureTypingSettle(bytes: Int, label: String, keys: Int = 15, interval: Duration = .milliseconds(80), rounds: Int = 3) async throws
+        -> (settle: [Duration], parses: [Int], stale: [Int]) {
+        _ = NSApplication.shared
+        let document = MarkdownDocument()
+        let source = Self.source(bytes: bytes)
+        document.snapshot.set(DocumentBytes(source: source, hasBOM: false))
+        document.makeWindowControllers()
+        defer { document.close() }
+        let editor = try #require(document.editor)
+        editor.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        for _ in 0..<2400 where editor.parsed.revision != editor.revision || editor.parsed.styles.isEmpty {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        try #require(editor.parsed.revision == editor.revision)
+        let text = editor.textView.textStorage!.mutableString
+        let clock = ContinuousClock()
+        var settles: [Duration] = [], parses: [Int] = [], stale: [Int] = []
+        for round in 0..<rounds {
+            let offset = text.paragraphRange(for: NSRange(location: text.length / 2, length: 0)).location
+            let parsesBefore = editor.parseCompletedCount, staleBefore = editor.staleParseCount
+            for number in 0..<keys {
+                editor.performEdit(range: NSRange(location: offset + number, length: 0), replacement: "x")
+                if number + 1 < keys { try await Task.sleep(for: interval) }
+            }
+            let last = clock.now
+            for _ in 0..<15_000 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(2)) }
+            settles.append(last.duration(to: clock.now))
+            parses.append(editor.parseCompletedCount - parsesBefore)
+            stale.append(editor.staleParseCount - staleBefore)
+            #expect(editor.parsed.revision == editor.revision, "round \(round)")
+        }
+        print(String(format: "%@ bytes=%d keys=%d interval=%.0fms delay=%.0fms staleness_limit=%.0fms settle p50=%.0fms max=%.0fms parses=%@ stale=%@",
+                     label, source.utf8.count, keys, Self.ms(interval), Self.ms(editor.parseDelay), Self.ms(editor.parseStalenessLimit),
+                     Self.percentile(settles, 0.5), Self.ms(settles.max()!), "\(parses)", "\(stale)"))
+        #expect(editor.textKitFallbackCount == 0)
+        return (settles, parses, stale)
+    }
+
     /// The artifact store alone, with a long history of measured elements whose pixels are mostly
     /// released: single-character edits at the head, middle and tail, and the release that follows
     /// each render completing while scrolling. Main-thread time per call.
