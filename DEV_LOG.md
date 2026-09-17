@@ -80,3 +80,47 @@ Host and raw output: `Validation/2026-09-17-render-cancel-recovery/` (Release, M
 - **Running renders whose callers left.** Measured first: an obsolete running diagram held the WebKit page until it finished, so the next diagram waited 342 ms after a cancelled 480-edge chain and 1,035 ms after a 490-edge crossing graph. Editing that graph while it rendered showed the new one after 2,270 ms. Replacing a page costs 125–135 ms. `WebRenderer` now abandons a running job, discarding its page, only when no caller waits for it, another job is queued, and it has run 150 ms. The next diagram then waits 250 ms in both cases, and editing the dense graph takes 1,490 ms. A 250-edge chain (about 200 ms) is now abandoned just before finishing, so the next diagram waits 234 ms instead of 140 ms. That regression is bounded by one page load and is recorded, not hidden. `RenderService` passes the shared entry's live waiter count, so a render another caller still waits for, or one rejoined after a keystroke, keeps running. Typing elsewhere during a render caused no page loads at 100 ms or 30 ms per keystroke. Queued cancellation is unchanged.
 - **Recovery writes.** Measured first on a 9.54 MB document: every caret move or scroll followed by a 600 ms pause rewrote a 10.12 MB JSON record, taking 164 ms to encode the bridged source, and ten screens read 1.5 s apart wrote 101 MB. Idle wrote nothing. A record is now `<id>.json`, which holds the metadata and names the file with the source, plus `<id>.<token>.source` with raw UTF-8. A save with the same revision replaces only the JSON, so caret and scroll saves write about 4 KB in 0.3 ms, and the reading session writes 0.04 MB. An edit writes the 9.54 MB source in 17.5 ms. A new source is written before the JSON that names it, and old sources are removed after, so a crash leaves a complete record. Records with the source inline still load. The revision is now `DocumentSnapshot`'s version, not the editor's, because a document without an editor can read new bytes without an editor revision, and deduplicating on the editor's revision kept the stale source (a test fails with it). UI: the two typing tests failed because keys arrived through the Korean input method, and failed identically on the commit before these changes. Only the three non-typing UI tests, including quit and recovery, validated this run.
 
+
+## 2026-09-17 — Multi-document recovery, live resize, table raster
+
+Host: a Linux container with **no Swift toolchain and no macOS SDK**. Nothing in this entry was
+compiled, run or measured. The three changes below are code and tests written against a reading of the
+source at `cb8c3df`; `Validation/2026-09-17-recovery-resize-tables/` says, per test, which assertion the
+previous code fails and why, and that is a claim about the code, not a result. Run the Swift and UI
+suites on macOS before trusting any of it.
+
+- **Multi-document recovery.** `LaunchPlan.resolve` took `records.first` and returned one plan, and the
+  launch path opened that one. Several unsaved drafts open at once therefore left one recoverable and
+  the rest in the recovery directory with nothing in the app that could reach them. `resolve` now
+  returns one plan per document, in the order to open them, and `applicationDidFinishLaunching` opens
+  all of them, bounded at eight, unsaved drafts first. A record also carries `state` — open, quit or
+  closed — and `hasUnsavedChanges`. The two answer different questions: a launch restores the documents
+  that were open when AirMark stopped, whether it stopped by quitting or crashing, and reopens the most
+  recently closed one only when nothing was left open, which is what a single-record launch did. A file
+  another app edited after a clean close now opens as a file instead of coming back as a dirty
+  "Recovered —" draft. Records from older builds have neither field and read as open with work to
+  recover, which is the previous behaviour. Restored windows step down from each other rather than
+  stacking exactly. Not addressed: records are still never removed, so one accumulates per document
+  identity ever opened, including empty untitled ones; the launch cap keeps that out of the UI but not
+  off the disk.
+- **Live resize.** Any environment change, down to one point of width, cancelled every render, ran
+  `artifacts.removeAll()` and invalidated every element, so a window drag replaced each rendered element
+  with its Markdown source and back at every step and discarded the layout that scroll eviction keeps.
+  The editor now measures and draws in the environment it last settled on; a geometry-only change arms
+  a 150 ms wait that every further change restarts and that never fires during a live resize. When it
+  fires, `ArtifactStore.holdGeometry` keeps what was measured as temporary geometry — each element keeps
+  its attachment at its measured size, scaled into the width there is now, and its last pixels — until
+  the new render replaces it. A changed font size, theme or background still measures from scratch. The
+  150 ms comes from PLAN-2026-09-17 §W8; nothing here measured it, and no frame time or page-load count
+  during a drag was measured either.
+- **Table raster.** `drawTable` read the scale and color space from `NSScreen.main` while every other
+  element followed the host window's backing scale through the render environment, so a window on a 1×
+  display beside a Retina main display got its tables at 2× and everything else at 1×. The scale was
+  also in the cache key without the bitmap following it. The raster is now `environment.scale`, which is
+  that window's backing scale captured with the rest of the environment and keyed with it, and the color
+  space of that window's screen; a window moving between screens reaches the editor through
+  `NSWindow.didChangeBackingPropertiesNotification`. The equivalence test against the previous AppKit
+  drawing is kept with the same corpus, but it now compares the two drawings inside one raster instead
+  of also deciding which raster is right — following the window matters more than reproducing the old
+  bitmap. Still unverified, and unverifiable here: a real two-screen machine, and right-to-left locales,
+  where cell text continues to align by the user's language direction rather than the host view's.

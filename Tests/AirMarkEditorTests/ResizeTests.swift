@@ -58,7 +58,8 @@ import AirMarkCore
             #expect(bounds.height > 0)
             widths.append(bounds.width)
         }
-        print("RESIZE drag steps=\(Self.dragWidths.count) measured=\(measured.size) drawn widths \(widths.first.map { "\($0)" } ?? "-")…\(widths.last.map { "\($0)" } ?? "-") requests=\(editor.renderRequestCount - requests)")
+        let firstDrawn = widths.first ?? 0, lastDrawn = widths.last ?? 0
+        print("RESIZE drag steps=\(Self.dragWidths.count) measured=\(measured.size) drawn width \(firstDrawn) to \(lastDrawn) requests=\(editor.renderRequestCount - requests)")
         #expect(editor.renderRequestCount == requests, "renders were started for widths the drag passed through")
         // Settling adopts the last width once, keeping the measurements as temporary geometry, and
         // renders the element again for it.
