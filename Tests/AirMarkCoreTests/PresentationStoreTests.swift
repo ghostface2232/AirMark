@@ -41,8 +41,10 @@ struct PresentationStoreTests {
                 #expect(store.elements == reference.elements, "round \(round) step \(step)")
                 #expect(store.checkboxes == reference.checkboxes.sorted { $0.location < $1.location }, "round \(round) step \(step)")
                 let probe = Self.randomSpan(&generator, length: text.length)
-                #expect(store.styles(intersecting: probe) == reference.styles.filter { $0.span.end > probe.location && $0.span.location < probe.end },
-                        "round \(round) step \(step) probe \(probe)")
+                let expected = reference.styles.filter { $0.span.end > probe.location && $0.span.location < probe.end }.map { run in
+                    StyleRun(span: run.span, kind: run.kind, markers: run.markers.filter { $0.end >= probe.location && $0.location <= probe.end })
+                }
+                #expect(store.styles(intersecting: probe) == expected, "round \(round) step \(step) probe \(probe)")
                 #expect(Array(store.elements(intersecting: probe)) == reference.elements.filter { $0.span.end > probe.location && $0.span.location < probe.end })
             }
             // A newer parse is compared with the edited store the way the editor applies it.
@@ -52,6 +54,36 @@ struct PresentationStoreTests {
             #expect(Set(store.changedStyleSpans(comparedTo: next)) == expectedSpans, "round \(round)")
             #expect(Set(store.unchangedElements(comparedTo: next)) == Set(reference.elements).intersection(Set(latest.elements)), "round \(round)")
         }
+    }
+
+    /// A caret-sized query inside a long block quote examines about as many tree nodes as one in a
+    /// short document: the cost follows the styles that reach the range, not the quote's length.
+    @Test func queryCostIsIndependentOfContainerLength() {
+        func visits(_ source: String) -> Int {
+            let store = PresentationStore(MarkdownParser.parse(source))
+            let middle = source.utf16.count / 2
+            var count = 0
+            let found = store.styles(intersecting: SourceSpan(middle - 2, 6), visits: &count)
+            #expect(found.contains { $0.kind == .quote })
+            return count
+        }
+        let line = "> quoted line with **bold** and *em* text\n"
+        let short = visits(String(repeating: line, count: 50))
+        let long = visits(String(repeating: line, count: 20_000))
+        #expect(long <= short * 3, "short quote: \(short) visits, long quote: \(long)")
+        let source = String(repeating: line, count: 20_000)
+        let quote = PresentationStore(MarkdownParser.parse(source)).styles(intersecting: SourceSpan(source.utf16.count / 2, 0)).first { $0.kind == .quote }
+        #expect((quote?.markers.count ?? .max) <= 2, "a query returns only the quote markers near it")
+    }
+
+    /// The editor edits before its first parse lands, on an empty store.
+    @Test func emptyStoreAcceptsEditsAndQueries() {
+        var store = PresentationStore()
+        store.apply(PresentationEdit(range: NSRange(location: 0, length: 0), replacement: "hello"))
+        #expect(store.styles(intersecting: SourceSpan(0, 5)).isEmpty)
+        var single = PresentationStore(MarkdownParser.parse("**a**"))
+        single.apply(PresentationEdit(range: NSRange(location: 0, length: 0), replacement: "x"))
+        #expect(single.styles(intersecting: SourceSpan(0, 6)).map(\.span) == [SourceSpan(0, 6)])
     }
 
     /// Queries at a single position return the styles strictly containing it, as caret rules need.

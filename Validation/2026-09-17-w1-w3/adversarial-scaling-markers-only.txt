@@ -1,0 +1,12 @@
+ADVERSARIAL normal bytes=124890 styles=7240 elements=905 parse_p50=41.356ms query2000_p50=0.205ms
+ADVERSARIAL normal bytes=249918 styles=14488 elements=1811 parse_p50=83.177ms query2000_p50=0.213ms parse_exponent=1.01 query_exponent=0.05
+ADVERSARIAL normal bytes=499974 styles=28984 elements=3623 parse_p50=165.249ms query2000_p50=0.243ms parse_exponent=0.99 query_exponent=0.19
+ADVERSARIAL normal bytes=999948 styles=57968 elements=7246 parse_p50=331.681ms query2000_p50=0.265ms parse_exponent=1.01 query_exponent=0.12
+ADVERSARIAL long-quote bytes=124992 styles=5953 elements=0 parse_p50=29.440ms query2000_p50=3.584ms
+ADVERSARIAL long-quote bytes=249984 styles=11905 elements=0 parse_p50=58.737ms query2000_p50=8.333ms parse_exponent=1.00 query_exponent=1.22
+ADVERSARIAL long-quote bytes=499968 styles=23809 elements=0 parse_p50=120.627ms query2000_p50=12.642ms parse_exponent=1.04 query_exponent=0.60
+ADVERSARIAL long-quote bytes=999978 styles=47619 elements=0 parse_p50=242.956ms query2000_p50=25.323ms parse_exponent=1.01 query_exponent=1.00
+ADVERSARIAL nested-containers bytes=124990 styles=30171 elements=0 parse_p50=141.973ms query2000_p50=16.604ms
+ADVERSARIAL nested-containers bytes=249980 styles=60341 elements=0 parse_p50=285.659ms query2000_p50=32.369ms parse_exponent=1.01 query_exponent=0.96
+ADVERSARIAL nested-containers bytes=499989 styles=120688 elements=0 parse_p50=588.985ms query2000_p50=63.780ms parse_exponent=1.04 query_exponent=0.98
+ADVERSARIAL nested-containers bytes=999978 styles=241375 elements=0 parse_p50=1159.545ms query2000_p50=127.585ms parse_exponent=0.98 query_exponent=1.00

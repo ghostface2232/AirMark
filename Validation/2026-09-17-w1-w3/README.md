@@ -33,3 +33,9 @@ Only paths whose curve is superlinear are changed. Every parse exponent over doc
 - Parsing one line of `$1 ` or `$a ` repeated has an exponent of 1.95–2.02: each unclosed `$` rescans the rest of the line.
 
 The long-list and unclosed-display query exponents move between 0.08 and 0.76 without a trend, at 0.3–0.7 ms for 2,000 queries; that is not treated as evidence.
+
+### Queries inside long containers
+
+- `adversarial-scaling-query-after.txt`: after returning only nearby markers and querying a maximum tree. Long-quote queries fall from 229.8 to 1.2 ms per 2,000 at 1MB and nested containers from 425.7 to 1.8 ms; query exponents are 0.10–0.22 for every corpus.
+- `adversarial-scaling-markers-only.txt`: an experiment, not committed code. Nearby markers with the old linear scan still give exponents of 0.96–1.22 in long quotes and nested containers, so both causes are needed. The tree's cost in a normal document is about 0.24 ms per 2,000 queries at 1MB (0.27 → 0.50 ms).
+- The first attempt changed only the scan to a tree and left the exponent at 1.00: each query copied every `>` marker of the quote into its result.

@@ -1,0 +1,20 @@
+ADVERSARIAL normal bytes=124890 styles=7240 elements=905 parse_p50=47.833ms query2000_p50=0.415ms
+ADVERSARIAL normal bytes=249918 styles=14488 elements=1811 parse_p50=84.716ms query2000_p50=0.403ms parse_exponent=0.82 query_exponent=-0.04
+ADVERSARIAL normal bytes=499974 styles=28984 elements=3623 parse_p50=166.849ms query2000_p50=0.441ms parse_exponent=0.98 query_exponent=0.13
+ADVERSARIAL normal bytes=999948 styles=57968 elements=7246 parse_p50=332.621ms query2000_p50=0.503ms parse_exponent=1.00 query_exponent=0.19
+ADVERSARIAL long-quote bytes=124992 styles=5953 elements=0 parse_p50=28.666ms query2000_p50=0.856ms
+ADVERSARIAL long-quote bytes=249984 styles=11905 elements=0 parse_p50=55.883ms query2000_p50=0.918ms parse_exponent=0.96 query_exponent=0.10
+ADVERSARIAL long-quote bytes=499968 styles=23809 elements=0 parse_p50=114.871ms query2000_p50=0.998ms parse_exponent=1.04 query_exponent=0.12
+ADVERSARIAL long-quote bytes=999978 styles=47619 elements=0 parse_p50=233.027ms query2000_p50=1.162ms parse_exponent=1.02 query_exponent=0.22
+ADVERSARIAL nested-containers bytes=124990 styles=30171 elements=0 parse_p50=138.472ms query2000_p50=1.329ms
+ADVERSARIAL nested-containers bytes=249980 styles=60341 elements=0 parse_p50=280.947ms query2000_p50=1.428ms parse_exponent=1.02 query_exponent=0.10
+ADVERSARIAL nested-containers bytes=499989 styles=120688 elements=0 parse_p50=567.575ms query2000_p50=1.601ms parse_exponent=1.01 query_exponent=0.17
+ADVERSARIAL nested-containers bytes=999978 styles=241375 elements=0 parse_p50=1150.602ms query2000_p50=1.811ms parse_exponent=1.02 query_exponent=0.18
+ADVERSARIAL long-list bytes=124980 styles=16664 elements=0 parse_p50=71.777ms query2000_p50=0.589ms
+ADVERSARIAL long-list bytes=249990 styles=33332 elements=0 parse_p50=144.261ms query2000_p50=0.623ms parse_exponent=1.01 query_exponent=0.08
+ADVERSARIAL long-list bytes=499980 styles=66664 elements=0 parse_p50=287.020ms query2000_p50=0.674ms parse_exponent=0.99 query_exponent=0.11
+ADVERSARIAL long-list bytes=999990 styles=133332 elements=0 parse_p50=583.728ms query2000_p50=0.765ms parse_exponent=1.02 query_exponent=0.18
+ADVERSARIAL unclosed-display bytes=124992 styles=13888 elements=0 parse_p50=32.873ms query2000_p50=0.465ms
+ADVERSARIAL unclosed-display bytes=249993 styles=27777 elements=0 parse_p50=66.138ms query2000_p50=0.512ms parse_exponent=1.01 query_exponent=0.14
+ADVERSARIAL unclosed-display bytes=499995 styles=55555 elements=0 parse_p50=132.185ms query2000_p50=0.567ms parse_exponent=1.00 query_exponent=0.15
+ADVERSARIAL unclosed-display bytes=999999 styles=111111 elements=0 parse_p50=268.500ms query2000_p50=0.644ms parse_exponent=1.02 query_exponent=0.18
