@@ -281,6 +281,27 @@ import AirMarkCore
         #expect(plans == [.openFile(path: url.path, record: record)], "the last document still reopens when nothing was left open")
     }
 
+    /// Every record a run writes names that run, so a launch restores the documents the last session
+    /// had open and not the ones a session before it left behind. Without the session, `.quit` records
+    /// nothing has rewritten since came back at every later launch.
+    @Test func recordsNameTheSessionThatWroteThem() async throws {
+        let (document, url, directory) = try makeDocument(Data("saved\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        let store = try #require(MarkdownDocument.recoveryStore)
+        let mine = try #require(try await recoveryRecord(document) { $0.state == .open })
+        #expect(mine.sessionID == store.sessionID)
+        // A `.quit` record an earlier run of the app left in the same directory.
+        var stale = mine
+        stale.id = UUID(); stale.filePath = "/notes/two-sessions-ago.md"
+        stale.state = .quit; stale.hasUnsavedChanges = false; stale.sessionID = UUID()
+        stale.date = mine.date.addingTimeInterval(-3600)
+        try await store.save(stale)
+        let records = await store.records()
+        #expect(records.contains { $0.id == stale.id })
+        let plans = LaunchPlan.resolve(records: records, recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: mine)], "only this session's document, got \(plans)")
+    }
+
     /// Waits for this document's recovery record to satisfy `condition`.
     func recoveryRecord(_ document: MarkdownDocument, where condition: (RecoveryRecord) -> Bool) async throws -> RecoveryRecord? {
         for _ in 0..<100 {

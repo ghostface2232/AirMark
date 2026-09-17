@@ -36,16 +36,29 @@ public struct RecoveryRecord: Codable, Sendable, Equatable {
     public var state: RecoveryState
     /// `source` was not on disk when the record was written, so only the record holds it.
     public var hasUnsavedChanges: Bool
+    /// The run of the app that wrote this record. `state` says the document was open when AirMark
+    /// stopped, but not which stop: without this, a record left by a session two launches ago was
+    /// restored again at every later launch, because nothing had rewritten it since. Nil in records
+    /// written before sessions were identified.
+    public var sessionID: UUID?
+    /// Where the document's window stood in its session, front first. Nil when the document had no
+    /// window order to read, and in records written before the order was recorded.
+    public var order: Int?
     public init(id: UUID, filePath: String?, source: String, hasBOM: Bool, revision: UInt64, selection: SourceSpan, scrollY: Double,
-                state: RecoveryState = .open, hasUnsavedChanges: Bool = true) {
+                state: RecoveryState = .open, hasUnsavedChanges: Bool = true, sessionID: UUID? = nil, order: Int? = nil) {
         self.id = id; self.filePath = filePath; self.source = source; self.hasBOM = hasBOM
         self.revision = revision; self.selection = selection; self.scrollY = scrollY; date = Date()
         self.state = state; self.hasUnsavedChanges = hasUnsavedChanges
+        self.sessionID = sessionID; self.order = order
     }
 }
 
 public actor RecoveryStore {
     public let directory: URL
+    /// Identifies this run of the app; one store is made per launch. Every record written through it
+    /// carries it, so a launch can tell the documents the last session had open from records an
+    /// earlier session left behind and nothing has rewritten since.
+    public nonisolated let sessionID = UUID()
     private nonisolated let writer = RecoveryWriter()
     public init(directory: URL) { self.directory = directory }
     public func save(_ record: RecoveryRecord) throws {
@@ -94,6 +107,10 @@ private final class RecoveryWriter: @unchecked Sendable {
         /// before: only the most recent one, and only when nothing was left open.
         var state: RecoveryState?
         var hasUnsavedChanges: Bool?
+        /// Absent in records written before a record said which run of the app wrote it, and before
+        /// the window order within that run was recorded. Both read as nil.
+        var sessionID: UUID?
+        var order: Int?
     }
     private let lock = NSLock()
     /// What this writer last wrote per id. A new writer, as after a relaunch, knows nothing and writes the
@@ -119,7 +136,8 @@ private final class RecoveryWriter: @unchecked Sendable {
             }
             let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
                                 revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date,
-                                state: record.state, hasUnsavedChanges: record.hasUnsavedChanges)
+                                state: record.state, hasUnsavedChanges: record.hasUnsavedChanges,
+                                sessionID: record.sessionID, order: record.order)
             do {
                 try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
             } catch {
@@ -160,7 +178,8 @@ private final class RecoveryWriter: @unchecked Sendable {
         }
         var record = RecoveryRecord(id: stored.id, filePath: stored.filePath, source: source, hasBOM: stored.hasBOM, revision: stored.revision,
                                     selection: stored.selection, scrollY: stored.scrollY,
-                                    state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true)
+                                    state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true,
+                                    sessionID: stored.sessionID, order: stored.order)
         record.date = stored.date
         return record
     }

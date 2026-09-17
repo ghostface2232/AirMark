@@ -49,8 +49,9 @@ import os
             let records = await Self.recovery.records()
             guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
             let recent = NSDocumentController.shared.recentDocumentURLs.map(\.path)
-            // Every document that was open when AirMark last stopped comes back, not only the newest
-            // record. The plans arrive in the order to open them; the last one belongs in front.
+            // Every document the last session had open comes back, not only the newest record and not
+            // the documents an earlier session left behind. The plans arrive in the order to open them,
+            // back to front; the last one belongs in front.
             let plans = LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
             for (index, plan) in plans.enumerated() {
                 // A document opened from a file gets its window through an asynchronous completion, so

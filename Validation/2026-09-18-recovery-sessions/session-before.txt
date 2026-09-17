@@ -1,0 +1,86 @@
+Building for debugging...
+/Users/baemingwan/Documents/AI/airmark/Sources/AirMarkCore/MarkdownParser.swift:273:5: [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m271 |[0;0m     /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
+[0;36m272 |[0;0m     /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+[0;36m273 |[0;0m     nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    [0;36m|[0;0m     `- [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m274 |[0;0m     nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+[0;36m275 |[0;0m 
+
+/Users/baemingwan/Documents/AI/airmark/Sources/AirMarkCore/MarkdownParser.swift:274:5: [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m272 |[0;0m     /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+[0;36m273 |[0;0m     nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+[0;36m274 |[0;0m     nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+    [0;36m|[0;0m     `- [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m275 |[0;0m 
+[0;36m276 |[0;0m     /// Whether `source` contains `]:`, which every link reference definition does.
+[5 / 26] AirMarkCore
+[13 / 33] AirMarkCore
+[24 / 38] AirMarkRender
+[28 / 42] AirMarkBench-product
+[31 / 44] AirMarkCoreTests-product
+[37 / 45] AirMarkEditorTests-product
+[42 / 49] AirMarkEditorTests-product
+[46 / 48] AirMarkCoreTests-product
+Build complete! (1.65 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DocumentTests started.
+◇ Test recordsNameTheSessionThatWroteThem() started.
+✘ Test recordsNameTheSessionThatWroteThem() recorded an issue at DocumentTests.swift:302:9: Expectation failed: plans == [.openFile(path: url.path, record: mine)]
+↳ only this session's document, got [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: 2AADBFE7-AE55-49E3-97BA-30C4ECF7A3B3, filePath: Optional("/notes/two-sessions-ago.md"), source: "saved\n", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 0, length: 0), scrollY: -32.0, date: 2026-09-17 22:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(E5620424-22FA-4CD7-B66F-F38C654AAAB1), order: nil)), AirMarkCore.LaunchPlan.openFile(path: "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md", record: Optional(AirMarkCore.RecoveryRecord(id: 3B0FC9A1-C8C3-40E2-8BE4-A0023D4371E7, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md"), source: "saved\n", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 0, length: 0), scrollY: -32.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.open, hasUnsavedChanges: false, sessionID: Optional(9CA7EED0-6CB4-4F0B-AEDD-D70962488655), order: nil)))]
+↳ plans == [.openFile(path: url.path, record: mine)] → false
+↳   plans → [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: 2AADBFE7-AE55-49E3-97BA-30C4ECF7A3B3, filePath: Optional("/notes/two-sessions-ago.md"), source: "saved\n", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 0, length: 0), scrollY: -32.0, date: 2026-09-17 22:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(E5620424-22FA-4CD7-B66F-F38C654AAAB1), order: nil)), AirMarkCore.LaunchPlan.openFile(path: "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md", record: Optional(AirMarkCore.RecoveryRecord(id: 3B0FC9A1-C8C3-40E2-8BE4-A0023D4371E7, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md"), source: "saved\n", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 0, length: 0), scrollY: -32.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.open, hasUnsavedChanges: false, sessionID: Optional(9CA7EED0-6CB4-4F0B-AEDD-D70962488655), order: nil)))]
+↳   [.openFile(path: url.path, record: mine)] → [AirMarkCore.LaunchPlan.openFile(path: "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md", record: Optional(AirMarkCore.RecoveryRecord(id: 3B0FC9A1-C8C3-40E2-8BE4-A0023D4371E7, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-9793A520-D75B-4577-9845-1B7C73992A0D/Note.md"), source: "saved\n", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 0, length: 0), scrollY: -32.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.open, hasUnsavedChanges: false, sessionID: Optional(9CA7EED0-6CB4-4F0B-AEDD-D70962488655), order: nil)))]
+✘ Test recordsNameTheSessionThatWroteThem() failed after 0.711 seconds with 1 issue.
+↳ /// Every record a run writes names that run, so a launch restores the documents the last session
+↳ /// had open and not the ones a session before it left behind. Without the session, `.quit` records
+↳ /// nothing has rewritten since came back at every later launch.
+✘ Suite DocumentTests failed after 0.711 seconds with 1 issue.
+↳ /// Saving, external-change detection and recovery without XCUIAutomation.
+↳ /// Other suites run in parallel and their documents also write to `MarkdownDocument.recoveryStore`,
+↳ /// so recovery assertions select this test's record by document identity.
+✘ Test run with 1 test in 1 suite failed after 0.711 seconds with 1 issue.
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test launchRestoresOnlyTheLastSessionsDocuments() started.
+◇ Test launchRestoresTheSessionsWindowOrder() started.
+✘ Test launchRestoresOnlyTheLastSessionsDocuments() recorded an issue at SourceTests.swift:157:5: Expectation failed: LaunchPlan.resolve(records: [current, abandoned], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/last.md", record: current)]
+↳ // `records()` is newest first, so the last session's record leads and names the session.
+↳ LaunchPlan.resolve(records: [current, abandoned], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/last.md", record: current)] → false
+↳   LaunchPlan.resolve(records: [current, abandoned], recentPaths: [], fileData: { disk[$0] }) → [AirMarkCore.LaunchPlan.openFile(path: "/notes/two-sessions-ago.md", record: Optional(AirMarkCore.RecoveryRecord(id: 4A153E1C-AD8E-4334-9858-76A96AB810D4, filePath: Optional("/notes/two-sessions-ago.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(803093D6-2694-49BF-9C8A-05AC5201E9DC), order: nil))), AirMarkCore.LaunchPlan.openFile(path: "/notes/last.md", record: Optional(AirMarkCore.RecoveryRecord(id: D10958C2-76A9-4DDA-826E-D11911E696AE, filePath: Optional("/notes/last.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(FFF47037-9A5C-4384-84FE-453B8B135905), order: nil)))]
+↳   [.openFile(path: "/notes/last.md", record: current)] → [AirMarkCore.LaunchPlan.openFile(path: "/notes/last.md", record: Optional(AirMarkCore.RecoveryRecord(id: D10958C2-76A9-4DDA-826E-D11911E696AE, filePath: Optional("/notes/last.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(FFF47037-9A5C-4384-84FE-453B8B135905), order: nil)))]
+✘ Test launchRestoresOnlyTheLastSessionsDocuments() recorded an issue at SourceTests.swift:163:5: Expectation failed: LaunchPlan.resolve(records: [closed, abandoned], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/put-away.md", record: closed)]
+↳ LaunchPlan.resolve(records: [closed, abandoned], recentPaths: [], fileData: { disk[$0] }) == [.openFile(path: "/notes/put-away.md", record: closed)] → false
+↳   LaunchPlan.resolve(records: [closed, abandoned], recentPaths: [], fileData: { disk[$0] }) → [AirMarkCore.LaunchPlan.openFile(path: "/notes/two-sessions-ago.md", record: Optional(AirMarkCore.RecoveryRecord(id: 4A153E1C-AD8E-4334-9858-76A96AB810D4, filePath: Optional("/notes/two-sessions-ago.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(803093D6-2694-49BF-9C8A-05AC5201E9DC), order: nil)))]
+↳   [.openFile(path: "/notes/put-away.md", record: closed)] → [AirMarkCore.LaunchPlan.openFile(path: "/notes/put-away.md", record: Optional(AirMarkCore.RecoveryRecord(id: 6D6DEFD3-2E42-4940-819A-6FA9B46A7A73, filePath: Optional("/notes/put-away.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: false, sessionID: Optional(FFF47037-9A5C-4384-84FE-453B8B135905), order: nil)))]
+✘ Test launchRestoresTheSessionsWindowOrder() recorded an issue at SourceTests.swift:189:5: Expectation failed: plans == [.openFile(path: "/notes/back.md", record: back),
+                      .openFile(path: "/notes/middle.md", record: middle),
+                      .openFile(path: "/notes/front.md", record: front)]
+↳ back to front, so the frontmost document is opened last
+↳ plans == [.openFile(path: "/notes/back.md", record: back),
+                        .openFile(path: "/notes/middle.md", record: middle),
+                        .openFile(path: "/notes/front.md", record: front)] → false
+↳   plans → [AirMarkCore.LaunchPlan.openFile(path: "/notes/front.md", record: Optional(AirMarkCore.RecoveryRecord(id: 7022EFEE-9C6C-49A6-A285-7C0A19E4D993, filePath: Optional("/notes/front.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(0)))), AirMarkCore.LaunchPlan.openFile(path: "/notes/middle.md", record: Optional(AirMarkCore.RecoveryRecord(id: 5855A8D7-8E1C-46CD-ABF2-4218F4B964B9, filePath: Optional("/notes/middle.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(1)))), AirMarkCore.LaunchPlan.openFile(path: "/notes/back.md", record: Optional(AirMarkCore.RecoveryRecord(id: 8458F981-3BE3-473B-9C41-E4D401F4062B, filePath: Optional("/notes/back.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(2))))]
+↳   [.openFile(path: "/notes/back.md", record: back),
+                          .openFile(path: "/notes/middle.md", record: middle),
+                          .openFile(path: "/notes/front.md", record: front)] → [AirMarkCore.LaunchPlan.openFile(path: "/notes/back.md", record: Optional(AirMarkCore.RecoveryRecord(id: 8458F981-3BE3-473B-9C41-E4D401F4062B, filePath: Optional("/notes/back.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(2)))), AirMarkCore.LaunchPlan.openFile(path: "/notes/middle.md", record: Optional(AirMarkCore.RecoveryRecord(id: 5855A8D7-8E1C-46CD-ABF2-4218F4B964B9, filePath: Optional("/notes/middle.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(1)))), AirMarkCore.LaunchPlan.openFile(path: "/notes/front.md", record: Optional(AirMarkCore.RecoveryRecord(id: 7022EFEE-9C6C-49A6-A285-7C0A19E4D993, filePath: Optional("/notes/front.md"), source: "text", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 2, length: 0), scrollY: 0.0, date: 2026-09-17 23:21:12 +0000, state: AirMarkCore.RecoveryState.quit, hasUnsavedChanges: false, sessionID: Optional(6BEEE0B6-5E8C-4826-857B-A91EF94D6FA2), order: Optional(0))))]
+✘ Test launchRestoresOnlyTheLastSessionsDocuments() failed after 0.008 seconds with 2 issues.
+↳ /// Only the documents the last session had open come back. A record says a document was open when
+↳ /// AirMark stopped, and nothing but that document rewrites it, so a session that restored nothing —
+↳ /// one launched on a file from Finder — left the session before it with `.open` records that every
+↳ /// later launch restored again.
+✘ Test launchRestoresTheSessionsWindowOrder() recorded an issue at SourceTests.swift:193:5: Expectation failed: plans.last?.recordID == front.id
+↳ plans.last?.recordID == front.id → false
+↳   plans.last?.recordID → 8458F981-3BE3-473B-9C41-E4D401F4062B
+↳     some → 8458F981-3BE3-473B-9C41-E4D401F4062B
+↳   front.id → 7022EFEE-9C6C-49A6-A285-7C0A19E4D993
+✘ Test launchRestoresTheSessionsWindowOrder() failed after 0.008 seconds with 2 issues.
+↳ /// The session records where each window stood, so the document in front at the quit is the document
+↳ /// in front at the launch, whichever one happened to write its record last.
+✘ Test run with 2 tests in 0 suites failed after 0.008 seconds with 4 issues.
+Note: Some test targets reported failures:
+  - AirMarkEditorTests (Swift Testing)
+  - AirMarkCoreTests (Swift Testing)

@@ -141,6 +141,62 @@ func launchRecord(_ path: String?, _ source: String, state: RecoveryState = .ope
     #expect(LaunchPlan.resolve(records: [newest] + older + [open], recentPaths: [], fileData: { _ in nil }) == [.recoverDraft(open)])
 }
 
+/// Only the documents the last session had open come back. A record says a document was open when
+/// AirMark stopped, and nothing but that document rewrites it, so a session that restored nothing —
+/// one launched on a file from Finder — left the session before it with `.open` records that every
+/// later launch restored again.
+@Test func launchRestoresOnlyTheLastSessionsDocuments() {
+    let old = UUID(), last = UUID()
+    var abandoned = launchRecord("/notes/two-sessions-ago.md", "text", state: .quit, unsaved: false)
+    abandoned.sessionID = old
+    var current = launchRecord("/notes/last.md", "text", state: .quit, unsaved: false)
+    current.sessionID = last
+    let disk = ["/notes/two-sessions-ago.md": Data("text".utf8), "/notes/last.md": Data("text".utf8),
+                "/notes/put-away.md": Data("text".utf8)]
+    // `records()` is newest first, so the last session's record leads and names the session.
+    #expect(LaunchPlan.resolve(records: [current, abandoned], recentPaths: [], fileData: { disk[$0] })
+            == [.openFile(path: "/notes/last.md", record: current)])
+    // Excluded, not dropped: with nothing left open in the last session it is still the one document
+    // that comes back, so no work becomes unreachable.
+    var closed = launchRecord("/notes/put-away.md", "text", state: .closed, unsaved: false)
+    closed.sessionID = last
+    #expect(LaunchPlan.resolve(records: [closed, abandoned], recentPaths: [], fileData: { disk[$0] })
+            == [.openFile(path: "/notes/put-away.md", record: closed)])
+    #expect(LaunchPlan.resolve(records: [abandoned], recentPaths: [], fileData: { disk[$0] })
+            == [.openFile(path: "/notes/two-sessions-ago.md", record: abandoned)],
+            "the last session is whatever session the newest record belongs to")
+    // Records from a build that wrote no session at all are still read whole.
+    let first = launchRecord("/notes/a.md", "text", state: .quit, unsaved: false)
+    let second = launchRecord("/notes/b.md", "text", state: .quit, unsaved: false)
+    #expect(LaunchPlan.resolve(records: [first, second], recentPaths: [], fileData: { _ in Data("text".utf8) }).count == 2)
+    // A directory holding both: the records with no session join the last session rather than being
+    // treated as an older one, which is what the launch before sessions did with them.
+    #expect(LaunchPlan.resolve(records: [current, first], recentPaths: [], fileData: { _ in Data("text".utf8) }).count == 2)
+}
+
+/// The session records where each window stood, so the document in front at the quit is the document
+/// in front at the launch, whichever one happened to write its record last.
+@Test func launchRestoresTheSessionsWindowOrder() {
+    let session = UUID()
+    func window(_ name: String, order: Int) -> RecoveryRecord {
+        var record = launchRecord("/notes/\(name).md", "text", state: .quit, unsaved: false)
+        record.sessionID = session; record.order = order
+        return record
+    }
+    // Newest first, as the store returns them: the back window was recorded last.
+    let back = window("back", order: 2), middle = window("middle", order: 1), front = window("front", order: 0)
+    let plans = LaunchPlan.resolve(records: [back, middle, front], recentPaths: [], fileData: { _ in Data("text".utf8) })
+    #expect(plans == [.openFile(path: "/notes/back.md", record: back),
+                      .openFile(path: "/notes/middle.md", record: middle),
+                      .openFile(path: "/notes/front.md", record: front)],
+            "back to front, so the frontmost document is opened last")
+    #expect(plans.last?.recordID == front.id)
+    // Without a recorded order the newest record is taken as the frontmost, as before.
+    var a = front, b = back
+    a.order = nil; b.order = nil
+    #expect(LaunchPlan.resolve(records: [a, b], recentPaths: [], fileData: { _ in Data("text".utf8) }).last?.recordID == a.id)
+}
+
 /// There is no limit on how many documents a launch restores. A record left unrestored would be work
 /// the app can no longer reach, and the same records would be left out at every later launch.
 @Test func launchRestoresEveryOpenDocumentWithoutALimit() {

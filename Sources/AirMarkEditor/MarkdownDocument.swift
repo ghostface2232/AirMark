@@ -191,11 +191,17 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// separate question, and `isDocumentEdited` already answers it: it is what the window's dirty mark
     /// shows, it survives a failed save, and reading it costs nothing. Comparing the source with the
     /// bytes on disk instead would encode the whole document on every caret move.
+    /// `sessionID` is the recovery store's, so every record this run writes names this run and a launch
+    /// restores the last session rather than every session that ever ended with a document open.
+    /// `order` is the document's place in the window order, front first, recorded with each record so
+    /// the session's stacking survives the quit; a document with no window in the order has none.
     public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
         return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version,
                               selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
-                              state: state, hasUnsavedChanges: isDocumentEdited)
+                              state: state, hasUnsavedChanges: isDocumentEdited,
+                              sessionID: Self.recoveryStore?.sessionID,
+                              order: NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()

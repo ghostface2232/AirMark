@@ -94,12 +94,13 @@ import Testing
         let directory = Self.directory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = RecoveryStore(directory: directory)
+        let session = UUID()
         var quit = Self.record(UUID(), "on disk\n", revision: 2, path: "/notes/a.md")
-        quit.state = .quit; quit.hasUnsavedChanges = false
+        quit.state = .quit; quit.hasUnsavedChanges = false; quit.sessionID = session; quit.order = 0
         var draft = Self.record(UUID(), "typed but never saved", revision: 1)
-        draft.state = .open; draft.hasUnsavedChanges = true
+        draft.state = .open; draft.hasUnsavedChanges = true; draft.sessionID = session; draft.order = 1
         var closed = Self.record(UUID(), "put away\n", revision: 5, path: "/notes/b.md")
-        closed.state = .closed; closed.hasUnsavedChanges = false
+        closed.state = .closed; closed.hasUnsavedChanges = false; closed.sessionID = session
         for record in [quit, draft, closed] { try await store.save(record) }
         let read = await RecoveryStore(directory: directory).records()
         #expect(Set(read.map(\.id)) == Set([quit.id, draft.id, closed.id]))
@@ -113,6 +114,10 @@ import Testing
         let old = try #require(await RecoveryStore(directory: directory).records().first { $0.id == legacy })
         #expect(old.state == .unknown)
         #expect(old.hasUnsavedChanges)
+        #expect(old.sessionID == nil)
+        #expect(old.order == nil)
+        // Each store is one run of the app, so two of them never claim the same session.
+        #expect(store.sessionID != RecoveryStore(directory: directory).sessionID)
     }
 
     /// A crash can stop a save after the new source is on disk but before the record names it, or leave

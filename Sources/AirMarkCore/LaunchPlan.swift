@@ -52,9 +52,21 @@ public enum LaunchPlan: Equatable, Sendable {
     /// would be work with nothing in the app that could reach it, which is the whole point of this. When
     /// nothing was left open the most recently put away document is reopened, as before, then the most
     /// recent file, then a blank note.
+    ///
+    /// Only the last session's documents come back. `state` alone says a document was open when AirMark
+    /// stopped, but not at which stop, and a record is rewritten only by the document it belongs to: a
+    /// session that opened a file from Finder, or that could not reopen one, left the session before it
+    /// with `.open` and `.quit` records nothing had touched, and every later launch restored them again.
+    /// A record excluded that way is not dropped — it joins the closed records as a candidate for the
+    /// single most recently put away document, so nothing becomes unreachable.
     public static func resolve(records: [RecoveryRecord], recentPaths: [String], fileData: (String) -> Data?) -> [LaunchPlan] {
-        var plans = sessions(records.filter { $0.state == .open || $0.state == .quit }, fileData: fileData)
-        if plans.isEmpty, let last = records.first(where: { $0.state == .closed || $0.state == .unknown }) {
+        // The newest record belongs to the last session, so it names it. Records written before sessions
+        // were identified carry none; a directory of only those is read whole, as it was before.
+        let lastSession = records.first?.sessionID
+        func inLastSession(_ record: RecoveryRecord) -> Bool { record.sessionID == nil || record.sessionID == lastSession }
+        let left = records.filter { inLastSession($0) && ($0.state == .open || $0.state == .quit) }
+        var plans = sessions(frontToBack(left), fileData: fileData)
+        if plans.isEmpty, let last = records.first(where: { !inLastSession($0) || $0.state == .closed || $0.state == .unknown }) {
             plans = sessions([last], fileData: fileData)
         }
         guard !plans.isEmpty else {
@@ -62,6 +74,17 @@ public enum LaunchPlan: Equatable, Sendable {
             return [.newDocument]
         }
         return Array(plans.reversed())
+    }
+
+    /// One session's records in the order their windows stood, front first. The session records that
+    /// order as it writes each record, so which window ends up in front does not depend on which
+    /// document happened to be recorded last. Records from a build that did not record it keep the order
+    /// `RecoveryStore` returns them in, newest first, where the newest record is taken as the frontmost.
+    private static func frontToBack(_ records: [RecoveryRecord]) -> [RecoveryRecord] {
+        guard records.allSatisfy({ $0.order != nil }) else { return records }
+        // Two records can name one position when one of them was written before the windows were
+        // restacked; the newer of the two is the better guess at which was in front.
+        return records.sorted { $0.order == $1.order ? $0.date > $1.date : $0.order! < $1.order! }
     }
 
     /// One plan per record, newest first, skipping records with nothing to restore and second records
