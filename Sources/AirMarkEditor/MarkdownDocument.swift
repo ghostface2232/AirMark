@@ -187,14 +187,14 @@ public final class DocumentSnapshot: @unchecked Sendable {
     ///
     /// `state` says where in the document's life the record is written; a launch restores the documents
     /// that were still open when AirMark stopped. Whether the text is anywhere but in the record is a
-    /// separate question, answered by the bytes the document last read or wrote.
+    /// separate question, and `isDocumentEdited` already answers it: it is what the window's dirty mark
+    /// shows, it survives a failed save, and reading it costs nothing. Comparing the source with the
+    /// bytes on disk instead would encode the whole document on every caret move.
     public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
-        let persisted = snapshot.persistedData()
-        let unsaved = persisted.map { $0 != bytes.data } ?? !bytes.source.isEmpty
         return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version,
                               selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
-                              state: state, hasUnsavedChanges: unsaved)
+                              state: state, hasUnsavedChanges: isDocumentEdited)
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()

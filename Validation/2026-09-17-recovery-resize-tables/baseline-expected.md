@@ -21,6 +21,12 @@ comparing the record's source with the file on disk, which also reports a file a
 | `DocumentTests.everyUnsavedDocumentOpenAtOnceIsRecovered` | Two documents edited at once produced one `.recoverDraft` plan; the test requires two. |
 | `DocumentTests.closingADocumentRecordsItAsClosed` | `close()` wrote a record indistinguishable from one written while the document was open. |
 
+`hasUnsavedChanges` is `NSDocument.isDocumentEdited`, read on the main actor where the record is built.
+Comparing the source with `snapshot.persistedData()` would answer the same question exactly, but it
+encodes the whole document on every record — including the caret-move and scroll records that `cb8c3df`
+had just made cost about 4 KB and 0.3 ms on a 9.5 MB document. Nothing here measured either, so the
+cheap one that AppKit already maintains is the one used.
+
 Unchanged on purpose: a launch with a single record behaves exactly as before, including the
 `.openFile` / `.recoverDraft` / `.openRecent` / `.newDocument` order, and Markdown source bytes are
 untouched by all of this.
