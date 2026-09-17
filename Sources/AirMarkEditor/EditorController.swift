@@ -39,6 +39,11 @@ import os
     /// Edits numbered at or below this are not in `editLog`: a parse of a source older than it cannot
     /// be moved to the current text and is dropped.
     private var editLogStart = 0
+    /// The edit number of the last parse the worker finished, which it can reparse from.
+    private var workerSequence: Int?
+    /// The edit number of the parse the drawn presentation came from. When it is the parse the worker
+    /// reparsed from, the two differ only inside the window the worker reports.
+    private var presentationSequence: Int?
     private let parsingWorker = MarkdownParsingWorker()
     private var renderTasks: [SourceSpan: Task<Void, Never>] = [:]
     /// Layout metrics for rendered elements, and their pixels while near the viewport.
@@ -89,6 +94,8 @@ import os
     public private(set) var staleParseCount = 0
     /// Stale parses installed after moving them through the edits made while they ran; a test hook.
     public private(set) var rebasedParseCount = 0
+    /// Parses installed by comparing only the window the worker reparsed; a test hook.
+    public private(set) var windowedInstallCount = 0
     private let signposter = OSSignposter(subsystem: "com.airmark.AirMark", category: "Editor")
     public var source: String { isViewLoaded ? textView.string : sourceForInitialLoad }
     public var selection: SourceSpan { SourceSpan(textView.selectedRange()) }
@@ -242,17 +249,23 @@ import os
         firstPendingParse = nil
         parseRunning = true
         let source = textView.string, revision = self.revision, sequence = editSequence
+        let base = workerSequence.flatMap { $0 >= editLogStart ? $0 : nil }
+        let edits = base.map { base in (since: base, edits: editLog.filter { $0.sequence > base }.map(\.edit)) }
         let state = signposter.beginInterval("Parse")
-        let finished = try? await parsingWorker.parsePresentation(source, revision: revision)
+        let finished = try? await parsingWorker.parsePresentation(source, revision: revision, sequence: sequence, edits: edits)
         signposter.endInterval("Parse", state)
-        guard let (result, store, cost) = finished else { parseRunning = false; return }
+        guard let (result, store, cost, changed) = finished else { parseRunning = false; return }
+        workerSequence = sequence
         lastParseCost = cost
         parseCompletedCount += 1
+        // The window says what differs from the parse the worker started from; it bounds what differs
+        // from the drawn presentation only when that came from the same parse.
+        let window = base != nil && presentationSequence == base ? changed : nil
         if result.revision == self.revision {
-            applyParsedDocument(result, store: store)
+            applyParsedDocument(result, store: store, changed: window, sequence: sequence)
         } else {
             staleParseCount += 1
-            if await installStaleParse(store, revision: revision, parsedAtEdit: sequence) { rebasedParseCount += 1 }
+            if await installStaleParse(store, revision: revision, parsedAtEdit: sequence, changed: window) { rebasedParseCount += 1 }
         }
         // Later parses start from later text, so edits this one saw are no longer needed.
         editLog.removeAll { $0.sequence <= sequence }
@@ -266,15 +279,20 @@ import os
     /// them. `parsed` stays at its revision, so renders and element lookups still wait for a parse
     /// of the current text. Most of the moving runs off the main actor; edits made during it are
     /// applied here. Returns false when the edits are unknown or composition is in progress.
-    @discardableResult func installStaleParse(_ store: PresentationStore, revision parsedRevision: UInt64, parsedAtEdit sequence: Int) async -> Bool {
+    @discardableResult func installStaleParse(_ store: PresentationStore, revision parsedRevision: UInt64, parsedAtEdit sequence: Int, changed: SourceSpan? = nil) async -> Bool {
         guard sequence >= editLogStart, !textView.hasMarkedText() else { return false }
         let target = editSequence
         let edits = editLog.filter { $0.sequence > sequence }.map(\.edit)
         var moved = edits.isEmpty ? store : await Task.detached { var store = store; for edit in edits { store.apply(edit) }; return store }.value
         guard sequence >= editLogStart, !textView.hasMarkedText() else { return false }
         for entry in editLog where entry.sequence > target { moved.apply(entry.edit) }
-        EditorPhases.shared.measure(.applyParse) { installPresentation(moved) }
+        var window = changed
+        for entry in editLog where entry.sequence > sequence {
+            window = window.map { entry.edit.enclosing($0) ?? SourceSpan(entry.edit.range.location, 0) }
+        }
+        EditorPhases.shared.measure(.applyParse) { installPresentation(moved, changed: window) }
         presentationRevision = parsedRevision
+        presentationSequence = sequence
         onParseApplied?()
         return true
     }
@@ -283,20 +301,36 @@ import os
         editLogStart = editSequence
     }
     /// `store` is the presentation built from `result` off the main thread; tests may omit it.
-    @discardableResult func applyParsedDocument(_ result: ParsedDocument, store: PresentationStore? = nil) -> Bool {
+    /// `changed` bounds where it differs from the drawn presentation, when known; `sequence` is the
+    /// edit number it was parsed at.
+    @discardableResult func applyParsedDocument(_ result: ParsedDocument, store: PresentationStore? = nil, changed: SourceSpan? = nil, sequence: Int? = nil) -> Bool {
         guard result.revision == revision, !textView.hasMarkedText() else { return false }
-        EditorPhases.shared.measure(.applyParse) { installParse(result, store: store ?? PresentationStore(result)) }
+        EditorPhases.shared.measure(.applyParse) { installParse(result, store: store ?? PresentationStore(result), changed: changed) }
+        presentationSequence = sequence
         scheduleRenders()
         onParseApplied?()
         return true
     }
-    private func installParse(_ result: ParsedDocument, store next: PresentationStore) {
+    private func installParse(_ result: ParsedDocument, store next: PresentationStore, changed: SourceSpan?) {
         parsed = result
         presentationRevision = result.revision
-        installPresentation(next)
+        installPresentation(next, changed: changed)
     }
-    private func installPresentation(_ next: PresentationStore) {
+    /// Draws `next` in place of the current presentation. With `changed`, the two are known to differ
+    /// only inside it, so only its elements are compared and only its paragraphs are drawn again;
+    /// without it, every style and element is compared.
+    private func installPresentation(_ next: PresentationStore, changed window: SourceSpan?) {
         let old = presentation
+        if let window {
+            windowedInstallCount += 1
+            let kept = Set(next.elements(intersecting: window))
+            for element in old.elements(intersecting: window) where !kept.contains(element) {
+                artifacts.remove(element.span); setIssue(nil, at: element.span)
+            }
+            presentation = next
+            invalidatePresentation(spans: [window, SourceSpan(textView.selectedRange())])
+            return
+        }
         // A distant reference definition can change an image's content without moving its span.
         // Source coordinates alone do not identify a reusable artifact, so elements are compared by
         // value; the ones equal at the same span keep their artifact and their recorded failure,

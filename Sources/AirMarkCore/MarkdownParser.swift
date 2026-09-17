@@ -57,6 +57,11 @@ public actor MarkdownParsingWorker {
     static let stackSize = 16 << 20
     private var busy = false
     private var waiting: [(id: UUID, continuation: CheckedContinuation<Void, any Error>)] = []
+    /// The last parse and the caller's edit number it was made at, which the next request's edits start from.
+    private var last: (document: ParsedDocument, sequence: Int)?
+    /// The parse before `last`, released when the next one replaces it. The caller still holds it when
+    /// a parse arrives, and releasing a large parse costs milliseconds, so the last release happens here.
+    private var retired: ParsedDocument?
     public init() {}
     public func parse(_ source: String, revision: UInt64) async throws -> ParsedDocument {
         try await takeTurn()
@@ -68,16 +73,27 @@ public actor MarkdownParsingWorker {
     /// with what the work itself took. `cost` excludes waiting for a parse already running, so a
     /// caller can pace its requests by what a parse of this document costs rather than by how long
     /// it happened to wait.
-    public func parsePresentation(_ source: String, revision: UInt64) async throws -> (document: ParsedDocument, store: PresentationStore, cost: Duration) {
+    ///
+    /// `sequence` numbers this request among the caller's edits. When `edits` are those made since the
+    /// request numbered `since`, which this worker parsed last, only the blocks they touched are parsed
+    /// again (`MarkdownParser.reparse`) and `changed` is the span outside which the result is that
+    /// parse moved by the edits; otherwise the document is parsed whole and `changed` is nil.
+    public func parsePresentation(_ source: String, revision: UInt64, sequence: Int? = nil, edits: (since: Int, edits: [PresentationEdit])? = nil)
+        async throws -> (document: ParsedDocument, store: PresentationStore, cost: Duration, changed: SourceSpan?) {
         try await takeTurn()
         defer { endTurn() }
         try Task.checkCancellation()
-        return await onLargeStack {
+        let previous = last.flatMap { last in edits.flatMap { $0.since == last.sequence ? last.document : nil } }
+        let result = await onLargeStack {
             let started = ContinuousClock.now
-            let document = MarkdownParser.parse(source, revision: revision)
+            let reparsed = previous.flatMap { MarkdownParser.reparse(source, revision: revision, previous: $0, edits: edits?.edits ?? []) }
+            let document = reparsed?.document ?? MarkdownParser.parse(source, revision: revision)
             let store = PresentationStore(document)
-            return (document, store, started.duration(to: ContinuousClock.now))
+            return (document: document, store: store, cost: started.duration(to: ContinuousClock.now), changed: reparsed?.changed)
         }
+        retired = last?.document
+        last = sequence.map { (result.document, $0) }
+        return result
     }
     /// A parse that skips the nesting limit, for tests that compare the estimate with real depth.
     func parseIgnoringLimit(_ source: String) async throws -> ParsedDocument {

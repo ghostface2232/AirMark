@@ -15,6 +15,13 @@ import AirMarkCore
 }
 
 @Suite(.serialized) @MainActor struct EditorTests {
+    struct LCG {
+        var state: UInt64
+        mutating func next(_ bound: Int) -> Int {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return bound <= 0 ? 0 : Int((state >> 33) % UInt64(bound))
+        }
+    }
     func make(_ source: String) async throws -> EditorController {
         _ = NSApplication.shared
         let editor = EditorController(source: source)
@@ -294,6 +301,38 @@ import AirMarkCore
         let heading = editor.presentationStyles(intersecting: NSRange(location: 11, length: 7)).first { $0.kind == .heading(1) }
         #expect(heading?.span.location == 11)
         #expect(Data(editor.source.utf8) == Data("abc hello\n\n# world\n".utf8))
+    }
+
+    /// Typing with parses landing in between, most of them reparsing a window: once the text settles,
+    /// the drawn presentation and `parsed` are exactly a whole parse of the text.
+    @Test func windowedParsesDrawWhatAWholeParseDraws() async throws {
+        let blocks = ["## Heading", "A paragraph with **bold** and `code`.", "- [ ] task\n- item", "> quote\n> more", "```swift\nlet x = 1\n```", "$$\nx^2\n$$", "| a | b |\n| - | - |\n| 1 | 2 |"]
+        let source = (0..<60).map { blocks[$0 % blocks.count] }.joined(separator: "\n\n") + "\n"
+        let editor = try await make(source)
+        var generator = LCG(state: 3)
+        let insertions = ["x", " ", "**", "`", "\n", "\n\n", "# ", "- ", "> ", "```", "$$", "한", "😀"]
+        func settle() async throws {
+            for _ in 0..<400 where editor.parsed.revision != editor.revision { try await Task.sleep(for: .milliseconds(5)) }
+            try #require(editor.parsed.revision == editor.revision)
+        }
+        for round in 0..<40 {
+            for _ in 0..<(1 + generator.next(4)) {
+                let text = editor.textView.string as NSString
+                var range = NSRange(location: generator.next(text.length + 1), length: 0)
+                if generator.next(4) == 0 { range.length = generator.next(min(12, text.length - range.location) + 1) }
+                if text.length > 0 { range = text.rangeOfComposedCharacterSequences(for: range) }
+                editor.performEdit(range: range, replacement: generator.next(5) == 0 ? "" : insertions[generator.next(insertions.count)])
+                if generator.next(3) == 0 { try await Task.sleep(for: .milliseconds(generator.next(60))) }
+            }
+            try await settle()
+            let whole = MarkdownParser.parse(editor.source, revision: editor.revision)
+            let drawn = PresentationStore(whole)
+            let everything = NSRange(location: 0, length: (editor.source as NSString).length)
+            #expect(editor.presentationStyles(intersecting: everything).map { "\($0.span) \($0.kind) \($0.markers)" }.sorted()
+                    == drawn.styles.map { "\($0.span) \($0.kind) \($0.markers)" }.sorted(), "round \(round)")
+            #expect(editor.parsed.elements == whole.elements && editor.parsed.checkboxes == whole.checkboxes && editor.parsed.blocks == whole.blocks, "round \(round)")
+        }
+        #expect(editor.windowedInstallCount > 10, "windowed installs: \(editor.windowedInstallCount)")
     }
 
     /// A parse from before the text was replaced cannot be moved to it, and none is installed
