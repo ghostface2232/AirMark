@@ -88,8 +88,9 @@ import os
         if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
         if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
     }
-    /// Puts the last restored document in front once the documents opened from files have their windows.
-    /// Opening a file reports back asynchronously, so the window order alone does not say which is newest.
+    /// Puts the most recently recorded document in front. Opening a file reports back asynchronously, so
+    /// the order the windows appear in does not say which document is newest. Best effort: if that
+    /// document has no window yet, whichever window AppKit ordered last stays in front.
     func bringToFront(_ identity: UUID?) {
         guard let identity else { return }
         Task { @MainActor in
