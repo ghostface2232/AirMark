@@ -62,34 +62,79 @@ public struct PresentationStore: Sendable {
 
     // MARK: Edits
 
+    /// Styles starting after the edit move uniformly, which costs as much as the document after the edit.
+    /// Styles starting before it are unaffected unless they reach it; those are found through the tree
+    /// and updated one by one, and within each only the markers from the edit on are visited. So an edit
+    /// near the end of a long block quote does not walk the quote's styles or its per-line markers.
     public mutating func apply(_ edit: PresentationEdit) {
-        let location = edit.range.location
-        let pivot = firstReaching(location)
-        for index in pivot..<starts.count {
-            if ends[index] != Self.removed {
-                if let span = edit.enclosing(SourceSpan(starts[index], ends[index] - starts[index])) {
-                    starts[index] = span.location
-                    ends[index] = span.end
-                    for marker in markerBounds[index]..<markerBounds[index + 1] {
-                        if markerLengths[marker] != Self.removedMarker, let moved = edit.unchanged(SourceSpan(markerStarts[marker], markerLengths[marker])) {
-                            markerStarts[marker] = moved.location
-                        } else {
-                            markerStarts[marker] = edit.start(of: markerStarts[marker])
-                            markerLengths[marker] = Self.removedMarker
-                        }
-                    }
-                } else {
-                    starts[index] = edit.start(of: starts[index])
-                    ends[index] = Self.removed
-                }
-            } else {
-                starts[index] = edit.start(of: starts[index])
-            }
-            reach[leafBase + index] = ownReach(index)
+        let location = edit.range.location, delta = edit.replacementLength - edit.range.length
+        let suffix = firstIndex(in: starts) { $0 > edit.range.end }
+        for index in stylesReaching(location, before: suffix) {
+            update(index, for: edit)
+            updateLeaf(index)
         }
-        updateTree(from: pivot)
+        if delta != 0 {
+            for index in suffix..<starts.count {
+                starts[index] += delta
+                if ends[index] != Self.removed { ends[index] += delta }
+                for marker in markerBounds[index]..<markerBounds[index + 1] { markerStarts[marker] += delta }
+                reach[leafBase + index] = ownReach(index)
+            }
+            updateTree(from: suffix)
+        }
         Self.apply(edit, to: &elements, span: \.span)
         Self.apply(edit, to: &checkboxes, span: \.self)
+    }
+
+    /// Moves one style that starts at or before the edit's end, exactly as `ParsedDocument.rebased` does.
+    private mutating func update(_ index: Int, for edit: PresentationEdit) {
+        guard ends[index] != Self.removed else { starts[index] = edit.start(of: starts[index]); return }
+        guard let span = edit.enclosing(SourceSpan(starts[index], ends[index] - starts[index])) else {
+            starts[index] = edit.start(of: starts[index])
+            ends[index] = Self.removed
+            return
+        }
+        starts[index] = span.location
+        ends[index] = span.end
+        // Markers are sorted and disjoint, so their keys (a live marker's end, a removed marker's start)
+        // are ordered. A marker is unchanged while its key is at or before the edit.
+        var marker = markerBounds[index], high = markerBounds[index + 1]
+        while marker < high {
+            let middle = (marker + high) / 2
+            if markerKey(middle) > edit.range.location { high = middle } else { marker = middle + 1 }
+        }
+        for marker in marker..<markerBounds[index + 1] {
+            if markerLengths[marker] != Self.removedMarker, let moved = edit.unchanged(SourceSpan(markerStarts[marker], markerLengths[marker])) {
+                markerStarts[marker] = moved.location
+            } else {
+                markerStarts[marker] = edit.start(of: markerStarts[marker])
+                markerLengths[marker] = Self.removedMarker
+            }
+        }
+    }
+
+    private func markerKey(_ marker: Int) -> Int {
+        markerLengths[marker] == Self.removedMarker ? markerStarts[marker] : markerStarts[marker] + markerLengths[marker]
+    }
+
+    /// Indices below `limit` whose own reach is at least `location`, in order.
+    private func stylesReaching(_ location: Int, before limit: Int) -> [Int] {
+        var result: [Int] = []
+        guard limit > 0 else { return result }
+        var stack = [1]
+        while let node = stack.popLast() {
+            guard reach[node] >= location else { continue }
+            if node >= leafBase { result.append(node - leafBase); continue }
+            if Self.firstLeaf(of: 2 * node + 1, base: leafBase) < limit { stack.append(2 * node + 1) }
+            stack.append(2 * node)
+        }
+        return result
+    }
+
+    private mutating func updateLeaf(_ index: Int) {
+        var node = leafBase + index
+        reach[node] = ownReach(index)
+        while node > 1 { node /= 2; reach[node] = max(reach[2 * node], reach[2 * node + 1]) }
     }
 
     /// Moves sorted, disjoint spans exactly as `PresentationEdit.unchanged` does. The spans an edit

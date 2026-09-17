@@ -38,6 +38,43 @@ if CommandLine.arguments.contains("--long-lines") {
     }
     exit(0)
 }
+// Cost of moving the presentation with one edit, at doubling sizes. Each sample applies 200 single-
+// character insertions at the head, middle or tail of a fresh store. `exponent` is log2 of the time
+// ratio to the previous size: 0 when an edit's cost does not grow with the document, 1 when it grows
+// with everything after the edit.
+if CommandLine.arguments.contains("--edits") {
+    func repeated(_ piece: String, bytes: Int) -> String { String(repeating: piece, count: max(1, bytes / piece.utf8.count)) }
+    let corpora: [(String, (Int) -> String)] = [
+        ("normal", { repeated(fixture, bytes: $0) }),
+        ("long-quote", { repeated("> quoted line with **bold** and *em* text\n", bytes: $0) }),
+        ("nested-list", { repeated("- item\n  - nested with **bold**\n", bytes: $0) }),
+    ]
+    for (name, make) in corpora {
+        var previous: [String: Double] = [:]
+        for size in [125_000, 250_000, 500_000, 1_000_000] {
+            let source = make(size)
+            let parsed = MarkdownParser.parse(source)
+            let length = source.utf16.count
+            var line = "EDITS \(name) bytes=\(source.utf8.count)"
+            // "inside-tail" is a few units before the end: inside a container that runs to the end.
+            for (position, location) in [("head", 0), ("middle", length / 2), ("inside-tail", length - 6), ("tail", length)] {
+                var samples: [Double] = []
+                for _ in 0..<5 {
+                    var store = PresentationStore(parsed)
+                    samples.append(measure {
+                        for number in 0..<200 { store.apply(PresentationEdit(range: NSRange(location: location + number, length: 0), replacement: "x")) }
+                    })
+                }
+                let p50 = percentile(samples, 0.5)
+                line += String(format: " %@=%.3fms", position, p50)
+                if let before = previous[position] { line += String(format: "(exp %.2f)", log2(p50 / before)) }
+                previous[position] = p50
+            }
+            print(line)
+        }
+    }
+    exit(0)
+}
 // Inputs chosen to defeat the index and the math scanner rather than to look like real notes.
 // Each corpus is measured at doubling sizes; the exponent between neighbours (log2 of the time ratio)
 // is about 1 for linear work and about 2 for quadratic work, whatever the absolute times are.

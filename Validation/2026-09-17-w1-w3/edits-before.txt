@@ -1,0 +1,12 @@
+EDITS normal bytes=124890 head=12.781ms middle=6.363ms inside-tail=0.026ms tail=0.026ms
+EDITS normal bytes=249918 head=25.375ms(exp 0.99) middle=12.790ms(exp 1.01) inside-tail=0.033ms(exp 0.35) tail=0.033ms(exp 0.36)
+EDITS normal bytes=499974 head=50.054ms(exp 0.98) middle=25.250ms(exp 0.98) inside-tail=0.048ms(exp 0.54) tail=0.050ms(exp 0.60)
+EDITS normal bytes=999948 head=100.869ms(exp 1.01) middle=50.778ms(exp 1.01) inside-tail=0.072ms(exp 0.61) tail=0.073ms(exp 0.54)
+EDITS long-quote bytes=124992 head=10.827ms middle=10.264ms inside-tail=9.499ms tail=0.005ms
+EDITS long-quote bytes=249984 head=21.927ms(exp 1.02) middle=20.669ms(exp 1.01) inside-tail=19.907ms(exp 1.07) tail=0.005ms(exp 0.16)
+EDITS long-quote bytes=499968 head=44.455ms(exp 1.02) middle=42.125ms(exp 1.03) inside-tail=39.499ms(exp 0.99) tail=0.005ms(exp 0.00)
+EDITS long-quote bytes=999978 head=90.661ms(exp 1.03) middle=82.762ms(exp 0.97) inside-tail=77.145ms(exp 0.97) tail=0.005ms(exp -0.09)
+EDITS nested-list bytes=124992 head=22.898ms middle=11.662ms inside-tail=0.019ms tail=0.005ms
+EDITS nested-list bytes=249984 head=46.400ms(exp 1.02) middle=23.145ms(exp 0.99) inside-tail=0.018ms(exp -0.10) tail=0.004ms(exp -0.19)
+EDITS nested-list bytes=500000 head=92.166ms(exp 0.99) middle=46.212ms(exp 1.00) inside-tail=0.019ms(exp 0.05) tail=0.005ms(exp 0.07)
+EDITS nested-list bytes=1000000 head=185.020ms(exp 1.01) middle=92.099ms(exp 0.99) inside-tail=0.020ms(exp 0.06) tail=0.005ms(exp 0.04)

@@ -69,3 +69,14 @@ Two intermediate designs failed this test and are recorded because they explain 
 - Stack depth survived by `MarkdownParser.parse` plus `PresentationStore` on a thread of a given stack size (binary search, scratch probe): quotes on one line 127 (1MB), 1,044 (8MB), 8,417 (64MB); nested lists 108 (1MB), 888 (8MB). The worker ran on a concurrency-pool thread and crashed at 70 nested quotes (SIGBUS in the reproduction test).
 - Parsing now runs on a 16MB-stack thread, and a source whose nesting estimate exceeds 256 is presented as plain text. The estimate is checked against the depth of quote and list styles the parser builds on 20,000 random inputs.
 - `fix1-bench.txt`: `swift run -c release --disable-sandbox AirMarkBench` afterwards, at load average 3.9. The estimate alone costs 2.9ms at 1MB and 29.7ms at 10MB, 0.75% of the parse; the difference from the 2026-09-16 record is machine load, not the estimate.
+
+### 2–4, 6. See commits 816df94, cdb750b, fa26392, a7b92e4, aa61999 and 699d71b
+
+Each has its reproduction test in the commit; they changed no measured path.
+
+### 5. Edits inside a long container
+
+- `edits-before.txt` / `edits-after.txt`: `swift run -c release --disable-sandbox AirMarkBench --edits`. 200 single-character insertions on a fresh presentation store at the head, middle, a few units before the end ("inside-tail"), and the end, at doubling sizes.
+- Before, an edit a few units before the end of a document that is one long block quote cost as much as the whole quote (exponent 0.97–1.07; 77.1 ms per 200 edits at 1MB), because the store walked every style after the first one reaching the edit, which is the quote itself. After: 0.084 ms, exponents 0.11–0.18.
+- Head and middle edits still move every later style (exponent near 1 by design) and are 26–38% faster (normal document at 1MB: head 100.9 → 74.6 ms, middle 50.8 → 36.7 ms per 200 edits).
+- The randomized store test fails under three deliberate mutations of the new path (marker search bound, suffix boundary, reach threshold).
