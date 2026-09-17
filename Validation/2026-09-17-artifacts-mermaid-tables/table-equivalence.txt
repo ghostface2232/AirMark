@@ -1,0 +1,50 @@
+◇ Test run started.
+TABLE_EQUIVALENCE two-by-two font=16 dark=no size=680.00x82.40 mean_abs=0.0000 max=0 over32=0.00000
+✔ Test nativeTableHasContentAndDimensions() passed after 0.052 seconds.
+TABLE_EQUIVALENCE header-wider font=16 dark=no size=680.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=16 dark=no size=680.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=16 dark=no size=680.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=16 dark=no size=680.00x206.00 mean_abs=0.1384 max=133 over32=0.00133
+TABLE_EQUIVALENCE trailing-spaces font=16 dark=no size=680.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=16 dark=no size=900.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=16 dark=no size=1749.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=16 dark=no size=680.00x123.60 mean_abs=0.3451 max=255 over32=0.00259
+TABLE_EQUIVALENCE digits-and-symbols font=16 dark=no size=680.00x247.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=16 dark=no size=680.00x1648.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=16.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-cells font=16.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=16.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE single-column font=16 dark=no size=680.00x206.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE two-by-two font=13 dark=yes size=600.25x72.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE header-wider font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=13 dark=yes size=600.25x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=13 dark=yes size=600.25x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=13 dark=yes size=600.25x180.50 mean_abs=0.2462 max=158 over32=0.00263
+TABLE_EQUIVALENCE trailing-spaces font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=13 dark=yes size=900.00x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=13 dark=yes size=1518.00x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE digits-and-symbols font=13 dark=yes size=600.25x216.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=13 dark=yes size=600.25x1444.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=13 dark=yes size=600.25x2166.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-display-limit-by-cells font=13.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=13.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE single-column font=13 dark=yes size=600.25x180.50 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE two-by-two font=19 dark=no size=720.50x92.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE header-wider font=19 dark=no size=720.50x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=19 dark=no size=720.50x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=19 dark=no size=720.50x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=19 dark=no size=720.50x231.50 mean_abs=0.1456 max=139 over32=0.00140
+TABLE_EQUIVALENCE trailing-spaces font=19 dark=no size=720.50x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=19 dark=no size=900.00x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=19 dark=no size=1988.00x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=19 dark=no size=720.50x138.90 mean_abs=0.3457 max=255 over32=0.00263
+TABLE_EQUIVALENCE digits-and-symbols font=19 dark=no size=720.50x277.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=19 dark=no size=720.50x1852.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=19.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-cells font=19.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=19.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE single-column font=19 dark=no size=720.50x231.50 mean_abs=0.0000 max=0 over32=0.00000
+✔ Test matchesTheAppKitReference() passed after 0.642 seconds.
+✔ Test preflightDecidesOnlyWhatCountsDecide() passed after 0.001 seconds.
+✔ Test run with 3 tests in 2 suites passed after 0.642 seconds.

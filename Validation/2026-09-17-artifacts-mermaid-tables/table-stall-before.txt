@@ -1,0 +1,10 @@
+15:45  up 6 days, 14:46, 1 user, load averages: 2.28 3.23 3.11
+TABLE_STALL accepted-100x6 json_bytes=4941 fails This image is too large to display. total p50=13.7ms max=17.8ms stall p50=13.1ms max=17.0ms
+TABLE_STALL accepted-2x300 json_bytes=7585 fails This image is too large to display. total p50=13.0ms max=13.5ms stall p50=12.6ms max=13.1ms
+TABLE_STALL accepted-long-cells-50x3 json_bytes=176051 fails This image is too large to display. total p50=53.6ms max=55.6ms stall p50=53.3ms max=55.2ms
+TABLE_STALL accepted-hangul-emoji-60x4 json_bytes=4641 fails This image is too large to display. total p50=15.6ms max=19.8ms stall p50=15.4ms max=19.5ms
+TABLE_STALL rejected-tall-20000x4 json_bytes=875561 fails Table is too large to render. total p50=326.8ms max=328.3ms stall p50=326.8ms max=328.3ms
+TABLE_STALL rejected-wide-10x5000 json_bytes=488921 fails Table is too large to render. total p50=193.8ms max=194.2ms stall p50=193.8ms max=194.2ms
+TABLE_STALL rejected-long-cells-2000x3 json_bytes=8522501 fails Table is too large to render. total p50=1088.5ms max=1098.5ms stall p50=1085.5ms max=1095.5ms
+✔ Test pathologicalTablesMainThreadStalls() passed after 8.851 seconds.
+✔ Test run with 1 test in 1 suite passed after 8.851 seconds.

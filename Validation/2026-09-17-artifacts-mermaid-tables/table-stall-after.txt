@@ -1,0 +1,24 @@
+15:52  up 6 days, 14:53, 1 user, load averages: 1.68 2.24 2.64
+TABLE_STALL accepted-100x6 path=appkit-reference json_bytes=4941 fails This image is too large to display. total p50=13.7ms max=17.6ms stall p50=13.7ms max=17.6ms
+TABLE_STALL accepted-100x6 path=coretext json_bytes=4941 fails This image is too large to display. total p50=1.7ms max=2.2ms stall p50=2.1ms max=2.1ms
+TABLE_STALL accepted-2x300 path=appkit-reference json_bytes=7585 fails This image is too large to display. total p50=13.1ms max=14.4ms stall p50=13.1ms max=14.4ms
+TABLE_STALL accepted-2x300 path=coretext json_bytes=7585 fails This image is too large to display. total p50=1.8ms max=1.8ms stall p50=2.1ms max=2.1ms
+TABLE_STALL accepted-long-cells-50x3 path=appkit-reference json_bytes=176051 fails This image is too large to display. total p50=53.5ms max=57.0ms stall p50=53.6ms max=57.0ms
+TABLE_STALL accepted-long-cells-50x3 path=coretext json_bytes=176051 fails This image is too large to display. total p50=24.0ms max=24.2ms stall p50=2.1ms max=2.1ms
+TABLE_STALL accepted-hangul-emoji-60x4 path=appkit-reference json_bytes=4641 fails This image is too large to display. total p50=15.9ms max=20.1ms stall p50=15.9ms max=20.1ms
+TABLE_STALL accepted-hangul-emoji-60x4 path=coretext json_bytes=4641 fails This image is too large to display. total p50=0.1ms max=0.2ms stall p50=2.1ms max=2.1ms
+TABLE_STALL rejected-tall-20000x4 path=appkit-reference json_bytes=875561 fails Table is too large to render. total p50=344.8ms max=353.1ms stall p50=344.8ms max=353.2ms
+TABLE_STALL rejected-tall-20000x4 path=coretext json_bytes=875561 fails Table is too large to render. total p50=17.1ms max=17.2ms stall p50=2.1ms max=2.1ms
+TABLE_STALL rejected-wide-10x5000 path=appkit-reference json_bytes=488921 fails Table is too large to render. total p50=204.4ms max=206.0ms stall p50=204.4ms max=206.0ms
+TABLE_STALL rejected-wide-10x5000 path=coretext json_bytes=488921 fails Table is too large to render. total p50=6.4ms max=6.5ms stall p50=2.1ms max=2.1ms
+TABLE_STALL rejected-long-cells-2000x3 path=appkit-reference json_bytes=8522501 fails Table is too large to render. total p50=1088.2ms max=1093.4ms stall p50=1088.2ms max=1093.4ms
+TABLE_STALL rejected-long-cells-2000x3 path=coretext json_bytes=8522501 fails Table is too large to render. total p50=8.2ms max=8.6ms stall p50=3.2ms max=3.3ms
+TABLE_STALL renders-40x6 path=appkit-reference json_bytes=1941 renders size=680x1648 pixels=1360x3296 total p50=5.4ms max=5.9ms stall p50=5.4ms max=5.9ms
+TABLE_STALL renders-40x6 path=coretext json_bytes=1941 renders size=680x1648 pixels=1360x3296 total p50=5.6ms max=6.0ms stall p50=2.1ms max=2.1ms
+TABLE_STALL renders-2x100 path=appkit-reference json_bytes=2385 renders size=9677x82 pixels=19354x165 total p50=4.4ms max=4.5ms stall p50=4.4ms max=4.5ms
+TABLE_STALL renders-2x100 path=coretext json_bytes=2385 renders size=9677x82 pixels=19354x165 total p50=3.7ms max=3.7ms stall p50=2.1ms max=2.1ms
+TABLE_STALL renders-long-cells-20x3 path=appkit-reference json_bytes=67721 renders size=900x824 pixels=1800x1648 total p50=21.4ms max=25.0ms stall p50=21.5ms max=25.0ms
+TABLE_STALL renders-long-cells-20x3 path=coretext json_bytes=67721 renders size=900x824 pixels=1800x1648 total p50=21.0ms max=21.2ms stall p50=2.1ms max=2.2ms
+✔ Test pathologicalTablesMainThreadStalls() passed after 10.042 seconds.
+✔ Test run with 1 test in 1 suite passed after 10.043 seconds.
+15:53  up 6 days, 14:53, 1 user, load averages: 1.59 2.20 2.62

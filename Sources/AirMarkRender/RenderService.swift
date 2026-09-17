@@ -139,7 +139,7 @@ public enum RenderFailure: LocalizedError, Equatable {
         } else {
             let task = Task<RenderArtifact, any Error> { [self] in
                 if element.kind == .image { return try await loadImage(element, environment: environment, baseURL: baseURL) }
-                if element.kind == .table { return try drawTable(element, environment: environment) }
+                if element.kind == .table { return try await drawTable(element, environment: environment) }
                 let renderer = element.kind == .math ? math : mermaid
                 return try await renderer.render(element, environment: environment, host: host)
             }
@@ -192,39 +192,16 @@ public enum RenderFailure: LocalizedError, Equatable {
             return RenderArtifact(image: image, size: size, baseline: size.height, label: element.label.isEmpty ? url.lastPathComponent : element.label)
         }.value
     }
-    private func drawTable(_ element: RenderElement, environment: RenderEnvironment) throws -> RenderArtifact {
-        let rows = try JSONDecoder().decode([[String]].self, from: Data(element.content.utf8))
-        guard !rows.isEmpty else { throw RenderFailure.unavailable }
-        let columns = rows.map(\.count).max() ?? 1
-        let font = NSFont.systemFont(ofSize: environment.fontSize)
-        let color: NSColor = environment.dark ? .init(white: 0.87, alpha: 1) : .init(white: 0.16, alpha: 1)
-        var widths = Array(repeating: 70.0, count: columns)
-        let headerFont = NSFont.boldSystemFont(ofSize: environment.fontSize)
-        for (r, row) in rows.enumerated() {
-            for (column, text) in row.enumerated() {
-                let measured = (text as NSString).size(withAttributes: [.font: r == 0 ? headerFont : font]).width
-                widths[column] = min(300, max(widths[column], ceil(measured) + 28))
-            }
-        }
-        let natural = widths.reduce(0, +), width = max(environment.width, natural)
-        let lineHeight = environment.fontSize * 1.7 + 14
-        let size = CGSize(width: width, height: Double(rows.count) * lineHeight)
-        guard size.width * size.height * environment.scale * environment.scale < 12_000_000 else { throw RenderFailure.invalid("Table is too large to render.") }
-        let image = NSImage(size: size, flipped: true) { bounds in
-            for (r, row) in rows.enumerated() {
-                if r == 0 || r % 2 == 0 { NSColor.gray.withAlphaComponent(r == 0 ? 0.12 : 0.04).setFill(); NSRect(x: 0, y: Double(r) * lineHeight, width: width, height: lineHeight).fill() }
-                var x = 0.0
-                for (c, text) in row.enumerated() {
-                    let cell = NSRect(x: x + 12, y: Double(r) * lineHeight + 10, width: widths[c] - 24, height: lineHeight - 14)
-                    (text as NSString).draw(in: cell, withAttributes: [.font: r == 0 ? headerFont : font, .foregroundColor: color])
-                    x += widths[c]
-                }
-                NSColor.gray.withAlphaComponent(0.18).setFill(); NSRect(x: 0, y: Double(r + 1) * lineHeight - 1, width: width, height: 1).fill()
-            }
-            return true
-        }
-        var rect = CGRect(origin: .zero, size: size)
-        guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { throw RenderFailure.unavailable }
-        return RenderArtifact(image: cg, size: size, baseline: size.height, label: element.label)
+    /// Tables are measured and drawn off the main thread. Pixels use the main screen's scale and color
+    /// space, which is what rasterizing an AppKit image did here before.
+    private func drawTable(_ element: RenderElement, environment: RenderEnvironment) async throws -> RenderArtifact {
+        let screen = NSScreen.main
+        let raster = TableRenderer.Raster(scale: screen.map { Double($0.backingScaleFactor) } ?? environment.scale,
+                                          colorSpace: screen?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          alignment: NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left)
+        let content = element.content, label = element.label, limit = memoryLimit
+        return try await Task.detached(priority: .userInitiated) {
+            try TableRenderer.render(content, label: label, environment: environment, raster: raster, memoryLimit: limit)
+        }.value
     }
 }

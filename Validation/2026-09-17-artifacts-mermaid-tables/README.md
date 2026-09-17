@@ -86,3 +86,46 @@ Command: `swift test -c release --disable-sandbox --filter "MermaidCorpusTests|R
 - UI: `testShowcaseRendersSpecialContent` passed against the Release app; `mermaid-11.17.2-showcase-top.png` is its capture with the showcase diagram.
 
 Not done: Mermaid 12.x migration; a visual diff of every diagram type between versions beyond size and ink.
+
+## 3. Large tables off the main actor
+
+### Problem
+
+`RenderService.drawTable` ran on the main actor: it decoded the table's JSON, measured every cell with `NSString.size(withAttributes:)`, and only then compared the size with the 12-megapixel display limit. A table that passed was drawn through an `NSImage` drawing handler and rasterized with `cgImage(forProposedRect:)`, and `RenderService` then rejected results over its 48MiB memory limit.
+
+Probing the old output (`TableProbeTests`, removed after use) showed what "the old output" is exactly: the bitmap uses the main screen's backing scale (2 here, also for an environment at scale 1), `ceil(points × scale)` pixels per side, 16-bit float components with premultiplied alpha (8 bytes per pixel), in the main screen's color space ("Color LCD"). So the memory limit, not the display limit, was the effective one at scale 2: a table between about 1.6 and 3 million square points was measured and rasterized in full, then rejected.
+
+### Harness
+
+`AIRMARK_TABLE_MEASURE=1 swift test -c release --disable-sandbox --filter pathologicalTablesMainThreadStalls`: while `RenderService.render` handles a table, a main-actor task wakes every 1ms and records the longest gap. Five renders per table on a fresh service (failures are not cached); p50 and max. `stall` has a floor of about 2ms from the sleep granularity.
+
+The first three names were chosen before the probe: `accepted-100x6`, `accepted-2x300` and `accepted-long-cells-50x3`, and `accepted-hangul-emoji-60x4`, pass the display limit but all fail the memory limit. The `renders-*` tables, added afterwards, display. `table-stall-before.txt` is the unmodified code. `table-stall-after.txt` runs, for every table, both the previous AppKit code (kept in the test target as `ReferenceTableRenderer`, called from a main-actor task as `RenderService` did) and the new path; the reference rows reproduce the before file.
+
+### Change
+
+- `TableRenderer` (AirMarkRender) measures cells with CoreText line bounds and draws with CoreText frames into a CoreGraphics bitmap of the same format, scale and color space, in a detached task. `RenderService` reads the screen's scale and color space and the user's writing direction on the main actor and passes them in.
+- Before measuring any cell, `TableRenderer.preflight` uses the row and column counts: the height is exact and the width lies between every column at 70pt and every column at 300pt. A table whose narrowest possible width already fails the display limit fails with the display-limit message. A table whose widest possible width still passes the display limit but whose narrowest possible bitmap exceeds the memory limit fails with the memory-limit message. Anything else is measured, as before. After measuring, the memory limit is checked before rasterizing.
+- Two AppKit behaviors had to be reproduced to match the reference: measured widths include trailing whitespace (`CTLineGetTypographicBounds`, not the framesetter's suggested size, which dropped it and narrowed a column), and natural alignment follows the user's language direction rather than each cell's script (a Hebrew or Arabic cell is left-aligned in a left-to-right locale). Both were caught by the equivalence test below and fixed. Only a left-to-right locale and a single 2x screen were available; the right-to-left locale path and scale/color space with several screens are unverified.
+
+### Equivalence with the AppKit drawing
+
+`matchesTheAppKitReference` renders 15 tables (ragged rows, empty cells, Hangul and emoji, trailing spaces, wrapped long cells, wide tables, RTL, symbols, and tables at and over both limits) at 16pt/680pt/2x light, 13pt/600.25pt/1x dark and 19pt/720.5pt/2x light, through the reference and the new renderer. Every pair has the same outcome and failure message; successful pairs have the same point size, pixel size, bytes, baseline, label, bitmap format and color space (`table-equivalence.txt`). Pixels, compared as 8-bit sRGB channels: 12 of the 15 tables are identical at all three settings; Hangul/emoji differ by a mean of 0.14–0.25 per channel (color glyph antialiasing; visually identical), RTL by 0.00–0.35. The test bounds the mean difference at 1.0 and the share of channels differing by more than 32 at 1%.
+
+### Results (Release, main-thread stall p50 / total p50)
+
+| table | JSON | outcome | AppKit on main | CoreText off main |
+|---|---:|---|---:|---:|
+| rejected-tall-20000x4 | 876KB | display limit | 327–345 / 327–345 ms | 2.1 / 17.1 ms |
+| rejected-wide-10x5000 | 489KB | display limit | 194–204 / 194–204 ms | 2.1 / 6.4 ms |
+| rejected-long-cells-2000x3 | 8.5MB | display limit | 1,086–1,088 / 1,088 ms | 3.2 / 8.2 ms |
+| accepted-100x6 | 4.9KB | memory limit | 13.1–13.7 / 13.7 ms | 2.1 / 1.7 ms |
+| accepted-2x300 | 7.6KB | memory limit | 12.6–13.1 / 13.0–13.1 ms | 2.1 / 1.8 ms |
+| accepted-long-cells-50x3 | 176KB | memory limit (after measuring) | 53.3–53.6 / 53.5–53.6 ms | 2.1 / 24.0 ms |
+| accepted-hangul-emoji-60x4 | 4.6KB | memory limit | 15.4–15.9 / 15.6–15.9 ms | 2.1 / 0.1 ms |
+| renders-40x6 | 1.9KB | 680×1648pt | 5.4 / 5.4 ms | 2.1 / 5.6 ms |
+| renders-2x100 | 2.4KB | 9677×82pt | 4.4 / 4.4 ms | 2.1 / 3.7 ms |
+| renders-long-cells-20x3 | 68KB | 900×824pt | 21.5 / 21.4 ms | 2.1 / 21.0 ms |
+
+Ranges are the before run and the reference rows of the after run. Tables that display take about as long as before, now off the main thread. The remaining cost for rejected tables is JSON decoding (the 8.5MB case) and, for `accepted-long-cells-50x3`, measuring cells whose widths decide the outcome.
+
+Tests: full Release Swift suite 105 passed in three runs (72 editor/integration, 33 core); full Debug suite 105 passed. `testShowcaseRendersSpecialContent` passed against the Release app, and `table-coretext-showcase-top.png` shows the showcase table's header row drawn by the new path. The capture further down the document was covered by a System Settings window that was open on the machine at the time and is not kept.
