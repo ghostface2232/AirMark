@@ -369,3 +369,40 @@ Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw 
   is a static they all set, so the new tests resolve a launch from the document's own record — a
   foreign record does not merely add a plan, it can decide the launch instead.
 
+## 2026-09-18 — Recovery, resize and table: tests and Release numbers
+
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Release, idle machine, warm
+OS cache. Raw output: `Validation/2026-09-18-recovery-resize-table-bench/`.
+
+- **New coverage, no parse benchmarks repeated.** `RecoveryResizeTableBench` is gated on
+  `AIRMARK_BENCH` and skips in 0.001 s without it. Two UI tests are new: one hands a launch a recovery
+  directory a previous run would have left — two `.quit` records from one session and one from the
+  session before — and finds two windows restored and the older session's document left alone; the
+  other quits with a document open and finds it back after the relaunch.
+- **Recovery launch, measured against the old decision written out in full.** Clean records, p50 of 3:
+  32 documents of 10 MB decide in 1.41 ms against 148.16 ms the old way, 8 of 10 MB in 0.43 against
+  37.86, one of 10 MB in 0.09 against 4.63. The shape is the point: the cost no longer follows document
+  size — one document is 0.08 ms at 1 MB and 0.09 ms at 10 MB, thirty-two are 1.34 and 1.41 — because it
+  is a stat per record and a small JSON read. No document file is read at all, in either the clean or
+  the unsaved case: an unsaved record's length does not match its file's, so the exact comparison is
+  ruled out before either side is touched, and what remains is loading the sources that become drafts
+  (32 × 10 MB: 122.51 ms against 142.54). The files were written moments before being read, so this is
+  a warm cache; that flatters the old numbers, which read hundreds of megabytes, not the new ones.
+- **Live resize.** Twelve rendered elements, twenty-one width steps: no render is started for a width
+  the drag passes through, all twelve keep their metrics, and one round of twelve requests follows —
+  starting 53.4 ms after the last step, pixels back at 58.8 ms. The main thread is held 0.75 ms per
+  step (0.95 ms worst, 16.4 ms over the drag), of which building paragraphs is 0.01 ms each and moving
+  artifacts rounds to zero.
+- **Table.** A 40×5 table misses in 12–14 ms and hits in 0.02 ms, twenty hits in a row rendering
+  nothing again. 1× and 2× are two entries: 2× is exactly twice 1× in each direction and four times the
+  bytes, the table occupies the same 766×1648 points in both, and both are sRGB whatever screen asked.
+- **No UI test for a window resize, and four routes were measured to say so.** XCUITest's own
+  press-and-drag moved and resized nothing anywhere along the margin or on the title bar; HID
+  `CGEvent`s left `NSEvent.mouseLocation` unchanged; the accessibility API answered
+  `kAXErrorAPIDisabled`; a title-bar double click does not zoom this window. The full-screen button does
+  resize it, 710 to 1710 points — and terminating out of the space it creates left the next test
+  failing with "Cmd-Q did not quit the app", twice, including one that passes alone. That test was
+  written, measured and removed. `view.inLiveResize == true` is still uncovered.
+- **Suites.** Release: 109 tests in 16 suites and 55 in 4 suites pass; Debug the same. The whole UI
+  file passes in Release, 11 of 11, including the two that type.
+

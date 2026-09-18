@@ -1,0 +1,4 @@
+✔ Test run with 109 tests in 16 suites passed after 20.435 seconds.
+✔ Test run with 55 tests in 4 suites passed after 4.531 seconds.
+✔ Test run with 109 tests in 16 suites passed after 37.022 seconds.
+✔ Test run with 55 tests in 4 suites passed after 12.044 seconds.

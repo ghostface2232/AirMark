@@ -293,6 +293,112 @@ import Carbon
         app.terminate()
     }
 
+    /// Writes a recovery record the way `RecoveryStore` writes one: the metadata as `<id>.json` and the
+    /// source in its own file beside it. Used to hand a launch the directory a previous session would
+    /// have left, which is the only way to put several documents and two sessions in front of it
+    /// without driving several windows open by hand.
+    @discardableResult
+    private func seedRecord(in directory: URL, file: URL?, source: String, session: UUID, order: Int,
+                            state: String = "quit", unsaved: Bool = false, age: TimeInterval = 0) throws -> UUID {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = UUID(), sourceName = "\(id.uuidString).\(UUID().uuidString).source"
+        try Data(source.utf8).write(to: directory.appendingPathComponent(sourceName))
+        var record: [String: Any] = [
+            "id": id.uuidString, "sourceFile": sourceName, "hasBOM": false, "revision": 1,
+            "selection": ["location": 0, "length": 0], "scrollY": 0,
+            "date": Date().timeIntervalSinceReferenceDate - age,
+            "state": state, "hasUnsavedChanges": unsaved,
+            "sessionID": session.uuidString, "order": order,
+        ]
+        if let file { record["filePath"] = file.path }
+        try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+            .write(to: directory.appendingPathComponent(id.uuidString + ".json"))
+        return id
+    }
+
+    /// Every document the last session had open comes back, and the session before it stays where it
+    /// is. Taking `records.first` opened one window and left the rest unreachable; restoring every
+    /// `.quit` record whatever session wrote it opened windows the user had not seen in two launches.
+    func testRelaunchRestoresTheLastSessionAndNotTheOneBefore() throws {
+        let output = try temporaryOutput("AirMarkSession")
+        let recovery = output.appendingPathComponent("Recovery")
+        func write(_ name: String, _ text: String) throws -> URL {
+            let url = output.appendingPathComponent(name)
+            try Data(text.utf8).write(to: url)
+            return url
+        }
+        let last = UUID(), previous = UUID()
+        // Two documents open when the last session stopped, and one left by the session before it.
+        let front = try write("Front.md", "FRONT DOCUMENT\n")
+        let back = try write("Back.md", "BACK DOCUMENT\n")
+        let stale = try write("Stale.md", "STALE DOCUMENT\n")
+        try seedRecord(in: recovery, file: stale, source: "STALE DOCUMENT\n", session: previous, order: 0, age: 7200)
+        try seedRecord(in: recovery, file: back, source: "BACK DOCUMENT\n", session: last, order: 1, age: 20)
+        try seedRecord(in: recovery, file: front, source: "FRONT DOCUMENT\n", session: last, order: 0, age: 10)
+
+        let app = XCUIApplication()
+        app.launchArguments = []
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        XCTAssertTrue(app.textViews["markdown-editor"].firstMatch.waitForExistence(timeout: 15))
+        // Both windows, and only those two.
+        var editors: [String] = []
+        for _ in 0..<40 {
+            editors = app.textViews.matching(identifier: "markdown-editor").allElementsBoundByIndex.compactMap { $0.value as? String }
+            if editors.count >= 2 { break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertEqual(editors.count, 2, "the last session had two documents open, got \(editors)")
+        XCTAssertTrue(editors.contains { $0.contains("FRONT DOCUMENT") }, "got \(editors)")
+        XCTAssertTrue(editors.contains { $0.contains("BACK DOCUMENT") }, "got \(editors)")
+        XCTAssertFalse(editors.contains { $0.contains("STALE DOCUMENT") }, "a document from an older session came back: \(editors)")
+        print("RELAUNCH_SESSION windows=\(editors.count) first-lines=\(editors.map { $0.split(separator: "\n").first.map(String.init) ?? "" })")
+        app.terminate()
+    }
+
+    /// Quitting with a document open records it as open at the quit, and the next launch brings it
+    /// back. The writing half is `testQuitRecordsAnOpenDocumentAsQuitNotClosed`; this is the round trip.
+    func testQuitRestoresTheDocumentThatWasOpen() throws {
+        let output = try temporaryOutput("AirMarkQuitRestore")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("QUIT AND COME BACK\n".utf8).write(to: file)
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertEqual(editor.value as? String, "QUIT AND COME BACK\n")
+        // Let the launch settle before the quit: the first parse and render land after the window, and
+        // a Cmd-Q that arrives before the app is ready for keys is not the thing under test.
+        sleep(3)
+        app.typeKey("q", modifierFlags: .command)
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "QUIT AND COME BACK\n", "the document open at the quit did not come back")
+        app.terminate()
+    }
+
+    // There is no UI test for a window resize, and not for want of trying. Four ways were measured on
+    // this machine and none of them both resizes the window and leaves the suite usable:
+    //
+    //   - `XCUICoordinate.press(forDuration:thenDragTo:)` across the whole resize margin, and on the
+    //     title bar: the window neither moved nor resized, for any grab point.
+    //   - HID `CGEvent`s posted to `.cghidEventTap`: `NSEvent.mouseLocation` was unchanged afterwards,
+    //     so the runner does not get to post them here.
+    //   - The accessibility API, to set the window's size directly: `kAXErrorAPIDisabled`.
+    //   - Double-clicking the title bar to zoom: harmless, and it does not zoom this window.
+    //
+    // The full-screen button does work and does resize the window, dramatically — and terminating out
+    // of the space it creates left the next test failing with "Cmd-Q did not quit the app", twice,
+    // including a test that passes on its own. A resize test that breaks the tests after it is worse
+    // than no resize test.
+    //
+    // What resize coverage there is lives elsewhere: `ResizeTests` for the behaviour and
+    // `RecoveryResizeTableBench.liveResizeCost` for the numbers, both driving frame changes on a real
+    // window in process. Neither puts `view.inLiveResize` true, so the one line that arms no wait
+    // during a drag is still uncovered.
+
     /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
     func testTypingUndoAndReplaceAll() {
         let app = XCUIApplication()
