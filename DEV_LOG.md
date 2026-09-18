@@ -255,10 +255,11 @@ after the review fixes below, and UI tests could not be run after them — that 
   the rest to whatever order the asynchronous opens completed in, though the session had recorded which
   window was in front. The opens still run together, each reporting into a main-actor collector, and
   when the last lands the windows are ordered back to front and the last made key. The UI assertion for
-  this **has not been run**: the session driving these runs was a remote one, and XCUITest needs an
-  active console session to activate an application. It reproduces with `main.swift` reverted and does
-  not stop the built app launching from the command line, and it is the same reason the three routes to
-  a window resize failed. Marked NOT YET RUN in the test; run it at a logged-in console.
+  this **has not been run**: from 14:21 every UI run failed to activate the app, where the whole file had
+  passed 11 of 11 at 12:16 the same day in the same session. It reproduces with `main.swift` reverted
+  and does not stop the built app launching from the command line, so it is not this branch — but the
+  cause was not determined, and an earlier claim here that it was the remote session is wrong, since
+  the tests had been passing from one for hours. Marked NOT YET RUN in the test.
 - **Discard is one writer operation.** `discardRecovery` removed the record, ignored the result, then
   saved a replacement at the same revision — and the writer reuses the source it last wrote for a
   revision, so a failed remove left the discarded text on disk under a record claiming the file's.

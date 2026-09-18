@@ -46,10 +46,24 @@ error: Failed to activate application 'com.airmark.AirMark …'
 ```
 
 It reproduces with `App/main.swift` reverted to the committed version, and the built app launches and
-runs normally from the command line, so it is the session and not this change. The cause is that the
-run was driven from a remote session: XCUITest needs an active console session to activate an
-application. The same explains the three routes to a window resize that failed earlier — HID
-`CGEvent`s left the cursor where it was, and the accessibility API answered `kAXErrorAPIDisabled`.
+runs normally from the command line, so it is not this change.
+
+**The cause was not determined.** An earlier note here said it was the remote session these runs were
+driven from; the timestamps say otherwise, and it is corrected rather than left standing:
+
+| time | UI runs |
+|---|---|
+| 08:35 – 12:16 | passing, including the whole file 11 of 11 at 12:16 |
+| 11:50 – 11:57 | the HID and accessibility attempts, which failed and broke nothing |
+| 14:21 onward | every run fails to activate the app |
+
+So UI tests worked for hours in the same remote session, and something changed on the machine between
+12:16 and 14:21 that is not in this branch. A prompt waiting on the console — an authentication or
+permission dialog that nobody at the keyboard could answer — would fit, and so would a locked screen.
+Neither was observed from here, so neither is stated as the cause.
+
+The accessibility failure at 11:57 is a separate and older fact: `kAXErrorAPIDisabled` means the test
+runner is not trusted for accessibility, which was true while the tests were passing.
 
 The assertion compiles (`build-for-testing` succeeds) and is marked NOT YET RUN in the test. To run it
 at a logged-in console, with screen recording and accessibility granted to the test runner:
