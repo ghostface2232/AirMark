@@ -1,0 +1,1 @@
+f8f1112 Drag the window edge for real, and quit through the menu
