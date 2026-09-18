@@ -107,3 +107,13 @@ third-party input method `com.pritype.inputmethod.v2` selected. `useASCIIInputSo
 `com.apple.keylayout.ABC` — checked — and moving that selection to after the editor has focus made no
 difference, so the helper does not overcome this input method. The same four passed at 12:16 on an
 idle machine. This is the test environment and not the branch; run the typing tests with ABC selected.
+
+**Then run at the console:** `bash Scripts/test-ui.sh -configuration Release`, the whole file —
+
+```
+Executed 11 tests, with 0 failures (0 unexpected) in 108.602 seconds
+** TEST SUCCEEDED **
+```
+
+All four typing tests and the window-order test included. That settles the input-method diagnosis, and
+it is the final UI state of the branch.

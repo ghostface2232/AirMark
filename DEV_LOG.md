@@ -280,4 +280,6 @@ after the review fixes below; the UI state after them is in that entry.
   and selecting it after focusing the editor instead of before made no difference, so it does not
   overcome this input method. The same four passed at 12:16 on an idle machine. Not a regression in
   this branch; run the typing tests with ABC selected.
+- **Then 11 of 11.** Run at the console, Release, the whole file: 11 tests, 0 failures, including all
+  four that type and the window-order test. That settles both the input-method diagnosis and the branch.
 
