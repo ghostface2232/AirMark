@@ -98,6 +98,10 @@ measured here and none of them both resizes the window and leaves the suite usab
 - HID `CGEvent`s posted to `.cghidEventTap`: `NSEvent.mouseLocation` was unchanged afterwards, so the
   runner does not get to post them here.
 - The accessibility API, to set the window's size directly: `kAXErrorAPIDisabled`.
+
+The last two, and the activation failures later the same day, have one cause: these runs were driven
+from a remote session, and input synthesis and app activation need an active console session. Worth
+retrying at a logged-in console before treating a window drag as impossible.
 - Double-clicking the title bar to zoom: harmless, and it does not zoom this window.
 
 The full-screen button does work and resizes the window from 710 to 1710 points. Terminating out of the

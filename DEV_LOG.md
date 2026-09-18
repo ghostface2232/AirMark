@@ -255,9 +255,10 @@ after the review fixes below, and UI tests could not be run after them — that 
   the rest to whatever order the asynchronous opens completed in, though the session had recorded which
   window was in front. The opens still run together, each reporting into a main-actor collector, and
   when the last lands the windows are ordered back to front and the last made key. The UI assertion for
-  this **has not been run**: UI tests on this machine stopped being able to activate the app part way
-  through, which reproduces with `main.swift` reverted and does not stop the built app launching from
-  the command line. It is marked NOT YET RUN in the test.
+  this **has not been run**: the session driving these runs was a remote one, and XCUITest needs an
+  active console session to activate an application. It reproduces with `main.swift` reverted and does
+  not stop the built app launching from the command line, and it is the same reason the three routes to
+  a window resize failed. Marked NOT YET RUN in the test; run it at a logged-in console.
 - **Discard is one writer operation.** `discardRecovery` removed the record, ignored the result, then
   saved a replacement at the same revision — and the writer reuses the source it last wrote for a
   revision, so a failed remove left the discarded text on disk under a record claiming the file's.

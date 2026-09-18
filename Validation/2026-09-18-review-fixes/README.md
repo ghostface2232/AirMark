@@ -46,9 +46,19 @@ error: Failed to activate application 'com.airmark.AirMark …'
 ```
 
 It reproduces with `App/main.swift` reverted to the committed version, and the built app launches and
-runs normally from the command line, so it is the machine's UI-test session and not this change. The
-assertion compiles (`build-for-testing` succeeds) and is marked NOT YET RUN in the test itself. Run
-`Scripts/test-ui.sh` on a machine that can activate apps before trusting it.
+runs normally from the command line, so it is the session and not this change. The cause is that the
+run was driven from a remote session: XCUITest needs an active console session to activate an
+application. The same explains the three routes to a window resize that failed earlier — HID
+`CGEvent`s left the cursor where it was, and the accessibility API answered `kAXErrorAPIDisabled`.
+
+The assertion compiles (`build-for-testing` succeeds) and is marked NOT YET RUN in the test. To run it
+at a logged-in console, with screen recording and accessibility granted to the test runner:
+
+```sh
+bash Scripts/test-ui.sh -only-testing:AirMarkUITests/AirMarkUITests/testRelaunchRestoresTheLastSessionAndNotTheOneBefore
+```
+
+It prints `RELAUNCH_SESSION window titles, front to back:` — the first title should be `Front.md`.
 
 ## 3. Discard is one writer operation
 
