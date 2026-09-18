@@ -90,6 +90,57 @@ import Testing
     /// trip; several documents keep their own records. A record written before these fields existed
     /// reads as unknown with work to recover, which a launch treats the way it treated every record
     /// before: only the most recent one, and only when nothing was left open.
+    /// A launch reads what it needs to decide, not every document it has ever recorded. `records()`
+    /// loads every source in full; `metadata()` takes each source's length from the directory listing
+    /// and reads only the small JSON beside it. The difference is a whole session's text.
+    @Test func metadataReadsTheRecordsWithoutTheirSources() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        // Four documents of about 8 MB, which is what this is about: a small record costs nothing
+        // either way.
+        let source = String(repeating: "A line of a large document. 한글 😀\n", count: 200_000)
+        let documents = directory.appendingPathComponent("Documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        var written: [RecoveryRecord] = []
+        for index in 0..<4 {
+            let file = documents.appendingPathComponent("large\(index).md")
+            try Data(source.utf8).write(to: file)
+            var record = Self.record(UUID(), source, revision: 1, path: file.path)
+            record.hasUnsavedChanges = false; record.state = .quit
+            try await store.save(record)
+            written.append(record)
+        }
+        let expected = source.utf8.count
+        let clock = ContinuousClock()
+        let fresh = RecoveryStore(directory: directory)
+        let metadataStart = clock.now
+        let metadata = await fresh.metadata()
+        let metadataCost = metadataStart.duration(to: clock.now)
+        let recordsStart = clock.now
+        let records = await fresh.records()
+        let recordsCost = recordsStart.duration(to: clock.now)
+        print("RECOVERY_LAUNCH 4 records of \(expected) source bytes: metadata() \(metadataCost), records() \(recordsCost)")
+
+        #expect(metadata.count == 4)
+        #expect(Set(metadata.map(\.id)) == Set(written.map(\.id)))
+        #expect(metadata.allSatisfy { $0.sourceBytes == expected }, "the source length has to be right without reading it")
+        #expect(metadata.allSatisfy { $0.state == .quit && !$0.hasUnsavedChanges })
+        // Newest first, as records() returns them.
+        #expect(metadata.map(\.id) == records.map(\.id))
+        #expect(metadata == records.map(\.metadata))
+        #expect(metadataCost < recordsCost, "metadata() cost \(metadataCost) against records() \(recordsCost)")
+
+        // The source is still there for the one plan that needs it.
+        let first = try #require(metadata.first)
+        #expect(await fresh.source(of: first)?.source == source)
+        // A launch of this directory opens four files and loads no source at all.
+        let plans = await fresh.launchPlans(recentPaths: [])
+        #expect(plans.count == 4)
+        #expect(plans.allSatisfy { if case .openFile = $0 { true } else { false } }, "got \(plans)")
+        #expect(Set(plans.compactMap(\.recordID)) == Set(written.map(\.id)))
+    }
+
     @Test func recordsKeepTheirStateAndUnsavedFlag() async throws {
         let directory = Self.directory()
         defer { try? FileManager.default.removeItem(at: directory) }

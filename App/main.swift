@@ -46,13 +46,16 @@ import os
             if let flag = CommandLine.arguments.firstIndex(of: "--open"), CommandLine.arguments.indices.contains(flag + 1) {
                 open(URL(fileURLWithPath: CommandLine.arguments[flag + 1])); return
             }
-            let records = await Self.recovery.records()
-            guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
             let recent = NSDocumentController.shared.recentDocumentURLs.map(\.path)
             // Every document the last session had open comes back, not only the newest record and not
             // the documents an earlier session left behind. The plans arrive in the order to open them,
             // back to front; the last one belongs in front.
-            let plans = LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+            //
+            // Resolved inside the store, which is not the main actor: deciding this reads recovery
+            // records and, for a document that may hold unsaved text, that document's file. None of
+            // that belongs on the thread that has a window to put up.
+            let plans = await Self.recovery.launchPlans(recentPaths: recent)
+            guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
             for (index, plan) in plans.enumerated() {
                 // A document opened from a file gets its window through an asynchronous completion, so
                 // the order the windows appear in does not say which document is newest. The last plan
@@ -73,7 +76,7 @@ import os
         for filename in filenames { open(URL(fileURLWithPath: filename)) }
         sender.reply(toOpenOrPrint: .success)
     }
-    func open(_ url: URL, recovery: RecoveryRecord? = nil, bringToFront: Bool = false) {
+    func open(_ url: URL, recovery: RecoveryMetadata? = nil, bringToFront: Bool = false) {
         openedFile = true
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { document, _, error in
             if let error { NSApp.presentError(error); if NSDocumentController.shared.documents.isEmpty { self.newDocument(nil) } }

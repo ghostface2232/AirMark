@@ -217,7 +217,7 @@ import AirMarkCore
             if !records.isEmpty { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let plans = LaunchPlan.resolve(records: records, recentPaths: [url.path], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        let plans = resolve(records: records, recent: [url.path], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         guard case .recoverDraft(let record)? = plans.last else { Issue.record("expected a draft, got \(plans)"); return }
         #expect(record.source == "saved\nunsaved")
         #expect(record.filePath == url.path)
@@ -246,7 +246,7 @@ import AirMarkCore
                records.contains(where: { $0.id == second.identity && $0.source.hasSuffix("two") }) { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let plans = LaunchPlan.resolve(records: records, recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        let plans = resolve(records: records, recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         // Other suites run in parallel and write to the same store; select this test's two documents.
         let mine: Set<UUID> = [first.identity, second.identity]
         let drafts = plans.compactMap { plan -> RecoveryRecord? in
@@ -277,8 +277,8 @@ import AirMarkCore
         let record = try #require(closed)
         #expect(record.state == .closed)
         #expect(!record.hasUnsavedChanges, "the text was on disk when it was closed")
-        let plans = LaunchPlan.resolve(records: [record], recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
-        #expect(plans == [.openFile(path: url.path, record: record)], "the last document still reopens when nothing was left open")
+        let plans = resolve(records: [record], recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: record.metadata)], "the last document still reopens when nothing was left open")
     }
 
     /// The quit writes `.quit` for every open document and AppKit then closes them. `isTerminating` is
@@ -338,8 +338,8 @@ import AirMarkCore
         try Data("left open\n".utf8).write(to: URL(fileURLWithPath: left.filePath!))
         left.source = "left open\n"
         try store.saveImmediately(left)
-        let plans = LaunchPlan.resolve(records: await store.records(), recentPaths: [],
-                                       fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        let plans = resolve(records: await store.records(), recent: [],
+                                       disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         #expect(!plans.contains { $0.recordID == identity }, "the closed document came back: \(plans)")
         #expect(plans.contains { $0.recordID == left.id }, "the document left open did not: \(plans)")
     }
@@ -361,8 +361,16 @@ import AirMarkCore
         try await store.save(stale)
         let records = await store.records()
         #expect(records.contains { $0.id == stale.id })
-        let plans = LaunchPlan.resolve(records: records, recentPaths: [], fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
-        #expect(plans == [.openFile(path: url.path, record: mine)], "only this session's document, got \(plans)")
+        let plans = resolve(records: records, recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: mine.metadata)], "only this session's document, got \(plans)")
+    }
+
+    /// Resolves a launch from whole records, as `SourceTests` does: production reads metadata and
+    /// loads a source only when it needs one, while a test has the records in hand.
+    func resolve(records: [RecoveryRecord], recent: [String] = [], disk: @escaping (String) -> Data? = { _ in nil }) -> [LaunchPlan] {
+        let sources = Dictionary(records.map { ($0.id, DocumentBytes(source: $0.source, hasBOM: $0.hasBOM)) }, uniquingKeysWith: { first, _ in first })
+        return LaunchPlan.resolve(records: records.map(\.metadata), recentPaths: recent,
+                                  storage: LaunchStorage(size: { disk($0)?.count }, data: disk, source: { sources[$0.id] }))
     }
 
     /// Waits for this document's recovery record to satisfy `condition`.

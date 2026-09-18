@@ -53,6 +53,49 @@ public struct RecoveryRecord: Codable, Sendable, Equatable {
     }
 }
 
+/// A record without its source, which is the only part of a record that is the size of a document.
+///
+/// A launch reads these first and decides what to open from them alone wherever it can: a document
+/// whose text was on disk when its record was written is opened from the file, so neither the file's
+/// bytes nor the record's source are ever read. `sourceBytes` is the length the record's source would
+/// have on disk, which is enough to tell an empty record from one with text, and enough to rule out an
+/// exact match without reading anything.
+public struct RecoveryMetadata: Sendable, Equatable {
+    public var id: UUID
+    public var filePath: String?
+    public var hasBOM: Bool
+    public var revision: UInt64
+    public var selection: SourceSpan
+    public var scrollY: Double
+    public var date: Date
+    public var state: RecoveryState
+    public var hasUnsavedChanges: Bool
+    public var sessionID: UUID?
+    public var order: Int?
+    /// UTF-8 bytes of the source, without the BOM. `DocumentBytes` for this record is this many bytes
+    /// plus three when `hasBOM`.
+    public var sourceBytes: Int
+    public init(id: UUID, filePath: String?, hasBOM: Bool, revision: UInt64, selection: SourceSpan, scrollY: Double, date: Date,
+                state: RecoveryState, hasUnsavedChanges: Bool, sessionID: UUID?, order: Int?, sourceBytes: Int) {
+        self.id = id; self.filePath = filePath; self.hasBOM = hasBOM; self.revision = revision
+        self.selection = selection; self.scrollY = scrollY; self.date = date
+        self.state = state; self.hasUnsavedChanges = hasUnsavedChanges
+        self.sessionID = sessionID; self.order = order; self.sourceBytes = sourceBytes
+    }
+    /// Bytes the document's file holds when it holds exactly this record's text.
+    public var documentBytes: Int { sourceBytes + (hasBOM ? 3 : 0) }
+}
+
+extension RecoveryRecord {
+    /// This record as a launch reads it before deciding whether the source is needed at all. Derived,
+    /// so `sourceBytes` cannot fall out of step with `source`.
+    public var metadata: RecoveryMetadata {
+        RecoveryMetadata(id: id, filePath: filePath, hasBOM: hasBOM, revision: revision, selection: selection,
+                         scrollY: scrollY, date: date, state: state, hasUnsavedChanges: hasUnsavedChanges,
+                         sessionID: sessionID, order: order, sourceBytes: source.utf8.count)
+    }
+}
+
 public actor RecoveryStore {
     public let directory: URL
     /// Identifies this run of the app; one store is made per launch. Every record written through it
@@ -75,6 +118,44 @@ public actor RecoveryStore {
             // A save can replace the source between reading the record and its source; read once more.
             RecoveryWriter.load(url, from: directory) ?? RecoveryWriter.load(url, from: directory)
         }.sorted { $0.date > $1.date }
+    }
+    /// Every record's fields without its source, newest first. One directory listing, which carries the
+    /// source files' sizes, and one small JSON per record: a launch reads no document-sized file to
+    /// find out what it has. Records naming a source that is not there are dropped, as `records()`
+    /// drops them.
+    public func metadata() -> [RecoveryMetadata] {
+        let keys: [URLResourceKey] = [.fileSizeKey]
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return [] }
+        var sizes: [String: Int] = [:], jsons: [URL] = []
+        for url in urls {
+            switch url.pathExtension {
+            case "json": jsons.append(url)
+            case "source": sizes[url.lastPathComponent] = (try? url.resourceValues(forKeys: Set(keys)))?.fileSize ?? 0
+            default: break
+            }
+        }
+        return jsons.compactMap { RecoveryWriter.loadMetadata($0, in: directory, sourceSizes: sizes) }.sorted { $0.date > $1.date }
+    }
+    /// The source of one record, read when a launch has decided it needs it. Goes through the same
+    /// loader `records()` uses, so an inline source from an older build and a source in its own file
+    /// are read the same way here as anywhere else.
+    public func source(of metadata: RecoveryMetadata) -> DocumentBytes? {
+        let url = directory.appendingPathComponent(metadata.id.uuidString + ".json")
+        guard let record = RecoveryWriter.load(url, from: directory) ?? RecoveryWriter.load(url, from: directory) else { return nil }
+        return DocumentBytes(source: record.source, hasBOM: record.hasBOM)
+    }
+    /// What to open at launch. Resolved here rather than by the caller because every file it reads and
+    /// every comparison it makes belongs off the main actor, and this store is the only thing that
+    /// knows where a record's source lives.
+    public func launchPlans(recentPaths: [String]) -> [LaunchPlan] {
+        LaunchPlan.resolve(records: metadata(), recentPaths: recentPaths, storage: LaunchStorage(
+            size: { path in
+                // Unreadable counts as gone, the way reading the whole file and getting nothing did.
+                guard FileManager.default.isReadableFile(atPath: path) else { return nil }
+                return (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+            },
+            data: { try? Data(contentsOf: URL(fileURLWithPath: $0)) },
+            source: { [self] in source(of: $0) }))
     }
     public func remove(_ id: UUID) throws {
         try writer.remove(id, from: directory)
@@ -163,6 +244,31 @@ private final class RecoveryWriter: @unchecked Sendable {
         for name in names where name.hasPrefix(prefix) && name.hasSuffix(".source") && name != kept {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         }
+    }
+    /// The record's fields in `url` without its source, whose length is taken from `sourceSizes` — the
+    /// directory listing — rather than by reading it. Nil on the same terms as `load`: unreadable, or
+    /// naming a source that is not there. A source the listing does not mention is checked once
+    /// directly, in case the listing was taken before the record was written.
+    static func loadMetadata(_ url: URL, in directory: URL, sourceSizes: [String: Int]) -> RecoveryMetadata? {
+        guard let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let sourceBytes: Int
+        if let inline = stored.source {
+            sourceBytes = inline.utf8.count
+        } else if let name = stored.sourceFile, !name.contains("/") {
+            if let size = sourceSizes[name] {
+                sourceBytes = size
+            } else if let size = (try? directory.appendingPathComponent(name).resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                sourceBytes = size
+            } else {
+                return nil
+            }
+        } else {
+            return nil
+        }
+        return RecoveryMetadata(id: stored.id, filePath: stored.filePath, hasBOM: stored.hasBOM, revision: stored.revision,
+                                selection: stored.selection, scrollY: stored.scrollY, date: stored.date,
+                                state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true,
+                                sessionID: stored.sessionID, order: stored.order, sourceBytes: sourceBytes)
     }
     /// The record in `url`, or nil when it cannot be read or names a source that is missing.
     static func load(_ url: URL, from directory: URL) -> RecoveryRecord? {

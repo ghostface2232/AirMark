@@ -61,3 +61,69 @@ the second call returns the identical `CGImage` from the cache.
 
 Mutating the key to drop the scale, which is the same fault the color space had, fails it on 4
 assertions, including a 1× window being handed the 2× bitmap. Full suite: 100 + 52 passing.
+
+## 2. A launch reads what it needs to decide
+
+### Problem
+
+Two costs, both paid at every launch:
+
+- `RecoveryStore.records()` read every record's source in full and decoded it to a `String`. A
+  directory holding four 8 MB documents read 32 MB before the launch had decided anything.
+- `LaunchPlan.resolve` then ran **on the main actor**, inside `applicationDidFinishLaunching`'s
+  `Task { @MainActor in }`. For every record it read that document's whole file from disk, re-encoded
+  the record's source to `Data`, and compared the two — on the thread that has a window to put up.
+
+The comparison was also asked of records that cannot answer anything with it. A record written while
+the document's text was on disk is not the only copy of anything, and both outcomes the comparison
+could reach — the file still matches, or another app has changed it since — open the file at the
+recorded position. The comparison decided nothing and cost a whole document.
+
+### Change
+
+The file layout is untouched: `<id>.json` beside `<id>.<token>.source`, written exactly as before.
+
+- `RecoveryMetadata` is a record without its source, with `sourceBytes` — the length the source has on
+  disk. `RecoveryStore.metadata()` takes that length from the directory listing it already makes and
+  reads only the small JSON beside it. `source(of:)` loads one record's text, through the same loader
+  `records()` uses, so an inline source from an older build is read the same way here as anywhere.
+- `LaunchPlan.resolve` takes metadata and a `LaunchStorage` of three closures — `size`, `data`,
+  `source` — because they cost three different amounts. A clean record costs one `size`. A record that
+  may hold the only copy of its text is compared, but a file of a length the record cannot have is
+  ruled out without reading either side. `.openFile` carries metadata; `.recoverDraft` carries a whole
+  record, and is the only plan whose source is loaded.
+- `RecoveryStore.launchPlans(recentPaths:)` resolves inside the store, which is an actor and not the
+  main actor. `main.swift` awaits it. Every file read and every comparison is off the main thread.
+
+Behaviour is unchanged. All five outcomes of the old branch — bytes equal, file gone, dirty and
+different, dirty and empty, clean and different — are preserved, and the existing launch tests assert
+them with their assertions untouched; only the call syntax moved to the new API.
+
+### Result
+
+`RecoveryStoreTests.metadataReadsTheRecordsWithoutTheirSources`, four records of 8 MB:
+
+```
+RECOVERY_LAUNCH 4 records of 8000000 source bytes: metadata() 0.00023 seconds, records() 0.01400 seconds
+```
+
+60× on a warm cache, and 32 MB not read. The same test then resolves a real launch of that directory
+and gets four `.openFile` plans with no source loaded.
+
+`SourceTests.launchReadsNothingForDocumentsWhoseTextIsOnDisk` counts the calls for a session of eight
+saved documents:
+
+| | before (`launchio-before.txt`) | after |
+|---|---:|---:|
+| stats | 8 | 8 |
+| document files read in full | 8 | **0** |
+| record sources loaded | 16 | **0** |
+
+Before was produced by restoring the old rule — compare every record — with everything else in place.
+
+`launchComparesOnlyWhatTheLengthsLeaveOpen` pins the rest: a dirty record whose file is another length
+is decided with no read; one whose length matches is read and compared, and wins or loses on the
+bytes; a BOM counts toward the length it is checked against; an empty record opens no window and its
+source is never loaded to find that out.
+
+Full suite: 100 + 55 passing.

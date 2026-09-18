@@ -1,0 +1,46 @@
+Building for debugging...
+[2 / 23] AirMarkCore
+/Users/baemingwan/Documents/AI/airmark/Sources/AirMarkCore/MarkdownParser.swift:273:5: [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m271 |[0;0m     /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
+[0;36m272 |[0;0m     /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+[0;36m273 |[0;0m     nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    [0;36m|[0;0m     `- [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m274 |[0;0m     nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+[0;36m275 |[0;0m 
+
+/Users/baemingwan/Documents/AI/airmark/Sources/AirMarkCore/MarkdownParser.swift:274:5: [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m272 |[0;0m     /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
+[0;36m273 |[0;0m     nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+[0;36m274 |[0;0m     nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+    [0;36m|[0;0m     `- [1;33mwarning: [1;39m'nonisolated(unsafe)' is unnecessary for a constant with 'Sendable' type 'NSRegularExpression?', consider removing it[0;0m
+[0;36m275 |[0;0m 
+[0;36m276 |[0;0m     /// Whether `source` contains `]:`, which every link reference definition does.
+[4 / 25] AirMarkCore
+[14 / 16] AirMarkBench-product
+[20 / 20] AirMarkBench-product
+Build complete! (0.75 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() started.
+✘ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() recorded an issue at SourceTests.swift:222:5: Expectation failed: plans.allSatisfy { if case .openFile = $0 { true } else { false } }
+↳ plans.allSatisfy { if case .openFile = $0 { true } else { false } } → <not evaluated>
+✘ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() recorded an issue at SourceTests.swift:224:5: Expectation failed: read.isEmpty
+↳ a clean record was compared byte for byte: ["/notes/file0.md", "/notes/file1.md", "/notes/file2.md", "/notes/file3.md", "/notes/file4.md", "/notes/file5.md", "/notes/file6.md", "/notes/file7.md"]
+↳ read.isEmpty → false
+↳   read → ["/notes/file0.md", "/notes/file1.md", "/notes/file2.md", "/notes/file3.md", "/notes/file4.md", "/notes/file5.md", "/notes/file6.md", "/notes/file7.md"]
+↳   isEmpty → false
+✘ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() recorded an issue at SourceTests.swift:225:5: Expectation failed: loaded.isEmpty
+↳ a clean record's source was loaded: [00FF0765-8FDB-4F16-AB6B-0FE9F1D8C097, 00FF0765-8FDB-4F16-AB6B-0FE9F1D8C097, 5C43E6EA-9031-4851-99D2-8E6277DD1533, 5C43E6EA-9031-4851-99D2-8E6277DD1533, 6C451487-0BAA-4662-8BC5-61BDF3BB0F10, 6C451487-0BAA-4662-8BC5-61BDF3BB0F10, 1704B5FC-5A22-4053-8D04-9A2326A1A074, 1704B5FC-5A22-4053-8D04-9A2326A1A074, C4AB2CB5-A92D-48BE-A384-7332EF3D0287, C4AB2CB5-A92D-48BE-A384-7332EF3D0287, 1639D808-F43E-465A-8B40-D9A0FBDD319F, 1639D808-F43E-465A-8B40-D9A0FBDD319F, 1986C2F3-54F3-4ABF-A4C5-004F5DBDE951, 1986C2F3-54F3-4ABF-A4C5-004F5DBDE951, B055A2FF-A2E5-4B70-A23D-F0C6C4850349, B055A2FF-A2E5-4B70-A23D-F0C6C4850349]
+↳ loaded.isEmpty → false
+↳   loaded → [00FF0765-8FDB-4F16-AB6B-0FE9F1D8C097, 00FF0765-8FDB-4F16-AB6B-0FE9F1D8C097, 5C43E6EA-9031-4851-99D2-8E6277DD1533, 5C43E6EA-9031-4851-99D2-8E6277DD1533, 6C451487-0BAA-4662-8BC5-61BDF3BB0F10, 6C451487-0BAA-4662-8BC5-61BDF3BB0F10, 1704B5FC-5A22-4053-8D04-9A2326A1A074, 1704B5FC-5A22-4053-8D04-9A2326A1A074, C4AB2CB5-A92D-48BE-A384-7332EF3D0287, C4AB2CB5-A92D-48BE-A384-7332EF3D0287, 1639D808-F43E-465A-8B40-D9A0FBDD319F, 1639D808-F43E-465A-8B40-D9A0FBDD319F, 1986C2F3-54F3-4ABF-A4C5-004F5DBDE951, 1986C2F3-54F3-4ABF-A4C5-004F5DBDE951, B055A2FF-A2E5-4B70-A23D-F0C6C4850349, B055A2FF-A2E5-4B70-A23D-F0C6C4850349]
+↳   isEmpty → false
+LAUNCH_IO clean session of 8: stats=8 files read=8 sources loaded=16
+✘ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() failed after 0.002 seconds with 3 issues.
+↳ /// What a launch reads, counted. A record whose text was on disk when it was written cannot be the
+↳ /// only copy of anything, and both answers a comparison could give it open the file, so it is never
+↳ /// compared: a launch restoring a session of saved documents reads no document bytes and no record
+↳ /// sources at all. It used to read every file and every source in full.
+✘ Test run with 1 test in 0 suites failed after 0.002 seconds with 3 issues.
+Note: Some test targets reported failures:
+  - AirMarkCoreTests (Swift Testing)
