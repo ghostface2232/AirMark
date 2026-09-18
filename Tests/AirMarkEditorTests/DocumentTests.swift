@@ -29,6 +29,15 @@ import AirMarkCore
     func waitUntilClean(_ document: MarkdownDocument) async throws {
         for _ in 0..<40 where document.isDocumentEdited { try await Task.sleep(for: .milliseconds(25)) }
     }
+    /// `settle()`, and then as long again as it takes for the document to be dirty. The wait is for the
+    /// text view to close its undo group, which is what the fixed wait was for and what the following
+    /// save has to come after — so this never returns sooner than `settle()` did. Returning the moment
+    /// `isDocumentEdited` flips is not the same thing and is not enough: the edit sets it straight
+    /// away, and a group closing after the save marks the document dirty again.
+    func waitUntilEdited(_ document: MarkdownDocument) async throws {
+        try await settle()
+        for _ in 0..<40 where !document.isDocumentEdited { try await Task.sleep(for: .milliseconds(25)) }
+    }
 
     @Test func repeatedSavesPreserveBytesWithoutFalseConflicts() async throws {
         let prefix = Data([0xEF, 0xBB, 0xBF])
@@ -40,7 +49,7 @@ import AirMarkCore
             append(document, addition); source += addition
             // Let the text view close its undo group, as happens between real key events;
             // NSDocument marks the change count from that notification.
-            try await settle()
+            try await waitUntilEdited(document)
             #expect(document.isDocumentEdited)
             try await document.save(to: url, ofType: Self.type, for: .saveOperation)
             #expect(try Data(contentsOf: url) == prefix + Data(source.utf8))
@@ -96,7 +105,7 @@ import AirMarkCore
         let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
         defer { document.close(); try? FileManager.default.removeItem(at: directory) }
         append(document, "pending\n")
-        try await settle()
+        try await waitUntilEdited(document)
         let before = document.snapshot.persistedData()
         let blocker = directory.appendingPathComponent("not-a-directory")
         try Data().write(to: blocker)
@@ -362,7 +371,11 @@ import AirMarkCore
         let records = await store.records()
         #expect(records.contains { $0.id == stale.id })
         let plans = resolve(records: records, recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
-        #expect(plans == [.openFile(path: url.path, record: mine.metadata)], "only this session's document, got \(plans)")
+        // By identity, not by value: the document keeps recording itself, so the record on disk may be
+        // a later one than `mine` by the time this reads it.
+        #expect(plans.count == 1, "only this session's document, got \(plans)")
+        #expect(plans.first?.recordID == mine.id)
+        if case .openFile(let path, _)? = plans.first { #expect(path == url.path) } else { Issue.record("expected a file, got \(plans)") }
     }
 
     /// Resolves a launch from whole records, as `SourceTests` does: production reads metadata and
