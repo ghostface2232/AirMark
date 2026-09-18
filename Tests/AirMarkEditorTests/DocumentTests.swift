@@ -29,15 +29,6 @@ import AirMarkCore
     func waitUntilClean(_ document: MarkdownDocument) async throws {
         for _ in 0..<40 where document.isDocumentEdited { try await Task.sleep(for: .milliseconds(25)) }
     }
-    /// `settle()`, and then as long again as it takes for the document to be dirty. The wait is for the
-    /// text view to close its undo group, which is what the fixed wait was for and what the following
-    /// save has to come after — so this never returns sooner than `settle()` did. Returning the moment
-    /// `isDocumentEdited` flips is not the same thing and is not enough: the edit sets it straight
-    /// away, and a group closing after the save marks the document dirty again.
-    func waitUntilEdited(_ document: MarkdownDocument) async throws {
-        try await settle()
-        for _ in 0..<40 where !document.isDocumentEdited { try await Task.sleep(for: .milliseconds(25)) }
-    }
 
     @Test func repeatedSavesPreserveBytesWithoutFalseConflicts() async throws {
         let prefix = Data([0xEF, 0xBB, 0xBF])
@@ -46,19 +37,17 @@ import AirMarkCore
         defer { document.close(); try? FileManager.default.removeItem(at: directory) }
         for number in 1...5 {
             let addition = "Save \(number). "
-            append(document, addition); source += addition
-            // Let the text view close its undo group, as happens between real key events;
-            // NSDocument marks the change count from that notification.
-            try await waitUntilEdited(document)
-            // This assertion has failed three times in about twenty full-suite runs on a loaded
-            // machine, never in isolation and never under synthetic load, and it predates the work in
-            // this session. Nothing is printed unless it is about to fail; when it next does, this says
-            // which pass it was and whether the edit reached the editor and the snapshot at all, which
-            // is what nobody has had so far.
-            if !document.isDocumentEdited {
-                print("SAVE_DIAG pass=\(number) editorSource=\(document.editor?.source.count ?? -1) expected=\(source.count) snapshot=\(document.snapshot.get().source.count) canUndo=\(document.undoManager?.canUndo ?? false) grouping=\(document.undoManager?.groupingLevel ?? -1)")
-            }
-            #expect(document.isDocumentEdited)
+            append(document, addition)
+            source += addition
+            // Before the first await, and deliberately. The document is `autosavesInPlace`, so an
+            // autosave can write the file and clear this flag at any suspension point — which is what
+            // it is for, and what made this assertion fail about one full-suite run in ten. Nothing
+            // runs between the edit and here, so what it asserts is the wiring from the edit to the
+            // change count, which is what it was always for.
+            #expect(document.isDocumentEdited, "the edit did not mark the document dirty")
+            // Let the text view close its undo group, as happens between real key events; a save that
+            // starts first leaves the group's own change count behind and the document dirty after it.
+            try await settle()
             try await document.save(to: url, ofType: Self.type, for: .saveOperation)
             #expect(try Data(contentsOf: url) == prefix + Data(source.utf8))
             try await waitUntilClean(document)
@@ -113,7 +102,8 @@ import AirMarkCore
         let (document, _, directory) = try makeDocument(Data("saved\n".utf8))
         defer { document.close(); try? FileManager.default.removeItem(at: directory) }
         append(document, "pending\n")
-        try await waitUntilEdited(document)
+        #expect(document.isDocumentEdited, "the edit did not mark the document dirty")
+        try await settle()
         let before = document.snapshot.persistedData()
         let blocker = directory.appendingPathComponent("not-a-directory")
         try Data().write(to: blocker)
@@ -122,7 +112,10 @@ import AirMarkCore
         }
         #expect(document.snapshot.persistedData() == before)
         #expect(!document.snapshot.isWriting())
-        #expect(document.isDocumentEdited)
+        // Still dirty, or already autosaved in place — a failed Save As must not be what cleared it,
+        // and an autosave legitimately may have. Asserting only the first would be asserting that no
+        // autosave ran, which is not this test's business and is not something it controls.
+        #expect(document.isDocumentEdited || !document.hasUnautosavedChanges, "the failed save cleared the document's changes")
         #expect(document.editor?.source == "saved\npending\n")
     }
 
@@ -182,6 +175,8 @@ import AirMarkCore
         try FileManager.default.removeItem(at: url)
         try await settle()
         #expect(document.fileURL == nil)
+        // Safe to assert strictly: the document has no file left, and `autosavesDrafts` is false, so
+        // nothing autosaves it out from under this.
         #expect(document.isDocumentEdited)
         #expect(document.editor?.source == "keep me\n")
         #expect(document.displayName.contains("Note.md"))

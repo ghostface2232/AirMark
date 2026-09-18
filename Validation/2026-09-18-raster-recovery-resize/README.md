@@ -184,25 +184,62 @@ notification directly. What that leaves untested is the one line that skips armi
 drag; what it does test is that the end of a drag alone starts the renders, which is the behaviour the
 poll existed to approximate. The two typing UI tests were not run.
 
-## 4. One test that still fails now and then, and is not fixed
+## 4. The flaky save test: an autosave-in-place, and the fix
 
-`DocumentTests.repeatedSavesPreserveBytesWithoutFalseConflicts` has failed its
-`#expect(document.isDocumentEdited)` three times in about twenty full-suite runs today, on a loaded
-machine. It failed that way before anything in this session was written, so it is not a regression
-here, and nothing changed here touches the edit, undo or change-count path.
+`DocumentTests.repeatedSavesPreserveBytesWithoutFalseConflicts` failed its
+`#expect(document.isDocumentEdited)` three times in about thirty full-suite runs, always on a loaded
+machine and never in isolation. It predates this session's work.
 
-What was done. The wait before the assertion was a flat 250 ms; it now keeps that and waits up to a
-second more for the document to be dirty, which is strictly longer than before. That reduced the rate
-but has not removed it. Waiting only for `isDocumentEdited` was tried first and was worse: the edit
-sets that flag at once, so the wait returned almost immediately, the save ran before the text view had
-closed its undo group, and the group closing afterwards marked the document dirty again — the failure
-moved to the `!isDocumentEdited` after the save in two of three runs. That is recorded because it says
-something about the mechanism: the 250 ms is waiting for the undo group, not for the flag.
+### Wrong turns, recorded because they cost time
 
-What could not be done. It does not reproduce on demand. Six runs of `--filter DocumentTests` under six
-spinning CPU hogs: no failure. Five full-suite runs under the same load: no failure. It appears only in
-an ordinary full parallel run, at a rate near one in seven.
+- **First attempt made it worse.** Replacing the flat 250 ms wait with a poll for `isDocumentEdited`
+  looked like the obvious robustness fix. It is not the same thing: the edit sets that flag
+  synchronously, so the poll returned almost at once, the save then ran before the text view had closed
+  its undo group, and the group closing afterwards marked the document dirty again. The failure moved
+  to the `!isDocumentEdited` after the save in two of three runs. That is why the 250 ms is still there
+  before the save — it is waiting for the undo group, not for the flag.
+- **Autosave was suspected and wrongly cleared.** `NSDocumentController.shared.autosavingDelay` reads
+  `0.0` in the test process and the document is not registered with the controller, and a run of the
+  test in isolation showed five save operations and no autosave. That was taken as ruling autosave out.
+  It does not: `autosavingDelay` does not govern an `autosavesInPlace` document, and the isolated run
+  is simply too short for one to fire.
+- **A 120-iteration stress test varying the append-to-save gap from 0 to 19 ms found nothing**, because
+  the gap was never the variable.
 
-What is left behind. A print that fires only when the assertion is about to fail, naming the pass
-number and whether the edit reached the editor and the snapshot. The next occurrence will say whether
-the edit was lost or only the change count, which is the thing nobody knows yet.
+### Root cause
+
+`NSDocument.updateChangeCount(_:)` was overridden to log, and showed only `done` and never `cleared` —
+because an asynchronous save clears the count through `updateChangeCount(withToken:for:)`, a different
+method. With that one overridden too, and the loop raised to 40 passes so a run covers more ground, a
+failure was caught on the second run:
+
+```
+--append 24--  done/edited=true  done/edited=true  token-out(op4)/edited=true  token-in(op4)/edited=false
+SAVE_DIAG pass=24 hasUnautosaved=false editorSource=235 expected=235 snapshot=235
+```
+
+`op4` is `autosaveInPlaceOperation`, and the record of `writeSafely` calls agrees: twenty-three `"0"`
+then a `"4"`. **An autosave-in-place fired between the append and the assertion, wrote the file, and
+cleared the dirty flag.** The edit was present the whole time — editor, snapshot and expectation all
+235 bytes — which is why exactly one assertion failed and the byte comparison after it passed.
+
+That is `autosavesInPlace = true` doing its job. The product is right and the test was wrong.
+
+### Fix
+
+The assertion moved to before the first `await`, where it belongs. Nothing runs between the edit and
+it, so no autosave can intervene, and what it checks — that the edit reaches the change count — is what
+it was always for. It is now deterministic rather than merely likely.
+
+Two other assertions had the same exposure. The one after a failed Save As became
+`isDocumentEdited || !hasUnautosavedChanges`: still dirty, or already autosaved, because asserting only
+the first is asserting that no autosave ran, which the test neither controls nor cares about. The one
+after the file is deleted is left strict and is safe — the document has no file left and
+`autosavesDrafts` is false, so nothing can autosave it.
+
+### Result
+
+The unfixed test reproduced within two full-suite runs at 40 passes. Fixed: four runs at 40 passes —
+about 640 append-and-save cycles — with no failure, then the loop restored to 5.
+
+No production code changed. All diagnostics were removed from `MarkdownDocument`.

@@ -304,17 +304,22 @@ Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw 
   measurement is what keeps that: adopting every layout pass turns a 21-step burst into 21 rounds of
   renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms — about
   three frames at 60 Hz — and a burst settles 57 ms after its last step instead of 154 ms.
-- **A flaky test reduced, not fixed.** `repeatedSavesPreserveBytesWithoutFalseConflicts` has failed its
-  dirty-document assertion three times in about twenty full-suite runs on a loaded machine, and did so
-  before anything in this session was written. The wait before it is for the text view to close its
-  undo group; it now keeps the 250 ms and waits up to a second more for the state, never returning
-  sooner than before. That lowered the rate and did not remove it. Waiting only for `isDocumentEdited`
-  is not the same thing and was tried first: the edit sets that flag immediately, the save then ran
-  before the group closed, and the group closing after it marked the document dirty again. It does not
-  reproduce on demand — six `--filter DocumentTests` runs and five full-suite runs under six spinning
-  CPU hogs all passed — so a print that fires only when the assertion is about to fail was left in
-  place, naming the pass and whether the edit reached the editor and the snapshot. **This is a known
-  intermittent failure, not a fixed one.**
+- **The flaky save test was an autosave.** `repeatedSavesPreserveBytesWithoutFalseConflicts` failed its
+  `#expect(document.isDocumentEdited)` three times in about thirty full-suite runs, on a loaded machine
+  and never in isolation, and predates this session. Overriding `updateChangeCount(_:)` showed only
+  `done` and never `cleared`, because an asynchronous save clears the count through
+  `updateChangeCount(withToken:for:)` instead; with that overridden too and the loop raised to 40
+  passes, a failure was caught on the second run and named its cause: `token-in(op4)` — an
+  autosave-in-place — between the append and the assertion, with the edit present throughout
+  (editor, snapshot and expectation all 235 bytes), which is why only that one assertion failed. That
+  is `autosavesInPlace` doing its job; the product is right and the test was wrong. The assertion moved
+  to before the first `await`, where nothing can run between the edit and it, which also makes it
+  deterministic. The assertion after a failed Save As became `isDocumentEdited || !hasUnautosavedChanges`,
+  since asserting only the first asserts that no autosave ran. Two earlier attempts are recorded in
+  `Validation/2026-09-18-raster-recovery-resize/`: polling for the flag made it worse, because the
+  250 ms is waiting for the undo group and not for the flag, and `autosavingDelay == 0.0` was wrongly
+  read as ruling autosave out — it does not govern an `autosavesInPlace` document. Fixed test: four
+  full-suite runs at 40 passes, about 640 cycles, with no failure, against reproduction within two.
 - **Validated.** `swift test --disable-sandbox`: 102 tests in 15 suites and 55 in 4 suites pass,
   against 99 + 52 at the start of the day. Each change's new tests were run against the pre-change
   logic and fail there. The four UI tests that synthesize no typing pass in Release.
