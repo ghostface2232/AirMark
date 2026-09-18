@@ -123,4 +123,6 @@ screen asked. Neither scale is ever served the other's pixels.
 - `swift test -c release --disable-sandbox`: 109 tests in 16 suites, 55 in 4 suites, all passing.
 - `swift test --disable-sandbox` (Debug): the same, all passing.
 - `Scripts/test-ui.sh -configuration Release`, the whole file: **11 of 11 passing**, including the two
-  that type, which needed an idle machine and got one.
+  that type, which needed an idle machine and got one. `testRelaunchRestoresTheLastSessionAndNotTheOneBefore`
+  later gained an assertion about the frontmost window that has **not** been run — see
+  `Validation/2026-09-18-review-fixes/`.

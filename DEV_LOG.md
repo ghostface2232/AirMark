@@ -222,8 +222,9 @@ step (0.95 ms worst, 16.4 ms over the drag).
 without it. Nothing in it repeats the parse benchmarks. Table: a 40×5 miss is 12–14 ms, a hit 0.02 ms,
 and 1×/2× stay two entries with the table on the same points and both bitmaps sRGB.
 
-Suites: Release 109 tests in 16 suites and 55 in 4 suites pass; Debug the same; the whole UI file passes
-in Release, 11 of 11, including both typing tests.
+Suites at the time of these changes: Release 109 tests in 16 suites and 55 in 4 suites, Debug the same,
+and the whole UI file passing in Release, 11 of 11, including both typing tests. The core count is 60
+after the review fixes below, and UI tests could not be run after them — that entry says why.
 
 ### Not verified
 

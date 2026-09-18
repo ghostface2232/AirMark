@@ -46,11 +46,13 @@ offers it as a "Recovered" window — exactly what the user had just deleted.
 changes are being thrown away — nothing else leaves it in that state — and its recovery is invalidated
 before `close()` returns, through the synchronous writer the quit path uses.
 
-- **An unsaved draft**: `removeImmediately(identity)`. Its text was never anywhere but in that record.
-- **A document with a file**: the record is removed and written again as `.closed`, clean, holding the
-  bytes on disk, so the next launch opens the file at the position it was left at. Removed first
-  because the writer keeps the source it last wrote for a revision, and this revision is the discarded
-  text's.
+- **An unsaved draft**: its record goes. The text was never anywhere but in that record.
+- **A document with a file**: the record is replaced by a `.closed` one, clean, holding the bytes on
+  disk, so the next launch opens the file at the position it was left at.
+
+Both go through `discardImmediately(_:replacingWith:)`, one writer operation — see
+`Validation/2026-09-18-review-fixes/`, which is where that became atomic. As first written this was a
+remove and then a save, and a failed remove left the discarded text on disk under the clean record.
 
 **Cancel** needs no code — a cancelled close is a close that does not happen — and has a test anyway.
 
@@ -78,7 +80,8 @@ and its record survive, then force-quits and relaunches to find it restored — 
 quit asks about the unsaved draft all over again, and surviving a stop that never asked is what recovery
 is for. `testEditingASavedFileIsKeptOnCloseAndRelaunch` pins the probe above as a test.
 
-Full suite, five consecutive runs: 106 + 55. All UI tests pass in Release.
+Full suite, five consecutive runs: 106 + 55 as the suite stood then. All UI tests passed in Release at
+that point; UI tests could not be run later in the day — see `Validation/2026-09-18-review-fixes/`.
 
 ## Not covered, and why
 
