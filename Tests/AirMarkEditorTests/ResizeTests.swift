@@ -40,7 +40,11 @@ import AirMarkCore
 
     /// Every step of a drag used to cancel the renders, drop every artifact and invalidate every
     /// element, so the elements flipped between their rendered form and their source while the window
-    /// moved. They now keep their metrics and their pixels, scaled into the width available.
+    /// moved. They now keep their metrics and their pixels. During the drag they are not scaled: the
+    /// paragraphs are not rebuilt, so an element wider than the new width keeps its old size and the
+    /// window clips it — seen in a real edge drag, `UITests.testLiveResizeByDraggingTheWindowEdge`. When
+    /// the drag ends they are scaled into the width there is, and then rendered for it. The fixture here
+    /// is 32 points wide, so it never meets either case; this covers that they survive the drag at all.
     @Test func draggingAWindowKeepsRenderedElementsInPlace() async throws {
         let (editor, window) = try await Self.make("Before\n\n![Two color swatches](swatch.png)\n\nAfter\n")
         defer { window.orderOut(nil) }

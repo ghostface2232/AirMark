@@ -228,11 +228,11 @@ after the review fixes below; the UI state after them is in that entry.
 
 ### Not verified
 
-- `view.inLiveResize == true` is uncovered. Four routes to a UI window resize were measured and none
-  works here: XCUITest's drag resizes nothing, HID `CGEvent`s leave the cursor unmoved, the
-  accessibility API answers `kAXErrorAPIDisabled`, and a title-bar double click does not zoom. The
-  full-screen button does resize the window — and terminating out of its space left the next test unable
-  to quit the app, twice, so that test was written, measured and removed.
+- `view.inLiveResize == true` was uncovered here, and is covered since — see the live-resize entry
+  below. XCUITest's own drag resizes nothing and a title-bar double click does not zoom; HID `CGEvent`s
+  and the accessibility API failed only because the test runner was not trusted for Accessibility. The
+  full-screen button resizes the window too, but terminating out of its space broke the next test, so
+  that test was written, measured and removed.
 - `Close → Don't Save` on a saved file cannot be reached while `autosavesInPlace` is true. The handling
   exists and is unit-tested against a programmatic close; no UI test opens that panel.
 - The close panel's Save button is not driven from the UI: the app is sandboxed, so that panel is the
@@ -282,4 +282,29 @@ after the review fixes below; the UI state after them is in that entry.
   this branch; run the typing tests with ABC selected.
 - **Then 11 of 11.** Run at the console, Release, the whole file: 11 tests, 0 failures, including all
   four that type and the window-order test. That settles both the input-method diagnosis and the branch.
+
+## 2026-09-18 — A real edge drag, and quitting without Cmd-Q
+
+`Validation/2026-09-18-live-resize-ui/`, with captures.
+
+- **`view.inLiveResize == true` is covered.** `testLiveResizeByDraggingTheWindowEdge` drags the window's
+  right edge with HID mouse events, the ones a hand produces, from a frame pinned at 880 points through
+  the argument domain — the window autosaves its frame, and a second run that started where the first
+  one's drag left it had nothing left to drag. Three consecutive runs, 880 → 640, passing. Without
+  Accessibility it skips rather than failing.
+- **What the drag showed.** Text reflows during the drag and no rendered element falls back to its
+  source. A diagram wider than the new width is not scaled while the drag lasts — the paragraphs are not
+  rebuilt, so it keeps its old size and the window clips it — and is rendered for the final width once
+  the mouse comes up. `ResizeTests` said elements were scaled during a drag; its fixture never met the
+  case, and it now says what the real drag showed.
+- **Quitting through the menu.** Three tests failed with "Cmd-Q did not quit the app", alone as well as
+  in the suite, with no product change since they last passed. The recording showed the menu bar reading
+  `한`: with the Korean input method selected, a synthesized Cmd-Q arrives as Cmd-ㅂ and matches no menu
+  item. The two tests that pinned an ASCII input source first passed in the same run, which settles it.
+  All five Cmd-Qs now go through a helper that clicks AirMark ▸ Quit AirMark — the same terminate path,
+  independent of the layout — and the three pass with the Korean input method still selected.
+- **UI, Release, the whole file:** 11 passed and the drag test skipped, because the rebuild that brought
+  in the helper dropped the runner's grant; the drag test itself did not change in that rebuild. The
+  runner is ad-hoc signed, so any change to the UI tests drops its Accessibility grant: remove the entry
+  and add the new build, then run with `test-without-building`. Toggling the old entry is not enough.
 

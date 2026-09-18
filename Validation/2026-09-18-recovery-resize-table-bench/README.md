@@ -108,7 +108,11 @@ the runner granted accessibility, before treating a window drag as impossible he
 The full-screen button does work and resizes the window from 710 to 1710 points. Terminating out of the
 space it creates then left the **next** test failing with "Cmd-Q did not quit the app" — twice,
 including a test that passes on its own. That test was written, measured, and removed: one that breaks
-the tests after it is worse than none. `view.inLiveResize == true` therefore remains uncovered.
+the tests after it is worse than none.
+
+**Covered since.** With the test runner trusted for Accessibility, HID events do drive a real edge drag,
+and `view.inLiveResize == true` is covered by `testLiveResizeByDraggingTheWindowEdge` —
+`Validation/2026-09-18-live-resize-ui/`.
 
 ## 4. Table cache and raster, Release
 

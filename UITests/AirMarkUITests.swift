@@ -1,5 +1,6 @@
 import XCTest
 import Carbon
+import ApplicationServices
 
 @MainActor final class AirMarkUITests: XCTestCase {
     /// Fixtures are bundled with the runner; reading them from the source tree would trigger the
@@ -130,7 +131,7 @@ import Carbon
         attachment.name = "inline-math"; attachment.lifetime = .keepAlways
         add(attachment)
         // Quit goes through applicationShouldTerminate and must actually end the process.
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
         let recovery = try FileManager.default.contentsOfDirectory(atPath: output.appendingPathComponent("Recovery").path)
         XCTAssertFalse(recovery.filter { $0.hasSuffix(".json") }.isEmpty, "quit should leave a recovery record")
@@ -152,7 +153,7 @@ import Carbon
         app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
 
         let names = try FileManager.default.contentsOfDirectory(atPath: recovery.path).filter { $0.hasSuffix(".json") }
@@ -193,6 +194,14 @@ import Carbon
         XCTAssertTrue(editor.waitForExistence(timeout: 15))
         return editor
     }
+    /// Quits through the app's own menu, which ends in the same `NSApplication.terminate` and
+    /// `applicationShouldTerminate` as Cmd-Q. Not Cmd-Q itself: with a Korean input method selected, a
+    /// synthesized Cmd-Q arrives as Cmd-ㅂ and matches no menu item, and the app stays up. That failed
+    /// every test here that did not pin an ASCII input source first, and passed every one that did.
+    private func quit(_ app: XCUIApplication) {
+        app.menuBars.menuBarItems["AirMark"].click()
+        app.menuItems["Quit AirMark"].click()
+    }
     private func temporaryOutput(_ name: String) throws -> URL {
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(name + "-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
@@ -217,7 +226,7 @@ import Carbon
             Thread.sleep(forTimeInterval: 0.1)
         }
         XCTAssertTrue(records.isEmpty, "the discarded draft is still recorded: \(records)")
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
 
         let editor = relaunch(app, output)
         let restored = (editor.value as? String) ?? ""
@@ -286,7 +295,7 @@ import Carbon
         Thread.sleep(forTimeInterval: 2)
         XCTAssertEqual(app.sheets.count, 0, "a saved file was asked about; autosavesInPlace should have kept it")
         XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "original\nEDITED", "the close did not keep the edit")
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
 
         let restored = relaunch(app, output)
         XCTAssertEqual(restored.value as? String, "original\nEDITED", "the file's content did not come back")
@@ -393,7 +402,7 @@ import Carbon
         // Let the launch settle before the quit: the first parse and render land after the window, and
         // a Cmd-Q that arrives before the app is ready for keys is not the thing under test.
         sleep(3)
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
 
         let restored = relaunch(app, output)
         XCTAssertEqual(restored.value as? String, "QUIT AND COME BACK\n", "the document open at the quit did not come back")
@@ -419,6 +428,90 @@ import Carbon
     // `RecoveryResizeTableBench.liveResizeCost` for the numbers, both driving frame changes on a real
     // window in process. Neither puts `view.inLiveResize` true, so the one line that arms no wait
     // during a drag is still uncovered.
+
+    /// A real live resize: the right edge of the window grabbed and dragged with HID mouse events, the
+    /// same events a person's drag produces. It is the only test that puts `NSView.inLiveResize` true,
+    /// and so the only cover for the branch that arms no wait during a drag and adopts the final width
+    /// on `didEndLiveResize`. `XCUICoordinate.press(forDuration:thenDragTo:)` does not do this — it moved
+    /// and resized nothing along the whole margin — so the events are posted directly.
+    ///
+    /// Posting them needs the test runner trusted for Accessibility. The runner is ad-hoc signed, so the
+    /// grant belongs to one build of it and a rebuild drops it: build for testing, grant the runner in
+    /// System Settings, then run with `test-without-building`. Without the grant this skips, rather than
+    /// failing a suite that has nothing wrong with it.
+    ///
+    /// What it asserts is what can be seen from outside: the window really resized, and the document's
+    /// text is untouched in the editor and on disk. Render counts during a drag are not visible from
+    /// here; `RecoveryResizeTableBench.liveResizeCost` measures those. Window captures are attached.
+    func testLiveResizeByDraggingTheWindowEdge() throws {
+        // With AIRMARK_REQUEST_ACCESSIBILITY=1 — passed through xcodebuild as
+        // TEST_RUNNER_AIRMARK_REQUEST_ACCESSIBILITY=1 — macOS is asked to prompt, which names the app it
+        // wants trusted and adds that app to the right list. Which process macOS holds responsible for
+        // the runner is not something to guess: two guesses here were wrong. Without it, this is silent.
+        let request = ProcessInfo.processInfo.environment["AIRMARK_REQUEST_ACCESSIBILITY"] == "1"
+        let trusted = request
+            ? AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            : AXIsProcessTrusted()
+        print("LIVE_RESIZE accessibility trusted=\(trusted) requested=\(request) runner=\(Bundle.main.bundlePath)")
+        try XCTSkipUnless(trusted,
+                          "the test runner is not trusted for Accessibility, so it cannot post the mouse events a window drag needs")
+        let fixture = Self.fixtures.appendingPathComponent("Showcase.md")
+        let output = try temporaryOutput("AirMarkLiveResize")
+        let copy = output.appendingPathComponent("Showcase.md")
+        try FileManager.default.copyItem(at: fixture, to: copy)
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("swatch.png"), to: output.appendingPathComponent("swatch.png"))
+        let app = XCUIApplication()
+        // The window starts at a known frame, not the one the last run left behind. The document window
+        // autosaves its frame, so without this a second run starts where the first one's drag ended —
+        // it did, at 470 points — and the minimum width of 440 leaves the drag almost nothing to do. The
+        // argument domain outranks the saved default, and the frame string is the window's rect and then
+        // the screen's, in AppKit's bottom-left coordinates.
+        let screen = try XCTUnwrap(NSScreen.main).visibleFrame
+        let start = NSRect(x: screen.minX + 120, y: screen.maxY - 820, width: 880, height: 760)
+        let frame = [start.minX, start.minY, start.width, start.height, screen.minX, screen.minY, screen.width, screen.height]
+            .map { String(Int($0)) }.joined(separator: " ")
+        app.launchArguments = ["--open", copy.path, "-NSWindow Frame AirMarkDocument", frame]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        // Let the first renders land, so the drag has rendered elements to keep in place.
+        sleep(5)
+        func capture(_ name: String) {
+            let attachment = XCTAttachment(screenshot: window.screenshot())
+            attachment.name = name; attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        capture("live-resize-before")
+        let before = window.frame
+        XCTAssertGreaterThan(before.width, 700, "the window did not start at the frame it was given: \(before)")
+        let text = editor.value as? String
+
+        func post(_ type: CGEventType, _ point: CGPoint) {
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        // One point inside the right edge, dragged left in frame-sized steps and held at the end, as a
+        // hand does. The frame is screen coordinates from the top left, which is what CGEvent takes.
+        let grab = CGPoint(x: before.maxX - 1, y: before.midY)
+        post(.mouseMoved, grab); usleep(200_000)
+        post(.leftMouseDown, grab); usleep(150_000)
+        for step in 1...40 { post(.leftMouseDragged, CGPoint(x: grab.x - Double(step) * 6, y: grab.y)); usleep(16_000) }
+        capture("live-resize-during")
+        post(.leftMouseUp, CGPoint(x: grab.x - 240, y: grab.y))
+        sleep(3)
+        capture("live-resize-after")
+
+        let after = window.frame
+        print("LIVE_RESIZE window \(before.width) -> \(after.width)")
+        XCTAssertLessThan(after.width, before.width - 150, "the drag did not resize the window: \(before) -> \(after)")
+        XCTAssertEqual(app.state, .runningForeground, "the app did not survive the drag")
+        XCTAssertEqual(editor.value as? String, text, "the resize changed the document's text")
+        XCTAssertEqual(try String(contentsOf: copy, encoding: .utf8), try String(contentsOf: fixture, encoding: .utf8),
+                       "the resize wrote to the file")
+        app.terminate()
+    }
 
     /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
     func testTypingUndoAndReplaceAll() {

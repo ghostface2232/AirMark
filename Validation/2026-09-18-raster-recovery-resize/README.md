@@ -100,8 +100,8 @@ settles in 132 ms rather than 57; the assertion allows a second and the number i
 PR #1's work is untouched: the diff is the environment branch of `scheduleRenders`, one observer and
 `scheduleEnvironmentChange`. Full suite: 102 + 55; the four non-typing UI tests pass in Release.
 
-**Not verified.** `view.inLiveResize == true` is not exercised — see
-`Validation/2026-09-18-recovery-resize-table-bench/`, which records the four routes tried.
+**Not verified here.** `view.inLiveResize == true` was not exercised by these tests. It is now, by a real
+edge drag — `Validation/2026-09-18-live-resize-ui/`.
 
 ## 4. A flaky test, root-caused
 
