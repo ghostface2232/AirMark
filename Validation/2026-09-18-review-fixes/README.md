@@ -37,42 +37,22 @@ last is made key. Nothing depends on completion order any more.
 **Verified.** Unit: `launchRestoresTheSessionsWindowOrder` already pins that `resolve` returns the
 plans back to front, and 109 + 60 tests pass in Debug and Release.
 
-**Not run.** The UI assertion for the frontmost window — added to
-`testRelaunchRestoresTheLastSessionAndNotTheOneBefore` — **has not been executed.** UI tests on this
-machine stopped being able to activate the app part way through this work:
+**Verified, end to end.** `testRelaunchRestoresTheLastSessionAndNotTheOneBefore` restores three
+documents and asserts the whole stacking, front to back — not just the count. Its first version, with
+two small documents, passed on the old code as well: the old code asked the last document for the front
+from its own completion, and with two that happens to be enough. It was rewritten until it could fail.
 
-```
-error: Failed to activate application 'com.airmark.AirMark …'
-```
+| | old code | this change |
+|---|---|---|
+| window titles, front to back | `["Middle.md", "Front.md", "Back.md"]` in 2 of 3 runs | `["Front.md", "Middle.md", "Back.md"]` in 5 of 5 |
 
-It reproduces with `App/main.swift` reverted to the committed version, and the built app launches and
-runs normally from the command line, so it is not this change.
+Front's completion brought it forward and Middle's completion landed after, on top. The back document is
+large to spread the completions apart; whether that is what exposes the race was not isolated.
 
-**The cause was not determined.** An earlier note here said it was the remote session these runs were
-driven from; the timestamps say otherwise, and it is corrected rather than left standing:
-
-| time | UI runs |
-|---|---|
-| 08:35 – 12:16 | passing, including the whole file 11 of 11 at 12:16 |
-| 11:50 – 11:57 | the HID and accessibility attempts, which failed and broke nothing |
-| 14:21 onward | every run fails to activate the app |
-
-So UI tests worked for hours in the same remote session, and something changed on the machine between
-12:16 and 14:21 that is not in this branch. A prompt waiting on the console — an authentication or
-permission dialog that nobody at the keyboard could answer — would fit, and so would a locked screen.
-Neither was observed from here, so neither is stated as the cause.
-
-The accessibility failure at 11:57 is a separate and older fact: `kAXErrorAPIDisabled` means the test
-runner is not trusted for accessibility, which was true while the tests were passing.
-
-The assertion compiles (`build-for-testing` succeeds) and is marked NOT YET RUN in the test. To run it
-at a logged-in console, with screen recording and accessibility granted to the test runner:
-
-```sh
-bash Scripts/test-ui.sh -only-testing:AirMarkUITests/AirMarkUITests/testRelaunchRestoresTheLastSessionAndNotTheOneBefore
-```
-
-It prints `RELAUNCH_SESSION window titles, front to back:` — the first title should be `Front.md`.
+This could not be run at first. From 14:21 every UI run failed to activate the app, where the whole
+file had passed 11 of 11 at 12:16 in the same session; reverting `main.swift` reproduced it, so it was
+not this change. It cleared once the machine was attended to — a prompt waiting on the console is the
+likely cause, though that was not observed from here.
 
 ## 3. Discard is one writer operation
 
@@ -110,5 +90,20 @@ resolves over its own two records, like the other tests that were corrected for 
 
 ## Suites
 
-Debug 109 tests in 16 suites and 60 in 4 suites, three consecutive runs. Release the same. UI tests
-could not be run; see above.
+Debug 109 tests in 16 suites and 60 in 4 suites, three consecutive runs. Release the same.
+
+UI, Release, the whole file: **7 of 11**. The seven that type nothing pass, including the window-order
+test. The four that type — `testDiscardedDraftIsNotRestoredAfterRelaunch`,
+`testEditingASavedFileIsKeptOnCloseAndRelaunch`, `testRepeatedAsynchronousSavesPreserveSource`,
+`testTypingUndoAndReplaceAll` — all fail for one reason, visible in their output:
+
+```
+("얀ㅊㅁㄲㅇ 뜨") is not equal to ("DISCARD ME")
+("… ㄴㅁㅍㄷ 1. ㄴㅁㅍㄷ 2. …") is not equal to ("… Save 1. Save 2. …")
+```
+
+Keystrokes arrive through the active Korean input method. The machine was in use at the time, with the
+third-party input method `com.pritype.inputmethod.v2` selected. `useASCIIInputSource()` does select
+`com.apple.keylayout.ABC` — checked — and moving that selection to after the editor has focus made no
+difference, so the helper does not overcome this input method. The same four passed at 12:16 on an
+idle machine. This is the test environment and not the branch; run the typing tests with ABC selected.

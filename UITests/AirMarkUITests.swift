@@ -328,12 +328,21 @@ import Carbon
             return url
         }
         let last = UUID(), previous = UUID()
-        // Two documents open when the last session stopped, and one left by the session before it.
+        // Three documents open when the last session stopped, and one left by the session before it.
+        //
+        // Three, because two proved nothing: with two small documents the old code — which asked only the
+        // last one for the front, from its own completion — happened to come out right every time. With
+        // three it came out wrong in two runs of three, as ["Middle.md", "Front.md", "Back.md"]: Front's
+        // completion brought it forward and Middle's landed after, on top of it. Back is large to spread
+        // the completions further apart; whether that is what exposes the race was not isolated.
+        let backText = "BACK DOCUMENT\n" + String(repeating: "A line of a large document, back of the stack.\n", count: 90_000)
         let front_ = try write("Front.md", "FRONT DOCUMENT\n")
-        let back = try write("Back.md", "BACK DOCUMENT\n")
+        let middle = try write("Middle.md", "MIDDLE DOCUMENT\n")
+        let back = try write("Back.md", backText)
         let stale = try write("Stale.md", "STALE DOCUMENT\n")
         try seedRecord(in: recovery, file: stale, source: "STALE DOCUMENT\n", session: previous, order: 0, age: 7200)
-        try seedRecord(in: recovery, file: back, source: "BACK DOCUMENT\n", session: last, order: 1, age: 20)
+        try seedRecord(in: recovery, file: back, source: backText, session: last, order: 2, age: 30)
+        try seedRecord(in: recovery, file: middle, source: "MIDDLE DOCUMENT\n", session: last, order: 1, age: 20)
         try seedRecord(in: recovery, file: front_, source: "FRONT DOCUMENT\n", session: last, order: 0, age: 10)
 
         let app = XCUIApplication()
@@ -343,31 +352,28 @@ import Carbon
         XCTAssertTrue(app.textViews["markdown-editor"].firstMatch.waitForExistence(timeout: 15))
         // Both windows, and only those two.
         var editors: [String] = []
-        for _ in 0..<40 {
+        for _ in 0..<60 {
             editors = app.textViews.matching(identifier: "markdown-editor").allElementsBoundByIndex.compactMap { $0.value as? String }
-            if editors.count >= 2 { break }
+            if editors.count >= 3 { break }
             Thread.sleep(forTimeInterval: 0.25)
         }
-        XCTAssertEqual(editors.count, 2, "the last session had two documents open, got \(editors)")
-        XCTAssertTrue(editors.contains { $0.contains("FRONT DOCUMENT") }, "got \(editors)")
-        XCTAssertTrue(editors.contains { $0.contains("BACK DOCUMENT") }, "got \(editors)")
-        XCTAssertFalse(editors.contains { $0.contains("STALE DOCUMENT") }, "a document from an older session came back: \(editors)")
+        XCTAssertEqual(editors.count, 3, "the last session had three documents open, got \(editors.count)")
+        for expected in ["FRONT DOCUMENT", "MIDDLE DOCUMENT", "BACK DOCUMENT"] {
+            XCTAssertTrue(editors.contains { $0.contains(expected) }, "\(expected) did not come back")
+        }
+        XCTAssertFalse(editors.contains { $0.contains("STALE DOCUMENT") }, "a document from an older session came back")
 
         // Which document is actually in front, not just how many came back. The session recorded
         // Front.md at order 0, and the opens finish in whatever order they finish in, so this is the
         // part that depends on the stacking being re-applied rather than inherited from a completion.
         //
-        // NOT YET RUN. This assertion was added after UI tests stopped being able to activate the app on
-        // the development machine — reproduced with the change it covers reverted, so it is the machine
-        // and not the code, but it does mean nobody has watched this assertion pass or fail. Run
-        // `Scripts/test-ui.sh` on a machine that can, before trusting it.
         let titles = app.windows.allElementsBoundByIndex.map(\.title)
         print("RELAUNCH_SESSION window titles, front to back: \(titles)")
-        XCTAssertTrue(titles.first?.contains("Front") == true,
-                      "the frontmost window is not the document the session had in front: \(titles)")
+        XCTAssertEqual(titles, ["Front.md", "Middle.md", "Back.md"],
+                       "the windows are not stacked the way the session recorded them")
         // The files are untouched by a restore.
         XCTAssertEqual(try String(contentsOf: front_, encoding: .utf8), "FRONT DOCUMENT\n")
-        XCTAssertEqual(try String(contentsOf: back, encoding: .utf8), "BACK DOCUMENT\n")
+        XCTAssertEqual(try String(contentsOf: middle, encoding: .utf8), "MIDDLE DOCUMENT\n")
         app.terminate()
     }
 

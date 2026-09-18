@@ -224,7 +224,7 @@ and 1×/2× stay two entries with the table on the same points and both bitmaps 
 
 Suites at the time of these changes: Release 109 tests in 16 suites and 55 in 4 suites, Debug the same,
 and the whole UI file passing in Release, 11 of 11, including both typing tests. The core count is 60
-after the review fixes below, and UI tests could not be run after them — that entry says why.
+after the review fixes below; the UI state after them is in that entry.
 
 ### Not verified
 
@@ -254,12 +254,13 @@ after the review fixes below, and UI tests could not be run after them — that 
 - **Window order applied, not inherited.** The launch asked the last plan to come to the front and left
   the rest to whatever order the asynchronous opens completed in, though the session had recorded which
   window was in front. The opens still run together, each reporting into a main-actor collector, and
-  when the last lands the windows are ordered back to front and the last made key. The UI assertion for
-  this **has not been run**: from 14:21 every UI run failed to activate the app, where the whole file had
-  passed 11 of 11 at 12:16 the same day in the same session. It reproduces with `main.swift` reverted
-  and does not stop the built app launching from the command line, so it is not this branch — but the
-  cause was not determined, and an earlier claim here that it was the remote session is wrong, since
-  the tests had been passing from one for hours. Marked NOT YET RUN in the test.
+  when the last lands the windows are ordered back to front and the last made key. Verified end to end
+  by restoring three documents and asserting the whole stacking: the old code gave
+  `["Middle.md", "Front.md", "Back.md"]` in two runs of three, this change `["Front.md", "Middle.md",
+  "Back.md"]` in five of five. The first version of that test used two documents and passed on the old
+  code too, so it was rewritten until it could fail. It could not be run for a while — from 14:21 every
+  UI run failed to activate the app, reproduced with `main.swift` reverted — and ran once the machine
+  was attended to; a prompt waiting on the console is the likely cause, not observed from here.
 - **Discard is one writer operation.** `discardRecovery` removed the record, ignored the result, then
   saved a replacement at the same revision — and the writer reuses the source it last wrote for a
   revision, so a failed remove left the discarded text on disk under a record claiming the file's.
@@ -271,4 +272,12 @@ after the review fixes below, and UI tests could not be run after them — that 
 - **Also.** `recordsNameTheSessionThatWroteThem` resolved a launch over every record in a recovery
   directory shared with the suites running alongside, so a neighbour's record could decide it. It failed
   that way once here and now resolves over its own two records.
+- **UI tests after the fixes.** Release, the whole file: 7 of 11. The seven that type nothing pass,
+  including the window-order test above. The four that type fail, and all four for one reason: the
+  keystrokes arrive through the active Korean input method — `"DISCARD ME"` became `"얀ㅊㅁㄲㅇ 뜨"`,
+  `"Save 1."` became `"ㄴㅁㅍㄷ 1."`. The machine was in use, with the third-party input method
+  `com.pritype.inputmethod.v2` selected. `useASCIIInputSource()` does select `com.apple.keylayout.ABC`,
+  and selecting it after focusing the editor instead of before made no difference, so it does not
+  overcome this input method. The same four passed at 12:16 on an idle machine. Not a regression in
+  this branch; run the typing tests with ABC selected.
 
