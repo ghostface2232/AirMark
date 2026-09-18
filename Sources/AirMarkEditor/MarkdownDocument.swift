@@ -218,19 +218,14 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     public override func close() {
         recoveryTask?.cancel()
-        // Quitting writes every open document's record itself, and AppKit may close the documents
-        // afterwards. A close record written then would say the user had closed them and the next
-        // launch would restore nothing.
+        // Skipped while quitting: the quit writes every open document's record itself and AppKit closes
+        // the documents afterwards, so a close record written then would say the user had put them away.
         //
-        // Written synchronously, not from a Task: a document closed and the app quit straight after
-        // left the Task unrun, so the record still said the document was open and the next launch
-        // brought back a window the user had put away. `saveImmediately` has the record on disk before
-        // this method returns, so nothing between the close and the quit can lose it. The cancelled
-        // debounced save cannot undo it either — it carries this document's revision with an earlier
-        // date, which the writer's ordering gate rejects.
+        // Synchronous, not a Task: closing a document and quitting straight after left a detached save
+        // unrun, and the record still said the document was open. The cancelled debounced save cannot
+        // undo this one — same revision, earlier date, which the writer's ordering gate rejects. The
+        // error goes nowhere because the window is going: a failed write here costs a reopened document.
         if !Self.isTerminating, let store = Self.recoveryStore {
-            // Nothing can be reported: the window is going away. The next launch reopening a closed
-            // document is the cost of a failed write here, which is what it was before.
             if isDocumentEdited { discardRecovery(in: store) } else { try? store.saveImmediately(record(state: .closed)) }
         }
         super.close()

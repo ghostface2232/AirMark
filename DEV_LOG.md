@@ -136,273 +136,107 @@ Host and raw output: `Validation/2026-09-17-parse-latency/` (Release, Mac17,3, m
 - **Measured.** Against `main` and against the cheaper whole parse (`8dba8b9`), three rotated Release runs each. A keystroke after a pause reaches the presentation in 51/56/93 ms at 100KB/1MB/10MB (`main`: 113/382/3,149 ms). During 35 s of typing 80 ms apart every key is parsed and installed — 438 of 438 at 100KB and 1MB, where `main` installed 33–46 and 1 — and the longest a key waited was 61 ms at 1MB and 101 ms at 10MB, against 35.6 s and 39.7 s on `main`. Typing 200–400 ms apart on 10MB waits 112 ms at worst instead of 39.4 s. Settling after a burst at 10MB is 75 ms instead of 5.1 s. The key gaps during typing are back to `main`'s 90 ms, so installing a windowed parse costs nothing a key can see. Raw output and the whole table: `Validation/2026-09-17-parse-latency/`.
 - **What it costs.** A document with `]:` anywhere is parsed whole on every keystroke; recording block spans and scanning for `]:` then makes it about 6% slower than before this work (10MB keystroke 2,021 → 2,158 ms p50), of which the block spans were 61 ms of a 1,742 ms parse until they were taken from the walk (`fa5de7c`, 1,681 ms). A top-level list is one block, so editing in a long list reparses that list.
 
-## 2026-09-17 — Multi-document recovery, live resize, table raster
+## 2026-09-18 — Recovery sessions, discard, table raster, live resize
 
-(Written before this branch was merged onto `main`; the section after it records what was actually
-run, on the merged code.)
+Everything below landed on this branch on 2026-09-18, on top of the parse-locality work. It replaces an
+earlier entry for the same changes that was written in a container with no toolchain and described code
+that has since changed: the settle delay, the table's colour space and the launch's session scoping are
+all different now, and all of it has since been built, run and measured.
 
-Host: a Linux container with **no Swift toolchain and no macOS SDK**. Nothing in this entry was
-compiled, run or measured. The three changes below are code and tests written against a reading of the
-source at `cb8c3df`; `Validation/2026-09-17-recovery-resize-tables/` says, per test, which assertion the
-previous code fails and why, and that is a claim about the code, not a result. Run the Swift and UI
-suites on macOS before trusting any of it.
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4, idle machine. Raw output
+under `Validation/2026-09-18-*/`. Each change below is problem, fix, and what was actually run.
 
-- **Multi-document recovery.** `LaunchPlan.resolve` took `records.first` and returned one plan, and the
-  launch path opened that one. Several unsaved drafts open at once therefore left one recoverable and
-  the rest in the recovery directory with nothing in the app that could reach them. `resolve` now
-  returns one plan per document, in the order to open them, and `applicationDidFinishLaunching` opens
-  all of them, bounded at eight, unsaved drafts first. A record also carries `state` — open, quit or
-  closed — and `hasUnsavedChanges`. The two answer different questions: a launch restores the documents
-  that were open when AirMark stopped, whether it stopped by quitting or crashing, and reopens the most
-  recently closed one only when nothing was left open, which is what a single-record launch did. A file
-  another app edited after a clean close now opens as a file instead of coming back as a dirty
-  "Recovered —" draft. Records from older builds have neither field and read as open with work to
-  recover, but a launch uses only the most recent of them and only when nothing was left open, which is
-  exactly what a launch did with every record before — restoring them all would open a window for each
-  of the tens of documents a long-standing recovery directory holds. Restored windows step down from
-  each other rather than stacking exactly. There is no limit on how many documents a launch restores:
-  a record left unrestored would be work with no way to reach it, and the same records would be left
-  out at every later launch. Not addressed: records are still never removed, so one accumulates on disk
-  per document identity ever opened, including empty untitled ones.
-- **Live resize.** Any environment change, down to one point of width, cancelled every render, ran
-  `artifacts.removeAll()` and invalidated every element, so a window drag replaced each rendered element
-  with its Markdown source and back at every step and discarded the layout that scroll eviction keeps.
-  The editor now measures and draws in the environment it last settled on; a geometry-only change arms
-  a 150 ms wait that every further change restarts and that never fires during a live resize. When it
-  fires, `ArtifactStore.holdGeometry` keeps what was measured as temporary geometry — each element keeps
-  its attachment at its measured size, scaled into the width there is now, and its last pixels — until
-  the new render replaces it. A changed font size, theme or background still measures from scratch. The
-  150 ms comes from PLAN-2026-09-17 §W8; nothing here measured it, and no frame time or page-load count
-  during a drag was measured either. One consequence to know: while the environment is unsettled no
-  render starts at all, so an element scrolled into view or added by a parse during a long drag shows
-  its source until 150 ms after the drag ends.
-- **Table raster.** `drawTable` read the scale and color space from `NSScreen.main` while every other
-  element followed the host window's backing scale through the render environment, so a window on a 1×
-  display beside a Retina main display got its tables at 2× and everything else at 1×. The scale was
-  also in the cache key without the bitmap following it. The raster is now `environment.scale`, which is
-  that window's backing scale captured with the rest of the environment and keyed with it, and the color
-  space of that window's screen; a window moving between screens reaches the editor through
-  `NSWindow.didChangeBackingPropertiesNotification`. The equivalence test against the previous AppKit
-  drawing is kept with the same corpus, but it now compares the two drawings inside one raster instead
-  of also deciding which raster is right — following the window matters more than reproducing the old
-  bitmap. Two consequences on a multi-screen setup, neither tested: the set of tables rejected as too
-  large moves in both directions, because the cost check and the display limit now use the same scale;
-  and a move between two screens of the same scale but different color profiles does not re-render,
-  because `RenderEnvironment` carries no color space — the bitmap is tagged, so it is converted rather
-  than shown wrong. Still unverified, and unverifiable here: a real two-screen machine, and
-  right-to-left locales, where cell text continues to align by the user's language direction rather
-  than the host view's.
+### Restore the last session, not every session
 
-### Review of the three changes above
+A record says a document was open when AirMark stopped, not at which stop, and only that document
+rewrites it. A session launched on a file from Finder restores nothing, so it left the session before it
+with `.open`/`.quit` records untouched and every later launch reopened them. Records now carry
+`sessionID` (one per store, one store per launch) and `order`; the newest record names the last session,
+so no manifest. An excluded record still qualifies as the single most-recently-put-away document, so
+nothing becomes unreachable. — 3 new tests fail on the old logic with 5 assertions; end to end,
+`UITests.testRelaunchRestoresTheLastSessionAndNotTheOneBefore` restores two documents and leaves the
+older session's alone.
 
-A review agent read the branch diff against `main` in the same container, so it could not compile it
-either; it traced every changed expression by hand and found no compile error. It found four real
-defects in the launch logic, which are fixed in the commits that follow, and four inaccurate statements
-in the documents written alongside, which are corrected:
+### The closed record is durable, and the quit flag stays set
 
-- Records from older builds decoded as open with unsaved work, and every non-closed record was
-  restored, so the first launch after an upgrade would have opened a window for each of the tens of
-  records a long-standing recovery directory holds — most of them documents put away weeks ago, shown
-  as dirty "Recovered —" drafts. They now decode as `.unknown` and only the most recent is used.
-- A record whose file is gone was dropped when nothing was marked unsaved. An unmounted volume is
-  enough to reach that state, and the record is then the only copy the app can reach. It comes back as
-  a draft again, as before.
-- The eight-window cap stranded drafts 9 and beyond permanently — the same defect the first commit
-  claims to fix, at a higher threshold. The cap is gone.
-- `isTerminating` was never cleared if a quit was vetoed after `applicationShouldTerminate` returned,
-  after which no closed document would ever be recorded again. It is cleared on the next turn of the
-  run loop, which a real quit never reaches.
-- Bringing the newest document to the front looked it up by identity, which a document opened from a
-  file does not have yet at that point, so it silently did nothing for exactly the common case. The
-  plan that belongs in front now asks for it where its window is made.
-- The `didEndLiveResize` observer restarted the 150 ms wait instead of ending it, and the re-arming
-  wait already notices the end of a drag on its own. Removed.
-- Corrected in `Validation/2026-09-17-recovery-resize-tables/`: a false claim that single-record
-  launches behave exactly as before (three cases do not, now listed), a test described as passing
-  before the change that does not compile before it, a `--filter` argument that matches no test, and a
-  comment claiming windows restore a remembered frame, which nothing in that method does.
+`close()` handed the `.closed` record to a detached Task, so closing and quitting straight after left
+the record saying the document was open. It now goes through `saveImmediately`. Separately,
+`isTerminating` was cleared by a Task on the next run-loop turn; measured that the flag is load-bearing
+— with it never set, a real Cmd-Q leaves `.closed` — so it stays set for the whole quit and only the
+`.terminateCancel` path clears it. — `closingWritesTheRecordBeforeItReturns` reads the JSON off disk
+with no await and fails on the old code; `UITests.testQuitRestoresTheDocumentThatWasOpen` covers the
+round trip. **The `isTerminating` race was never reproduced** (5/5 passes with the Task in place); that
+change removes a dependence on scheduling, not an observed failure.
 
-## 2026-09-18 — Recovery sessions, close durability, quit flag
+### Discarded changes are not offered back
 
-Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. PR #2 was merged onto
-`main` after the parse-locality work had landed; only `DEV_LOG.md` conflicted, and `EditorController`
-and `ArtifactStore`, changed by both, were read back rather than trusted to the auto-merge. Raw output:
-`Validation/2026-09-18-recovery-sessions/`.
+Clicking Delete on an unsaved draft left a `.closed` record holding the discarded text, and the launch
+fallback revived it. `close()` now asks whether the changes are being kept: a draft's record is removed,
+a document with a file keeps a clean record of the file. Cancel needs no code. Probed first rather than
+assumed: a document **with a file is never asked about** — `autosavesInPlace` writes the edit and closes
+— so there is no Don't Save for a saved file; a draft is asked, and macOS labels the discard button
+**Delete**. — 2 tests fail on the old `close()` with 7 assertions;
+`UITests.testDiscardedDraftIsNotRestoredAfterRelaunch` fails on it with "the discarded draft came back".
 
-- **The legacy launch record the test never built.** `launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted`
-  came in failing. `RecoveryRecord.init` defaults `state` to `.open`, the state a running document
-  records; `.unknown` is what `RecoveryWriter.load` produces for stored JSON with no `state` field. The
-  helper used the default and asserted the result was `.unknown`, so the two assertions after it
-  compared a plan for twenty `.open` records against a plan for one. Test-only fix.
-- **Sessions.** `state` says a document was open when AirMark stopped, not at which stop, and nothing
-  but that document rewrites its record. A session launched on a file from Finder restores nothing, so
-  it left the session before it with `.open` and `.quit` records untouched and every later launch
-  opened a window for each. A record now carries `sessionID`, one per `RecoveryStore` and one store per
-  launch. No manifest: the newest record belongs to the last session and names it, the same date
-  ordering the "most recently put away document" fallback already used. A record from an older session
-  is excluded from the session restore but joins the closed records as a candidate for that single
-  fallback, so nothing becomes unreachable. A record also carries `order`, the document's place in
-  `NSApplication.shared.orderedDocuments` front first, written with every record rather than only at
-  the quit, so the window that was in front comes back in front whichever document wrote its record
-  last. Records with neither field read as nil and a directory of only those is read whole, as before.
-- **The close record is durable.** `close()` handed the `.closed` record to a detached Task nothing
-  waited for, so Cmd-W then Cmd-Q could exit before it ran and leave a record saying the document was
-  open; the quit does not cover it, because it writes records only for documents still in the document
-  controller. It now goes through `saveImmediately`. A debounced save already suspended in `store.save`
-  cannot undo it: same revision, earlier date, which the writer's ordering gate rejects.
-- **`isTerminating` for the whole quit.** It was cleared by a main-actor Task on the next turn of the
-  run loop. Measured that the flag is load-bearing: with it never set, a real Cmd-Q leaves a `.closed`
-  record, so AppKit does close the documents after `applicationShouldTerminate` returns and before the
-  process exits. The Task is gone and only the `.terminateCancel` path clears the flag. A logout
-  cancelled after this method returns leaves it set on a process that keeps running — a document closed
-  then comes back next launch, which is the better failure and the only one left; no AppKit callback
-  reports that cancellation.
-- **Validated.** `swift test --disable-sandbox`: 99 tests in 15 suites and 52 in 4 suites pass, against
-  a post-merge baseline of 96 + 50 with 3 issues. Each change's new tests were run against the
-  pre-change logic and fail there. The four UI tests that synthesize no typing pass in Release,
-  including the new `testQuitRecordsAnOpenDocumentAsQuitNotClosed`.
-- **Not verified.** The `isTerminating` race was never reproduced: with the clearing Task in place the
-  quit test passed 5/5, so that change removes a dependence on scheduling rather than an observed
-  failure. The multi-launch sequence behind sessions is covered at `LaunchPlan.resolve` and through a
-  real `RecoveryStore`, not by launching the app twice. That `orderedDocuments` reports the stacking a
-  user sees is taken from AppKit, not measured. The two UI tests that type were not run. One
-  full-suite run in five saw `repeatedSavesPreserveBytesWithoutFalseConflicts` miss its 250 ms wait for
-  an undo-group notification under load; it touches nothing changed here.
+### One table raster policy, named by the cache key
 
-## 2026-09-18 — Table raster, recovery launch I/O, live resize
+`drawTable` read the host screen's colour space and the process writing direction; the key carried
+neither, so two windows at one scale on differently profiled screens shared an entry.
+`TableRenderer.raster(for:)` is now the only place the policy lives and the key hashes what it reads:
+the window's scale, a fixed sRGB, and the alignment. Fixing sRGB is safe and the test says why, measured
+— a table draws neutral greys, and greys are byte-identical in sRGB and Display P3, so the test fails if
+a table ever draws a saturated colour. — Dropping the scale from the key fails the cache test on 4
+assertions, including a 1× window handed the 2× bitmap.
 
-Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw output:
-`Validation/2026-09-18-raster-recovery-resize/`.
+### A launch reads the records, not every document
 
-- **One table raster policy, named by the key.** `drawTable` read the host window's screen color space
-  and the process writing direction, and the cache key carried neither, so two windows at one scale on
-  differently profiled screens shared an entry and the first render decided the bytes for both. That a
-  bitmap carries its color space is true of drawing and beside the point for a key.
-  `TableRenderer.raster(for:)` is now the only place the policy lives and `key` hashes what it reads:
-  the requesting window's scale, a fixed sRGB, and the alignment. Fixing sRGB is safe because a table
-  draws neutral grays over alpha, and a gray has the same coordinates in sRGB and Display P3 — measured
-  byte for byte identical, and asserted, so a table that later draws a saturated color fails the test
-  rather than quietly making the fixed raster wrong. `tableCacheKeyCoversTheRasterAndNothingElse`
-  covers 1×/2× and two hosts at one scale; dropping the scale from the key, the same fault the color
-  space had, fails it on 4 assertions including a 1× window handed the 2× bitmap.
-- **A launch reads the records, not every document.** `records()` loaded every source in full — 32 MB
-  for four 8 MB documents — and `resolve` then ran on the main actor, reading each document's whole
-  file, re-encoding the record's source and comparing them. Most of those comparisons decided nothing:
-  a record written while the text was on disk is not the only copy of anything, and both answers open
-  the file at the recorded position. The `<id>.json` plus `<id>.<token>.source` layout is untouched.
-  `RecoveryMetadata` is a record without its source, carrying the length the source has on disk;
-  `metadata()` takes that from the directory listing it already makes. `resolve` takes metadata and a
-  `LaunchStorage` of `size`, `data` and `source`, which cost three different amounts, and
-  `launchPlans(recentPaths:)` resolves inside the store, which is an actor and not the main actor.
-  Measured: `metadata()` 0.23 ms against `records()` 14.0 ms; a session of eight saved documents reads
-  8 stats, 0 files and 0 sources, against 8 stats, 8 files and 16 sources. All five outcomes of the old
-  branch are preserved and the existing launch tests assert them unchanged.
-- **A drag says when it is over.** The editor armed a 150 ms wait while the geometry moved and re-armed
-  it whenever it woke to find the drag still going, so a drag was a poll and its end was noticed up to
-  150 ms late. Nothing is armed during a drag now; `didEndLiveResize` adopts the width it left behind
-  and renders once, 0.3 ms after the event. Geometry that reports no end is still coalesced, and the
-  measurement is what keeps that: adopting every layout pass turns a 21-step burst into 21 rounds of
-  renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms — about
-  three frames at 60 Hz — and a burst settles 57 ms after its last step instead of 154 ms.
-- **The flaky save test was an autosave.** `repeatedSavesPreserveBytesWithoutFalseConflicts` failed its
-  `#expect(document.isDocumentEdited)` three times in about thirty full-suite runs, on a loaded machine
-  and never in isolation, and predates this session. Overriding `updateChangeCount(_:)` showed only
-  `done` and never `cleared`, because an asynchronous save clears the count through
-  `updateChangeCount(withToken:for:)` instead; with that overridden too and the loop raised to 40
-  passes, a failure was caught on the second run and named its cause: `token-in(op4)` — an
-  autosave-in-place — between the append and the assertion, with the edit present throughout
-  (editor, snapshot and expectation all 235 bytes), which is why only that one assertion failed. That
-  is `autosavesInPlace` doing its job; the product is right and the test was wrong. The assertion moved
-  to before the first `await`, where nothing can run between the edit and it, which also makes it
-  deterministic. The assertion after a failed Save As became `isDocumentEdited || !hasUnautosavedChanges`,
-  since asserting only the first asserts that no autosave ran. Two earlier attempts are recorded in
-  `Validation/2026-09-18-raster-recovery-resize/`: polling for the flag made it worse, because the
-  250 ms is waiting for the undo group and not for the flag, and `autosavingDelay == 0.0` was wrongly
-  read as ruling autosave out — it does not govern an `autosavesInPlace` document. Fixed test: four
-  full-suite runs at 40 passes, about 640 cycles, with no failure, against reproduction within two.
-- **Validated.** `swift test --disable-sandbox`: 102 tests in 15 suites and 55 in 4 suites pass,
-  against 99 + 52 at the start of the day. Each change's new tests were run against the pre-change
-  logic and fail there. The four UI tests that synthesize no typing pass in Release.
-- **Not verified.** `view.inLiveResize == true` is not exercised: AppKit offers no public way to begin
-  a live resize, so the tests drive non-drag geometry and post the end-of-drag notification with the
-  coalescing wait pinned at 30 s, which leaves the one line that skips arming during a drag uncovered.
-  An AppKit-animated `setFrame(display:animate:)` was tried as a way to measure a real non-drag
-  transition and deadlocked the test process against the main-actor renders, so the frame-gap
-  reasoning behind the 50 ms is argued from the display refresh rate, not measured. The two UI tests
-  that type were not run.
+`records()` loaded every source in full and `resolve` then ran on the main actor, reading each
+document's file and comparing. Most comparisons decided nothing: a record written while the text was on
+disk is not the only copy, and both answers open the file. `RecoveryMetadata` carries the source's
+length, taken from the directory listing; `launchPlans` resolves inside the store actor. Release, p50 of
+3, against the old decision written out in full:
 
-## 2026-09-18 — Discarding changes, and what a launch offers back
+| documents × size | old way | `launchPlans` | files read |
+|---:|---:|---:|---:|
+| 1 × 10 MB | 4.63 ms | **0.09 ms** | 0 |
+| 8 × 10 MB | 37.86 ms | **0.43 ms** | 0 |
+| 32 × 10 MB | 148.16 ms | **1.41 ms** | 0 |
 
-Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw output:
-`Validation/2026-09-18-discard-lifecycle/`.
+The shape is the point: cost no longer follows document size (one document is 0.08 ms at 1 MB and
+0.09 ms at 10 MB). Warm cache, which flatters the old numbers, not the new.
 
-- **What the close panel is, measured first.** The work was asked for as `Close → Don't Save`. AirMark
-  does not offer that for a document with a file: `autosavesInPlace` is true, so Cmd-W on an edited
-  opened file shows no panel at all and writes the edit — probed, not read off the source. An unsaved
-  draft does ask, because `autosavesDrafts` is false, and macOS labels its discard button **Delete**.
-  That is the path the report was about.
-- **The bug.** Clicking Delete left a `.closed` record holding the discarded text with
-  `hasUnsavedChanges` still set. A launch with nothing else to open falls back to the most recently put
-  away document, finds a record with no file path and text in it, and offers it as a "Recovered"
-  window — exactly what the user had just deleted.
-- **The fix.** `close()` asks whether the changes are being kept. A document still edited as it closes
-  is one whose changes are being thrown away, and its recovery is invalidated before `close()` returns,
-  through the synchronous writer the quit path uses. An unsaved draft's record is removed outright: its
-  text was never anywhere else. A document with a file keeps a `.closed` record of the file — clean,
-  and holding the bytes on disk — so the next launch opens the file at the position it was left at and
-  nothing discarded stays in the recovery directory. The record is removed before being written again
-  because the writer keeps the source it last wrote for a revision, and this revision is the discarded
-  text's. `RecoveryStore.removeImmediately` is `remove` without the actor hop, for the reason
-  `saveImmediately` exists. Cancel needs no code: a cancelled close is a close that does not happen.
-- **Validated.** Unit: the two discard tests fail on the old `close()` with 7 assertions between them
-  and pass after; `cancellingACloseKeepsTheRecovery` passes either way by design. Five consecutive full
-  runs, 106 tests in 15 suites and 55 in 4 suites. UI, end to end through a relaunch:
-  `testDiscardedDraftIsNotRestoredAfterRelaunch` fails on the old code with "the discarded draft came
-  back: DISCARD ME" and passes after; `testCancelledCloseKeepsTheDraftAfterRelaunch` and
-  `testEditingASavedFileIsKeptOnCloseAndRelaunch` pass. All seven UI tests pass in Release.
-- **Not covered.** `Close → Don't Save` on a saved file is not tested because it cannot be reached —
-  the handling exists and is unit-tested against a programmatic close, but no UI test can open that
-  panel, and making it reachable would mean turning `autosavesInPlace` off, which nobody asked for. The
-  panel's Save button is not driven from the UI either: the app is sandboxed, so that save panel is the
-  system's powerbox rather than AirMark, and what Save leads to is asserted at the document level. The
-  recovery directory is shared with the suites running alongside, since `MarkdownDocument.recoveryStore`
-  is a static they all set, so the new tests resolve a launch from the document's own record — a
-  foreign record does not merely add a plan, it can decide the launch instead.
+### A drag says when it is over
 
-## 2026-09-18 — Recovery, resize and table: tests and Release numbers
+The editor armed a 150 ms wait while geometry moved and re-armed it whenever it woke during a drag, so a
+drag was a poll and its end was noticed up to 150 ms late, on a number with no basis. Nothing is armed
+during a drag now; `didEndLiveResize` adopts, 0.3 ms after the event. Geometry that reports no end is
+still coalesced, and the measurement keeps it: adopting every layout pass turns a 21-step burst into 21
+rounds of renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms.
+Release, 12 elements, 21 steps: 0 renders for widths passed through, all 12 keeping their metrics, one
+round starting 53.4 ms after the last step with pixels back at 58.8 ms, main thread held 0.75 ms per
+step (0.95 ms worst, 16.4 ms over the drag).
 
-Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Release, idle machine, warm
-OS cache. Raw output: `Validation/2026-09-18-recovery-resize-table-bench/`.
+### Tests and measurement
 
-- **New coverage, no parse benchmarks repeated.** `RecoveryResizeTableBench` is gated on
-  `AIRMARK_BENCH` and skips in 0.001 s without it. Two UI tests are new: one hands a launch a recovery
-  directory a previous run would have left — two `.quit` records from one session and one from the
-  session before — and finds two windows restored and the older session's document left alone; the
-  other quits with a document open and finds it back after the relaunch.
-- **Recovery launch, measured against the old decision written out in full.** Clean records, p50 of 3:
-  32 documents of 10 MB decide in 1.41 ms against 148.16 ms the old way, 8 of 10 MB in 0.43 against
-  37.86, one of 10 MB in 0.09 against 4.63. The shape is the point: the cost no longer follows document
-  size — one document is 0.08 ms at 1 MB and 0.09 ms at 10 MB, thirty-two are 1.34 and 1.41 — because it
-  is a stat per record and a small JSON read. No document file is read at all, in either the clean or
-  the unsaved case: an unsaved record's length does not match its file's, so the exact comparison is
-  ruled out before either side is touched, and what remains is loading the sources that become drafts
-  (32 × 10 MB: 122.51 ms against 142.54). The files were written moments before being read, so this is
-  a warm cache; that flatters the old numbers, which read hundreds of megabytes, not the new ones.
-- **Live resize.** Twelve rendered elements, twenty-one width steps: no render is started for a width
-  the drag passes through, all twelve keep their metrics, and one round of twelve requests follows —
-  starting 53.4 ms after the last step, pixels back at 58.8 ms. The main thread is held 0.75 ms per
-  step (0.95 ms worst, 16.4 ms over the drag), of which building paragraphs is 0.01 ms each and moving
-  artifacts rounds to zero.
-- **Table.** A 40×5 table misses in 12–14 ms and hits in 0.02 ms, twenty hits in a row rendering
-  nothing again. 1× and 2× are two entries: 2× is exactly twice 1× in each direction and four times the
-  bytes, the table occupies the same 766×1648 points in both, and both are sRGB whatever screen asked.
-- **No UI test for a window resize, and four routes were measured to say so.** XCUITest's own
-  press-and-drag moved and resized nothing anywhere along the margin or on the title bar; HID
-  `CGEvent`s left `NSEvent.mouseLocation` unchanged; the accessibility API answered
-  `kAXErrorAPIDisabled`; a title-bar double click does not zoom this window. The full-screen button does
-  resize it, 710 to 1710 points — and terminating out of the space it creates left the next test
-  failing with "Cmd-Q did not quit the app", twice, including one that passes alone. That test was
-  written, measured and removed. `view.inLiveResize == true` is still uncovered.
-- **Suites.** Release: 109 tests in 16 suites and 55 in 4 suites pass; Debug the same. The whole UI
-  file passes in Release, 11 of 11, including the two that type.
+`RecoveryResizeTableBench` holds the Release numbers, gated on `AIRMARK_BENCH` and skipped in 0.001 s
+without it. Nothing in it repeats the parse benchmarks. Table: a 40×5 miss is 12–14 ms, a hit 0.02 ms,
+and 1×/2× stay two entries with the table on the same points and both bitmaps sRGB.
 
+Suites: Release 109 tests in 16 suites and 55 in 4 suites pass; Debug the same; the whole UI file passes
+in Release, 11 of 11, including both typing tests.
+
+### Not verified
+
+- `view.inLiveResize == true` is uncovered. Four routes to a UI window resize were measured and none
+  works here: XCUITest's drag resizes nothing, HID `CGEvent`s leave the cursor unmoved, the
+  accessibility API answers `kAXErrorAPIDisabled`, and a title-bar double click does not zoom. The
+  full-screen button does resize the window — and terminating out of its space left the next test unable
+  to quit the app, twice, so that test was written, measured and removed.
+- `Close → Don't Save` on a saved file cannot be reached while `autosavesInPlace` is true. The handling
+  exists and is unit-tested against a programmatic close; no UI test opens that panel.
+- The close panel's Save button is not driven from the UI: the app is sandboxed, so that panel is the
+  system's powerbox. What Save leads to is asserted at the document level.
+- `repeatedSavesPreserveBytesWithoutFalseConflicts` failed about one run in ten before this work. The
+  cause was found — an autosave-in-place between the append and the assertion, which clears the dirty
+  flag, caught by overriding `updateChangeCount(withToken:for:)` — and the assertion moved to before the
+  first await, where no autosave can intervene. 640 append-and-save cycles since, with no failure.

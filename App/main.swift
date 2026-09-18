@@ -110,16 +110,13 @@ import os
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
         // never runs a main-actor Task, so an asynchronous reply would hang the quit.
-        // Stays set for the rest of a quit that goes through. It used to be cleared on the next turn of
-        // the run loop, which is a race with no winner: AppKit closes the documents after this returns,
-        // and whether that happens before or after a main-actor Task is not something the quit decides.
-        // Losing the race turned every `.quit` record into a `.closed` one and the next launch restored
-        // nothing — and now that `close()` writes synchronously, it would lose it every time.
         //
-        // A quit stopped after this returns, by another app during a logout, leaves the flag set on a
-        // process that keeps running. A document closed after that keeps its `.quit` record and comes
-        // back at the next launch. That is a window the user has to close again, against a session that
-        // never came back at all; it is the better failure, and it is the only one left unhandled.
+        // The flag stays set for the rest of a quit that goes through. AppKit closes the documents
+        // after this returns, and `close()` would write `.closed` over the `.quit` records written
+        // here; nothing clears the flag on a timer, because that is a race the quit does not decide.
+        // A logout cancelled after this returns leaves it set on a process that keeps running, and a
+        // document closed then comes back at the next launch — a window to close again, against a
+        // session that never returns. No callback reports that cancellation; it is the one case left.
         MarkdownDocument.isTerminating = true
         for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
             // Recorded as open at the quit, so the next launch restores every one of these windows.

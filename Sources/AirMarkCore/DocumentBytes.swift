@@ -112,6 +112,9 @@ public actor RecoveryStore {
     public nonisolated func saveImmediately(_ record: RecoveryRecord) throws {
         try writer.save(record, to: directory)
     }
+    /// Every record with its source. A launch does not use this — it reads `metadata()` and loads a
+    /// source only for what it decides to recover — so this is the whole-store read for anything that
+    /// really wants the text.
     public func records() -> [RecoveryRecord] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
         return urls.filter { $0.pathExtension == "json" }.compactMap { url in
@@ -157,12 +160,9 @@ public actor RecoveryStore {
             data: { try? Data(contentsOf: URL(fileURLWithPath: $0)) },
             source: { [self] in source(of: $0) }))
     }
-    public func remove(_ id: UUID) throws {
-        try removeImmediately(id)
-    }
-    /// Synchronous removal, for the paths that cannot await. Closing a document whose changes are being
-    /// discarded is one: the record has to be gone before the close returns, for the same reason the
-    /// closed record has to be written before it.
+    /// Synchronous, and `nonisolated` because the one caller cannot await: closing a document whose
+    /// changes are being discarded has to have the record gone before it returns, for the same reason
+    /// the closed record has to be written before it.
     public nonisolated func removeImmediately(_ id: UUID) throws {
         try writer.remove(id, from: directory)
     }

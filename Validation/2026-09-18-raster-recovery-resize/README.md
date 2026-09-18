@@ -1,117 +1,63 @@
 # Table raster policy, recovery launch I/O, live resize
 
-Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Debug `swift test`
-unless stated otherwise. Observations on this machine, not PLAN.md budget certifications. Baseline is
-the end of `Validation/2026-09-18-recovery-sessions/`: 99 tests in 15 suites, 52 in 4 suites.
+Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Debug `swift test` unless said
+otherwise. Baseline is the end of `Validation/2026-09-18-recovery-sessions/`: 99 + 52 passing.
 
 ## 1. One raster policy, and a cache key that names it
 
-### Problem
+**Problem.** `drawTable` read two inputs the key did not carry: the host window's screen colour space
+and `NSParagraphStyle.defaultWritingDirection`. The key hashes `RenderEnvironment`, which carries the
+scale but neither of these, so two windows at one scale on differently profiled screens shared an entry
+and whichever rendered first decided the bytes for both. That a bitmap carries its colour space is true
+of drawing and beside the point for a key.
 
-`drawTable` read two inputs the cache key did not carry:
+**Fix.** `TableRenderer.raster(for:)` is the only place the policy lives, and `key` hashes exactly what
+it reads: the requesting window's scale, a fixed sRGB, and the alignment. The screen stops being an
+input rather than becoming one the key must name. `drawTable` no longer takes `host`.
 
-- the host window's screen color space, and
-- `NSParagraphStyle.defaultWritingDirection(forLanguage: nil)`.
-
-The key hashes `RenderEnvironment`, which carries the scale but neither of these. Two windows at the
-same scale on differently profiled screens therefore shared one entry, and whichever rendered first
-decided the bytes for both. The comment claimed a bitmap "carries its color space, so a result shared
-with a window on another screen is converted rather than shown wrong", which is true of drawing and
-beside the point for a key: a key that does not name an input cannot tell the two results apart.
-
-### Change
-
-`TableRenderer.raster(for:)` is now the only place the policy lives, and `RenderService.key` hashes
-exactly what it reads:
-
-- **scale** — `environment.scale`, the requesting window's, already in the key.
-- **color space** — a fixed sRGB. The screen stops being an input rather than becoming an input the
-  key has to name.
-- **alignment** — added to the key for table elements.
-
-`drawTable` no longer takes `host`.
-
-### Why fixed sRGB is safe, measured
-
-A table draws neutral grays over an alpha channel and is composited onto the text view's background.
-Grays have the same coordinates in sRGB and in Display P3 — same white point, same transfer curve,
-the primaries never enter — so the same table drawn into either profile is identical:
+**Why fixed sRGB is safe — measured.** A table draws neutral greys over alpha, and greys have the same
+coordinates in sRGB and Display P3, so the same table drawn into either is identical:
 
 ```
 TABLE_PROFILE sRGB and Display P3 bytes identical: true, 792000 bytes
 ```
 
-`tableRasterIsSRGBWhicheverScreenAsks` asserts that equality, so it is a guard rather than a remark:
-give a table a saturated color and the bytes diverge, the test fails, and the policy has to be
-revisited instead of silently becoming wrong.
+`tableRasterIsSRGBWhicheverScreenAsks` asserts that equality, so it is a guard: give a table a saturated
+colour and the bytes diverge, the test fails, and the policy is revisited instead of quietly becoming
+wrong.
 
-### Result
+**Before → after.** `tableCacheKeyCoversTheRasterAndNothingElse` covers both conditions asked for — 1×
+and 2× give different keys, two renders and scale-following dimensions; two hosts at one scale (one in a
+window on a screen, one in no window, where the old code read two different colour spaces) give one key,
+one render and the identical cached `CGImage`. Mutating the key to drop the scale, the same fault the
+colour space had, fails it on 4 assertions including a 1× window handed the 2× bitmap. Full suite:
+100 + 52.
 
-| test | before | after |
-|---|---|---|
-| `tableRasterIsSRGBWhicheverScreenAsks` (replaces `tableColorSpaceComesFromTheHostWindowsScreen`) | — | pass |
-| `tableCacheKeyCoversTheRasterAndNothingElse` | — | pass |
-| `tableRasterFollowsTheRequestingWindow` | pass | pass |
-| `matchesTheAppKitReference` | pass | pass |
+## 2. A launch reads the records, not every document
 
-The new cache test covers both conditions asked for. 1× and 2× produce different keys, two renders and
-pixel dimensions that follow the scale; two hosts at one scale — one in a window on a screen, one in no
-window, which is where the old code read two different color spaces — produce one key, one render, and
-the second call returns the identical `CGImage` from the cache.
+**Problem.** Two costs at every launch. `records()` read every source in full — 32 MB for four 8 MB
+documents — and `resolve` then ran **on the main actor**, reading each document's whole file,
+re-encoding the record's source and comparing them. Most of those comparisons decided nothing: a record
+written while the document's text was on disk is not the only copy of anything, and both answers the
+comparison could give open the file at the recorded position.
 
-Mutating the key to drop the scale, which is the same fault the color space had, fails it on 4
-assertions, including a 1× window being handed the 2× bitmap. Full suite: 100 + 52 passing.
+**Fix.** The `<id>.json` plus `<id>.<token>.source` layout is untouched. `RecoveryMetadata` is a record
+without its source, carrying the length the source has on disk, which `metadata()` takes from the
+directory listing it already makes. `resolve` takes metadata and a `LaunchStorage` of `size`, `data`,
+`source` — three closures because they cost three different amounts. `launchPlans(recentPaths:)`
+resolves inside the store, which is an actor and not the main actor.
 
-## 2. A launch reads what it needs to decide
-
-### Problem
-
-Two costs, both paid at every launch:
-
-- `RecoveryStore.records()` read every record's source in full and decoded it to a `String`. A
-  directory holding four 8 MB documents read 32 MB before the launch had decided anything.
-- `LaunchPlan.resolve` then ran **on the main actor**, inside `applicationDidFinishLaunching`'s
-  `Task { @MainActor in }`. For every record it read that document's whole file from disk, re-encoded
-  the record's source to `Data`, and compared the two — on the thread that has a window to put up.
-
-The comparison was also asked of records that cannot answer anything with it. A record written while
-the document's text was on disk is not the only copy of anything, and both outcomes the comparison
-could reach — the file still matches, or another app has changed it since — open the file at the
-recorded position. The comparison decided nothing and cost a whole document.
-
-### Change
-
-The file layout is untouched: `<id>.json` beside `<id>.<token>.source`, written exactly as before.
-
-- `RecoveryMetadata` is a record without its source, with `sourceBytes` — the length the source has on
-  disk. `RecoveryStore.metadata()` takes that length from the directory listing it already makes and
-  reads only the small JSON beside it. `source(of:)` loads one record's text, through the same loader
-  `records()` uses, so an inline source from an older build is read the same way here as anywhere.
-- `LaunchPlan.resolve` takes metadata and a `LaunchStorage` of three closures — `size`, `data`,
-  `source` — because they cost three different amounts. A clean record costs one `size`. A record that
-  may hold the only copy of its text is compared, but a file of a length the record cannot have is
-  ruled out without reading either side. `.openFile` carries metadata; `.recoverDraft` carries a whole
-  record, and is the only plan whose source is loaded.
-- `RecoveryStore.launchPlans(recentPaths:)` resolves inside the store, which is an actor and not the
-  main actor. `main.swift` awaits it. Every file read and every comparison is off the main thread.
-
-Behaviour is unchanged. All five outcomes of the old branch — bytes equal, file gone, dirty and
+**Behaviour unchanged.** All five outcomes of the old branch — bytes equal, file gone, dirty and
 different, dirty and empty, clean and different — are preserved, and the existing launch tests assert
-them with their assertions untouched; only the call syntax moved to the new API.
+them with their assertions untouched; only the call syntax moved.
 
-### Result
-
-`RecoveryStoreTests.metadataReadsTheRecordsWithoutTheirSources`, four records of 8 MB:
+**Before → after.**
 
 ```
-RECOVERY_LAUNCH 4 records of 8000000 source bytes: metadata() 0.00023 seconds, records() 0.01400 seconds
+RECOVERY_LAUNCH 4 records of 8000000 source bytes: metadata() 0.23 ms, records() 14.00 ms
 ```
 
-60× on a warm cache, and 32 MB not read. The same test then resolves a real launch of that directory
-and gets four `.openFile` plans with no source loaded.
-
-`SourceTests.launchReadsNothingForDocumentsWhoseTextIsOnDisk` counts the calls for a session of eight
-saved documents:
+`launchReadsNothingForDocumentsWhoseTextIsOnDisk`, a session of eight saved documents:
 
 | | before (`launchio-before.txt`) | after |
 |---|---:|---:|
@@ -120,126 +66,71 @@ saved documents:
 | record sources loaded | 16 | **0** |
 
 Before was produced by restoring the old rule — compare every record — with everything else in place.
-
 `launchComparesOnlyWhatTheLengthsLeaveOpen` pins the rest: a dirty record whose file is another length
-is decided with no read; one whose length matches is read and compared, and wins or loses on the
-bytes; a BOM counts toward the length it is checked against; an empty record opens no window and its
-source is never loaded to find that out.
+is decided with no read; one whose length matches is read and compared; a BOM counts toward the length;
+an empty record opens no window and its source is never loaded to find that out. Full suite: 100 + 55.
 
-Full suite: 100 + 55 passing.
+Release numbers across 1/8/32 documents at 1 MB and 10 MB are in
+`Validation/2026-09-18-recovery-resize-table-bench/`.
 
 ## 3. A drag says when it is over
 
-### Problem
+**Problem.** While geometry moved the editor armed a 150 ms wait, and a wait that woke to find the drag
+still going armed another. A drag was a poll, its end was noticed up to 150 ms late, and the 150 ms had
+no stated basis.
 
-While the geometry moved, the editor armed a 150 ms wait; when that wait woke and found
-`view.inLiveResize` still true it armed another. A drag was therefore a poll, and the end of a drag
-was noticed by the first wait to wake after the mouse came up — up to 150 ms late, and later still if
-the wake landed just before the release. The 150 ms had no stated basis.
+**Fix.** Nothing is armed during a drag; `didEndLiveResize` adopts the width it left behind and renders
+once. Geometry that reports no end — a zoom, a full-screen transition, a divider, a scroller appearing —
+is still coalesced, because it arrives as one layout pass per displayed frame. The wait only has to
+outlast the gap between two frames, so it is **50 ms**, about three at 60 Hz with room for a missed one.
 
-### Change
-
-A drag reports its own end, so nothing waits for one:
-
-- While `view.inLiveResize`, nothing is armed at all. The elements keep their metrics and their
-  pixels, scaled into the width there is now, exactly as before.
-- `NSWindow.didEndLiveResizeNotification` adopts the width the drag left behind and renders once.
-- Geometry that reports no end — a zoom, a full-screen transition, a divider, a scroller appearing —
-  is still coalesced, because it arrives as one layout pass per displayed frame. The wait has only to
-  outlast the gap between two frames, so it is **50 ms**, about three frames at 60 Hz with room for a
-  missed one, instead of 150 ms with no basis. A drag starting during a wait drops it.
-
-`scheduleEnvironmentChange` and the end-of-drag notification both end in one `adoptSettledEnvironment`.
-
-PR #1's work is untouched: the diff is the environment branch of `scheduleRenders`, one observer and
-`scheduleEnvironmentChange`. No line of the parse pacing, the edit log, the windowed install, the
-`SpanList` render errors or `ArtifactStore` is in it.
-
-### Result
+**Before → after.**
 
 | | before | after |
 |---|---|---|
-| end of a drag → renders start | up to 150 ms, by a poll that happened to wake | **0.3 ms**, on the event (`RESIZE_END`) |
+| end of a drag → renders start | up to 150 ms, by a poll that happened to wake | **0.3 ms**, on the event |
 | 21 non-drag geometry steps | 1 round, 154 ms after the last (`resize-150ms.txt`) | 1 round, 57 ms after the last |
 | the same with coalescing removed | — | **21 rounds** (`resize-nocoalesce.txt`) |
 
-`endOfADragAdoptsWithoutWaiting` pins the coalescing wait at 30 seconds and posts the end-of-drag
-notification: the renders start 0.3 ms later, so nothing but the event can have started them.
+`endOfADragAdoptsWithoutWaiting` pins the wait at 30 seconds and posts the end-of-drag notification: the
+renders start 0.3 ms later, so nothing but the event can have started them. The 21-rounds mutation is
+what keeps the wait — it earns its place; the 150 ms did not. Under a full parallel suite the same burst
+settles in 132 ms rather than 57; the assertion allows a second and the number is printed, not asserted.
 
-`geometryThatReportsNoEndIsCoalescedIntoOneRound` is the measurement that keeps the wait. Removing it
-and adopting every layout pass turns 21 steps into 21 rounds of renders, each cancelling the one
-before, and fails `draggingAWindowKeepsRenderedElementsInPlace` as well. The wait earns its place; the
-150 ms did not.
+PR #1's work is untouched: the diff is the environment branch of `scheduleRenders`, one observer and
+`scheduleEnvironmentChange`. Full suite: 102 + 55; the four non-typing UI tests pass in Release.
 
-In a full parallel suite run the same burst settles in 132 ms rather than 57 ms — the 50 ms sleep plus
-what the scheduler adds under load. The assertion allows 200 ms.
+**Not verified.** `view.inLiveResize == true` is not exercised — see
+`Validation/2026-09-18-recovery-resize-table-bench/`, which records the four routes tried.
 
-Full suite: 102 + 55 passing. The four non-typing UI tests pass in Release.
+## 4. A flaky test, root-caused
 
-### Not verified
+**Problem.** `repeatedSavesPreserveBytesWithoutFalseConflicts` failed `#expect(document.isDocumentEdited)`
+about one full-suite run in ten, on a loaded machine, and predated this work.
 
-`view.inLiveResize == true` is not exercised by a unit test: AppKit offers no public way to begin a
-live resize, so the tests drive geometry the way a non-drag change arrives and post the end-of-drag
-notification directly. What that leaves untested is the one line that skips arming the wait during a
-drag; what it does test is that the end of a drag alone starts the renders, which is the behaviour the
-poll existed to approximate. The two typing UI tests were not run.
+**Two wrong turns, recorded because they cost time.** Replacing the fixed 250 ms wait with a poll for
+`isDocumentEdited` made it worse: the edit sets that flag synchronously, so the poll returned at once,
+the save ran before the undo group closed, and the group closing afterwards marked the document dirty
+again — the failure moved to the assertion after the save in two of three runs. That is why the 250 ms
+is still there: it waits for the undo group, not for the flag. Separately, `autosavingDelay == 0.0` was
+read as ruling autosave out; it does not govern an `autosavesInPlace` document.
 
-## 4. The flaky save test: an autosave-in-place, and the fix
-
-`DocumentTests.repeatedSavesPreserveBytesWithoutFalseConflicts` failed its
-`#expect(document.isDocumentEdited)` three times in about thirty full-suite runs, always on a loaded
-machine and never in isolation. It predates this session's work.
-
-### Wrong turns, recorded because they cost time
-
-- **First attempt made it worse.** Replacing the flat 250 ms wait with a poll for `isDocumentEdited`
-  looked like the obvious robustness fix. It is not the same thing: the edit sets that flag
-  synchronously, so the poll returned almost at once, the save then ran before the text view had closed
-  its undo group, and the group closing afterwards marked the document dirty again. The failure moved
-  to the `!isDocumentEdited` after the save in two of three runs. That is why the 250 ms is still there
-  before the save — it is waiting for the undo group, not for the flag.
-- **Autosave was suspected and wrongly cleared.** `NSDocumentController.shared.autosavingDelay` reads
-  `0.0` in the test process and the document is not registered with the controller, and a run of the
-  test in isolation showed five save operations and no autosave. That was taken as ruling autosave out.
-  It does not: `autosavingDelay` does not govern an `autosavesInPlace` document, and the isolated run
-  is simply too short for one to fire.
-- **A 120-iteration stress test varying the append-to-save gap from 0 to 19 ms found nothing**, because
-  the gap was never the variable.
-
-### Root cause
-
-`NSDocument.updateChangeCount(_:)` was overridden to log, and showed only `done` and never `cleared` —
-because an asynchronous save clears the count through `updateChangeCount(withToken:for:)`, a different
-method. With that one overridden too, and the loop raised to 40 passes so a run covers more ground, a
-failure was caught on the second run:
+**Root cause.** Overriding `updateChangeCount(_:)` showed only `done` and never `cleared`, because an
+asynchronous save clears the count through `updateChangeCount(withToken:for:)`. With that overridden too
+and the loop raised to 40 passes, a failure was caught on the second run:
 
 ```
 --append 24--  done/edited=true  done/edited=true  token-out(op4)/edited=true  token-in(op4)/edited=false
-SAVE_DIAG pass=24 hasUnautosaved=false editorSource=235 expected=235 snapshot=235
+SAVE_DIAG pass=24 editorSource=235 expected=235 snapshot=235
 ```
 
-`op4` is `autosaveInPlaceOperation`, and the record of `writeSafely` calls agrees: twenty-three `"0"`
-then a `"4"`. **An autosave-in-place fired between the append and the assertion, wrote the file, and
-cleared the dirty flag.** The edit was present the whole time — editor, snapshot and expectation all
-235 bytes — which is why exactly one assertion failed and the byte comparison after it passed.
+`op4` is `autosaveInPlaceOperation`. An autosave-in-place fired between the append and the assertion,
+wrote the file and cleared the dirty flag — with the edit present throughout, which is why exactly one
+assertion failed. That is `autosavesInPlace` doing its job: the product was right and the test was wrong.
 
-That is `autosavesInPlace = true` doing its job. The product is right and the test was wrong.
+**Fix.** The assertion moved to before the first `await`, where nothing can run between the edit and it.
+The assertion after a failed Save As became `isDocumentEdited || !hasUnautosavedChanges`, since
+asserting only the first asserts that no autosave ran.
 
-### Fix
-
-The assertion moved to before the first `await`, where it belongs. Nothing runs between the edit and
-it, so no autosave can intervene, and what it checks — that the edit reaches the change count — is what
-it was always for. It is now deterministic rather than merely likely.
-
-Two other assertions had the same exposure. The one after a failed Save As became
-`isDocumentEdited || !hasUnautosavedChanges`: still dirty, or already autosaved, because asserting only
-the first is asserting that no autosave ran, which the test neither controls nor cares about. The one
-after the file is deleted is left strict and is safe — the document has no file left and
-`autosavesDrafts` is false, so nothing can autosave it.
-
-### Result
-
-The unfixed test reproduced within two full-suite runs at 40 passes. Fixed: four runs at 40 passes —
-about 640 append-and-save cycles — with no failure, then the loop restored to 5.
-
-No production code changed. All diagnostics were removed from `MarkdownDocument`.
+**Before → after.** Reproduced within two full-suite runs at 40 passes; after, four runs at 40 passes —
+about 640 append-and-save cycles — with no failure. No production code changed; all diagnostics removed.

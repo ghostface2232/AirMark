@@ -24,10 +24,10 @@ those, and a second set of the same numbers would only be more to keep honest.
 | table cache | `tableCacheKeyCoversTheRasterAndNothingElse`, `tableRasterIsSRGBWhicheverScreenAsks`, and `tableCacheAndRaster` in the bench |
 | live resize | `draggingAWindowKeepsRenderedElementsInPlace`, `endOfADragAdoptsWithoutWaiting`, `geometryThatReportsNoEndIsCoalescedIntoOneRound`, and `liveResizeCost` in the bench |
 
-The new UI test for sessions hands the launch a recovery directory a previous run would have left —
-two `.quit` records from one session and one from the session before — because that is the only way to
-put several documents and two sessions in front of a real launch without opening windows by hand. It
-finds two windows, `FRONT DOCUMENT` and `BACK DOCUMENT`, and not `STALE DOCUMENT`.
+The new session UI test hands the launch a recovery directory a previous run would have left — two
+`.quit` records from one session and one from the session before — which is the only way to put several
+documents and two sessions in front of a real launch without opening windows by hand. It finds two
+windows, `FRONT DOCUMENT` and `BACK DOCUMENT`, and not `STALE DOCUMENT`.
 
 ## 2. Recovery launch, Release
 
