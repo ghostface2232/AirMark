@@ -15,6 +15,13 @@ public struct RenderEnvironment: Hashable, Sendable {
     public init(width: Double, fontSize: Double, scale: Double, dark: Bool, background: String = "#ffffff") {
         self.width = width; self.fontSize = fontSize; self.scale = scale; self.dark = dark; self.background = background
     }
+    /// True when `other` differs from this only in geometry. The element then renders to the same
+    /// content at another width or raster scale, so a result measured in one can stand in, scaled, as
+    /// temporary geometry until the new one arrives. A different font size, theme or background paints
+    /// something else and cannot stand in.
+    public func matchesAppearance(of other: RenderEnvironment) -> Bool {
+        fontSize == other.fontSize && dark == other.dark && background == other.background
+    }
 }
 public struct RenderArtifact: @unchecked Sendable {
     // CGImage is immutable; no NSImage/AppKit objects cross isolation boundaries.
@@ -106,6 +113,12 @@ public enum RenderFailure: LocalizedError, Equatable {
 
     public func key(_ element: RenderElement, environment: RenderEnvironment, baseURL: URL?) -> String {
         var source = "renderer-1|mermaid-11.17.2|katex-0.16.22|\(element.kind.rawValue)|\(element.inline)|\(element.content)|\(environment)"
+        if element.kind == .table {
+            // The one input to a table's pixels that the environment does not carry. The color space is
+            // a constant and the scale is `environment.scale`, so with this the key names everything
+            // `TableRenderer.raster(for:)` draws with.
+            source += "|\(TableRenderer.naturalAlignment.rawValue)"
+        }
         if element.kind == .image {
             source += "|\(baseURL?.path ?? "")"
             if let url = localURL(element.content, baseURL: baseURL), let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]) {
@@ -195,13 +208,13 @@ public enum RenderFailure: LocalizedError, Equatable {
             return RenderArtifact(image: image, size: size, baseline: size.height, label: element.label.isEmpty ? url.lastPathComponent : element.label)
         }.value
     }
-    /// Tables are measured and drawn off the main thread. Pixels use the main screen's scale and color
-    /// space, which is what rasterizing an AppKit image did here before.
+    /// Tables are measured and drawn off the main thread, in `TableRenderer.raster(for:)` — the one
+    /// place the raster policy lives, so that what `key` hashes and what is drawn cannot disagree. The
+    /// scale is the requesting window's, so a window on a 1× display beside a Retina one does not get
+    /// 2× pixels; the color space is a fixed sRGB, so the screen is not an input at all and two windows
+    /// on differently profiled screens share one cached bitmap correctly.
     private func drawTable(_ element: RenderElement, environment: RenderEnvironment) async throws -> RenderArtifact {
-        let screen = NSScreen.main
-        let raster = TableRenderer.Raster(scale: screen.map { Double($0.backingScaleFactor) } ?? environment.scale,
-                                          colorSpace: screen?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
-                                          alignment: NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left)
+        let raster = TableRenderer.raster(for: environment)
         let content = element.content, label = element.label, limit = memoryLimit
         return try await Task.detached(priority: .userInitiated) {
             try TableRenderer.render(content, label: label, environment: environment, raster: raster, memoryLimit: limit)

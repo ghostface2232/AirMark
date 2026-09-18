@@ -18,6 +18,11 @@ public struct DocumentBytes: Sendable, Equatable {
 }
 
 /// A document's recovery state. Records of one document with the same `revision` carry the same source.
+///
+/// `state` and `hasUnsavedChanges` are two separate questions a launch has to answer and one record
+/// could not: whether the document was still open when AirMark stopped, and whether its text was
+/// anywhere but in this record. A document closed cleanly whose file another app has edited since is
+/// not the same thing as a draft a crash left behind.
 public struct RecoveryRecord: Codable, Sendable, Equatable {
     public var id: UUID
     public var filePath: String?
@@ -27,14 +32,76 @@ public struct RecoveryRecord: Codable, Sendable, Equatable {
     public var selection: SourceSpan
     public var scrollY: Double
     public var date: Date
-    public init(id: UUID, filePath: String?, source: String, hasBOM: Bool, revision: UInt64, selection: SourceSpan, scrollY: Double) {
+    /// The moment in the document's life this record was written at.
+    public var state: RecoveryState
+    /// `source` was not on disk when the record was written, so only the record holds it.
+    public var hasUnsavedChanges: Bool
+    /// The run of the app that wrote this record. `state` says the document was open when AirMark
+    /// stopped, but not which stop: without this, a record left by a session two launches ago was
+    /// restored again at every later launch, because nothing had rewritten it since. Nil in records
+    /// written before sessions were identified.
+    public var sessionID: UUID?
+    /// Where the document's window stood in its session, front first. Nil when the document had no
+    /// window order to read, and in records written before the order was recorded.
+    public var order: Int?
+    public init(id: UUID, filePath: String?, source: String, hasBOM: Bool, revision: UInt64, selection: SourceSpan, scrollY: Double,
+                state: RecoveryState = .open, hasUnsavedChanges: Bool = true, sessionID: UUID? = nil, order: Int? = nil) {
         self.id = id; self.filePath = filePath; self.source = source; self.hasBOM = hasBOM
         self.revision = revision; self.selection = selection; self.scrollY = scrollY; date = Date()
+        self.state = state; self.hasUnsavedChanges = hasUnsavedChanges
+        self.sessionID = sessionID; self.order = order
+    }
+}
+
+/// A record without its source, which is the only part of a record that is the size of a document.
+///
+/// A launch reads these first and decides what to open from them alone wherever it can: a document
+/// whose text was on disk when its record was written is opened from the file, so neither the file's
+/// bytes nor the record's source are ever read. `sourceBytes` is the length the record's source would
+/// have on disk, which is enough to tell an empty record from one with text, and enough to rule out an
+/// exact match without reading anything.
+public struct RecoveryMetadata: Sendable, Equatable {
+    public var id: UUID
+    public var filePath: String?
+    public var hasBOM: Bool
+    public var revision: UInt64
+    public var selection: SourceSpan
+    public var scrollY: Double
+    public var date: Date
+    public var state: RecoveryState
+    public var hasUnsavedChanges: Bool
+    public var sessionID: UUID?
+    public var order: Int?
+    /// UTF-8 bytes of the source, without the BOM. `DocumentBytes` for this record is this many bytes
+    /// plus three when `hasBOM`.
+    public var sourceBytes: Int
+    public init(id: UUID, filePath: String?, hasBOM: Bool, revision: UInt64, selection: SourceSpan, scrollY: Double, date: Date,
+                state: RecoveryState, hasUnsavedChanges: Bool, sessionID: UUID?, order: Int?, sourceBytes: Int) {
+        self.id = id; self.filePath = filePath; self.hasBOM = hasBOM; self.revision = revision
+        self.selection = selection; self.scrollY = scrollY; self.date = date
+        self.state = state; self.hasUnsavedChanges = hasUnsavedChanges
+        self.sessionID = sessionID; self.order = order; self.sourceBytes = sourceBytes
+    }
+    /// Bytes the document's file holds when it holds exactly this record's text.
+    public var documentBytes: Int { sourceBytes + (hasBOM ? 3 : 0) }
+}
+
+extension RecoveryRecord {
+    /// This record as a launch reads it before deciding whether the source is needed at all. Derived,
+    /// so `sourceBytes` cannot fall out of step with `source`.
+    public var metadata: RecoveryMetadata {
+        RecoveryMetadata(id: id, filePath: filePath, hasBOM: hasBOM, revision: revision, selection: selection,
+                         scrollY: scrollY, date: date, state: state, hasUnsavedChanges: hasUnsavedChanges,
+                         sessionID: sessionID, order: order, sourceBytes: source.utf8.count)
     }
 }
 
 public actor RecoveryStore {
     public let directory: URL
+    /// Identifies this run of the app; one store is made per launch. Every record written through it
+    /// carries it, so a launch can tell the documents the last session had open from records an
+    /// earlier session left behind and nothing has rewritten since.
+    public nonisolated let sessionID = UUID()
     private nonisolated let writer = RecoveryWriter()
     public init(directory: URL) { self.directory = directory }
     public func save(_ record: RecoveryRecord) throws {
@@ -45,6 +112,9 @@ public actor RecoveryStore {
     public nonisolated func saveImmediately(_ record: RecoveryRecord) throws {
         try writer.save(record, to: directory)
     }
+    /// Every record with its source. A launch does not use this — it reads `metadata()` and loads a
+    /// source only for what it decides to recover — so this is the whole-store read for anything that
+    /// really wants the text.
     public func records() -> [RecoveryRecord] {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
         return urls.filter { $0.pathExtension == "json" }.compactMap { url in
@@ -52,8 +122,58 @@ public actor RecoveryStore {
             RecoveryWriter.load(url, from: directory) ?? RecoveryWriter.load(url, from: directory)
         }.sorted { $0.date > $1.date }
     }
-    public func remove(_ id: UUID) throws {
-        try writer.remove(id, from: directory)
+    /// Every record's fields without its source, newest first. One directory listing, which carries the
+    /// source files' sizes, and one small JSON per record: a launch reads no document-sized file to
+    /// find out what it has. Records naming a source that is not there are dropped, as `records()`
+    /// drops them.
+    public func metadata() -> [RecoveryMetadata] {
+        let keys: [URLResourceKey] = [.fileSizeKey]
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return [] }
+        var sizes: [String: Int] = [:], jsons: [URL] = []
+        for url in urls {
+            switch url.pathExtension {
+            case "json": jsons.append(url)
+            // A size that cannot be read is left out rather than recorded as zero: `loadMetadata` then
+            // goes and finds it, where zero would have made a draft look empty and dropped its text.
+            case "source":
+                if let size = (try? url.resourceValues(forKeys: Set(keys)))?.fileSize { sizes[url.lastPathComponent] = size }
+            default: break
+            }
+        }
+        return jsons.compactMap { RecoveryWriter.loadMetadata($0, in: directory, sourceSizes: sizes) }.sorted { $0.date > $1.date }
+    }
+    /// The source of one record, read when a launch has decided it needs it. Goes through the same
+    /// loader `records()` uses, so an inline source from an older build and a source in its own file
+    /// are read the same way here as anywhere else.
+    public func source(of metadata: RecoveryMetadata) -> DocumentBytes? {
+        let url = directory.appendingPathComponent(metadata.id.uuidString + ".json")
+        guard let record = RecoveryWriter.load(url, from: directory) ?? RecoveryWriter.load(url, from: directory) else { return nil }
+        return DocumentBytes(source: record.source, hasBOM: record.hasBOM)
+    }
+    /// What to open at launch. Resolved here rather than by the caller because every file it reads and
+    /// every comparison it makes belongs off the main actor, and this store is the only thing that
+    /// knows where a record's source lives.
+    public func launchPlans(recentPaths: [String]) -> [LaunchPlan] {
+        LaunchPlan.resolve(records: metadata(), recentPaths: recentPaths, storage: LaunchStorage(
+            size: { path in
+                // Unreadable counts as gone, the way reading the whole file and getting nothing did.
+                guard FileManager.default.isReadableFile(atPath: path) else { return nil }
+                return (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+            },
+            data: { try? Data(contentsOf: URL(fileURLWithPath: $0)) },
+            source: { [self] in source(of: $0) }))
+    }
+    /// Throws away everything recorded for `id`, and records `replacement` in its place when there is
+    /// one — one writer operation, so there is no moment where the discarded source is still on disk
+    /// under a record that claims to hold something else, and no way for a concurrent save to land in
+    /// between. Synchronous and `nonisolated` because the caller cannot await: a document closing on
+    /// discarded changes has to have them gone before `close()` returns.
+    ///
+    /// The replacement is written fresh rather than over what was there. The writer keeps the source it
+    /// last wrote for a revision and would otherwise reuse it, which for a discard is exactly the file
+    /// being thrown away.
+    public nonisolated func discardImmediately(_ id: UUID, replacingWith replacement: RecoveryRecord? = nil) throws {
+        try writer.discard(id, replacingWith: replacement, in: directory)
     }
 }
 
@@ -66,7 +186,9 @@ public actor RecoveryStore {
 /// large document does not write the document again. A new source goes to a new file first, then the
 /// JSON naming it, then the previous source files are removed: a crash at any point leaves a JSON file
 /// naming a complete source. Records from before this layout carry the source inline and still load.
-private final class RecoveryWriter: @unchecked Sendable {
+/// Internal rather than private so the tests can reach `loadMetadata`, whose fallbacks decide whether
+/// a record with text is read as an empty one.
+final class RecoveryWriter: @unchecked Sendable {
     private struct Stored: Codable {
         var id: UUID
         var filePath: String?
@@ -78,6 +200,15 @@ private final class RecoveryWriter: @unchecked Sendable {
         var selection: SourceSpan
         var scrollY: Double
         var date: Date
+        /// Absent in records written before a record said where in a document's life it came from.
+        /// Such a record reads as `.unknown`, which a launch treats the way it treated every record
+        /// before: only the most recent one, and only when nothing was left open.
+        var state: RecoveryState?
+        var hasUnsavedChanges: Bool?
+        /// Absent in records written before a record said which run of the app wrote it, and before
+        /// the window order within that run was recorded. Both read as nil.
+        var sessionID: UUID?
+        var order: Int?
     }
     private let lock = NSLock()
     /// What this writer last wrote per id. A new writer, as after a relaunch, knows nothing and writes the
@@ -85,42 +216,66 @@ private final class RecoveryWriter: @unchecked Sendable {
     private var latest: [UUID: (revision: UInt64, date: Date, sourceFile: String)] = [:]
     func save(_ record: RecoveryRecord, to directory: URL) throws {
         try lock.withLock {
-            let saved = latest[record.id]
-            if let saved {
+            if let saved = latest[record.id] {
                 guard record.revision > saved.revision ||
                         (record.revision == saved.revision && record.date >= saved.date) else { return }
             }
-            let files = FileManager.default
-            try files.createDirectory(at: directory, withIntermediateDirectories: true)
-            let sourceFile: String
-            var wroteSource = false
-            if let saved, saved.revision == record.revision, files.fileExists(atPath: directory.appendingPathComponent(saved.sourceFile).path) {
-                sourceFile = saved.sourceFile
-            } else {
-                sourceFile = "\(record.id.uuidString).\(UUID().uuidString).source"
-                try Data(record.source.utf8).write(to: directory.appendingPathComponent(sourceFile), options: .atomic)
-                wroteSource = true
-            }
-            let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
-                                revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date)
-            do {
-                try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
-            } catch {
-                if wroteSource { try? files.removeItem(at: directory.appendingPathComponent(sourceFile)) }
-                throw error
-            }
-            latest[record.id] = (record.revision, record.date, sourceFile)
-            // Sources no record names any more, including one left by a save that stopped before its JSON.
-            if wroteSource { removeSources(of: record.id, in: directory, keeping: sourceFile) }
+            try write(record, to: directory)
         }
     }
-    func remove(_ id: UUID, from directory: URL) throws {
-        try lock.withLock {
-            let url = directory.appendingPathComponent(id.uuidString + ".json")
-            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
-            removeSources(of: id, in: directory, keeping: nil)
-            latest.removeValue(forKey: id)
+    /// Writes the record. Caller holds the lock and has already decided this record is the newer one.
+    private func write(_ record: RecoveryRecord, to directory: URL) throws {
+        let saved = latest[record.id]
+        let files = FileManager.default
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let sourceFile: String
+        var wroteSource = false
+        if let saved, saved.revision == record.revision, files.fileExists(atPath: directory.appendingPathComponent(saved.sourceFile).path) {
+            sourceFile = saved.sourceFile
+        } else {
+            sourceFile = "\(record.id.uuidString).\(UUID().uuidString).source"
+            try Data(record.source.utf8).write(to: directory.appendingPathComponent(sourceFile), options: .atomic)
+            wroteSource = true
         }
+        let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
+                            revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date,
+                            state: record.state, hasUnsavedChanges: record.hasUnsavedChanges,
+                            sessionID: record.sessionID, order: record.order)
+        do {
+            try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
+        } catch {
+            if wroteSource { try? files.removeItem(at: directory.appendingPathComponent(sourceFile)) }
+            throw error
+        }
+        latest[record.id] = (record.revision, record.date, sourceFile)
+        // Sources no record names any more, including one left by a save that stopped before its JSON.
+        if wroteSource { removeSources(of: record.id, in: directory, keeping: sourceFile) }
+    }
+    func remove(_ id: UUID, from directory: URL) throws {
+        try lock.withLock { try drop(id, in: directory) }
+    }
+    /// Throws away everything recorded for `id` and, when `replacement` is given, records that instead —
+    /// one operation under one lock, so nothing can read or write a half-discarded record in between.
+    ///
+    /// The order is the opposite of `save`'s, because the two want opposite things from a crash. A save
+    /// writes the source before the JSON that names it, so an interrupted save leaves the record it had.
+    /// A discard removes the JSON first, because the JSON is the only thing that makes a source
+    /// reachable — `records()` and `metadata()` enumerate JSON files — so an interrupted discard leaves
+    /// nothing of what was discarded. The worst it can do is lose the replacement, and a document that
+    /// is not restored is the right way to fail at throwing a document away.
+    func discard(_ id: UUID, replacingWith replacement: RecoveryRecord?, in directory: URL) throws {
+        try lock.withLock {
+            try drop(id, in: directory)
+            guard let replacement else { return }
+            try write(replacement, to: directory)
+        }
+    }
+    /// The JSON first, then the sources it named. Caller holds the lock.
+    private func drop(_ id: UUID, in directory: URL) throws {
+        let url = directory.appendingPathComponent(id.uuidString + ".json")
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        removeSources(of: id, in: directory, keeping: nil)
+        latest.removeValue(forKey: id)
     }
     private func removeSources(of id: UUID, in directory: URL, keeping kept: String?) {
         let prefix = id.uuidString + "."
@@ -128,6 +283,36 @@ private final class RecoveryWriter: @unchecked Sendable {
         for name in names where name.hasPrefix(prefix) && name.hasSuffix(".source") && name != kept {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
         }
+    }
+    /// The record's fields in `url` without its source, whose length is taken from `sourceSizes` — the
+    /// directory listing — rather than by reading it. Nil on the same terms as `load`: unreadable, or
+    /// naming a source that is not there. A source the listing does not mention is checked once
+    /// directly, in case the listing was taken before the record was written.
+    static func loadMetadata(_ url: URL, in directory: URL, sourceSizes: [String: Int]) -> RecoveryMetadata? {
+        guard let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let sourceBytes: Int
+        if let inline = stored.source {
+            sourceBytes = inline.utf8.count
+        } else if let name = stored.sourceFile, !name.contains("/") {
+            // The listing, then a stat of the file itself, then the file. Only a source that cannot be
+            // read at all drops the record, which is what `records()` does with one. Every step before
+            // that is an answer about the length, and calling an unmeasurable source empty would lose
+            // a draft: an empty record opens no window, and nothing else holds a draft's text.
+            let source = directory.appendingPathComponent(name)
+            if let size = sourceSizes[name] ?? (try? source.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                sourceBytes = size
+            } else if let bytes = try? Data(contentsOf: source) {
+                sourceBytes = bytes.count
+            } else {
+                return nil
+            }
+        } else {
+            return nil
+        }
+        return RecoveryMetadata(id: stored.id, filePath: stored.filePath, hasBOM: stored.hasBOM, revision: stored.revision,
+                                selection: stored.selection, scrollY: stored.scrollY, date: stored.date,
+                                state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true,
+                                sessionID: stored.sessionID, order: stored.order, sourceBytes: sourceBytes)
     }
     /// The record in `url`, or nil when it cannot be read or names a source that is missing.
     static func load(_ url: URL, from directory: URL) -> RecoveryRecord? {
@@ -141,7 +326,10 @@ private final class RecoveryWriter: @unchecked Sendable {
         } else {
             return nil
         }
-        var record = RecoveryRecord(id: stored.id, filePath: stored.filePath, source: source, hasBOM: stored.hasBOM, revision: stored.revision, selection: stored.selection, scrollY: stored.scrollY)
+        var record = RecoveryRecord(id: stored.id, filePath: stored.filePath, source: source, hasBOM: stored.hasBOM, revision: stored.revision,
+                                    selection: stored.selection, scrollY: stored.scrollY,
+                                    state: stored.state ?? .unknown, hasUnsavedChanges: stored.hasUnsavedChanges ?? true,
+                                    sessionID: stored.sessionID, order: stored.order)
         record.date = stored.date
         return record
     }

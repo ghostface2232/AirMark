@@ -28,6 +28,8 @@ bash Scripts/test-ui.sh
 - `mermaid` fences render offline. Tables and local images render in place.
 - Raw HTML and remote images are not executed or downloaded.
 - Unsaved drafts are kept under `~/Library/Application Support/AirMark/Recovery`.
+- The documents open when AirMark last stopped come back at the next launch, in the order their windows
+  stood. A draft you delete at the close panel does not, and neither do documents from earlier sessions.
 
 Set `AIRMARK_STATE_DIR` to isolate recovery data for testing. `--blank` opens a fresh draft; `--open /absolute/path.md` opens a specific file.
 

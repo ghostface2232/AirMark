@@ -1,0 +1,4 @@
+Test Case '-[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch]' started.
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:219: error: -[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch] : XCTAssertTrue failed - the discarded draft is still recorded: ["503DBAC6-AFBF-4BB7-BAE7-46B5A0932E5D.json"]
+/Users/baemingwan/Documents/AI/airmark/UITests/AirMarkUITests.swift:224: error: -[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch] : XCTAssertFalse failed - the discarded draft came back: "DISCARD ME"
+Test Case '-[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch]' failed (17.677 seconds).

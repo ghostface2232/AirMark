@@ -69,6 +69,20 @@ import os
     /// The text storage's own NSString. `textView.string` bridges a copy of the whole document.
     private var text: NSString { textView.textStorage?.mutableString ?? NSMutableString() }
     private var renderEnvironment: RenderEnvironment?
+    /// Pending adoption of a new environment. While it is armed the editor still measures and draws in
+    /// `renderEnvironment`, which is what keeps the geometry moving from replacing every rendered
+    /// element with its source and back at every step. Never armed during a drag: a drag says when it
+    /// ends.
+    private var environmentTask: Task<Void, Never>?
+    /// How long geometry that is not a drag must hold still before renders start for it.
+    ///
+    /// A drag needs no such wait — `didEndLiveResize` says when it is over — and this is for the
+    /// changes that report no end: a zoom, a full-screen transition, a split-view divider, a scroller
+    /// appearing. Those arrive as one layout pass per displayed frame, so the wait has only to outlast
+    /// the gap between two frames; three at 60 Hz leaves room for a missed one. Adopting each pass
+    /// instead cancels and restarts every render on the page once per frame, which the resize tests
+    /// measure. A `var` so a test can pin it.
+    static var environmentSettleDelay = Duration.milliseconds(50)
     private var renderTokens: [SourceSpan: UUID] = [:]
     private var invalidating = false
     private var themeWasDark = false
@@ -105,6 +119,8 @@ import os
     public var renderedElementCount: Int { artifacts.residentCount }
     /// Rendered elements whose layout metrics are known, with or without pixels.
     public var measuredElementCount: Int { artifacts.count }
+    /// Elements standing in with metrics measured before the current environment; for tests.
+    var heldGeometryCount: Int { artifacts.heldGeometryCount }
     /// Decoded pixel bytes of the render results this editor holds.
     public var retainedPixelBytes: Int { artifacts.pixelBytes }
     /// The images this editor holds, for tests that stand in for on-screen drawing.
@@ -150,6 +166,19 @@ import os
         observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didDeminiaturizeNotification, object: nil, queue: .main) { [weak self] notification in
             let window = notification.object as? NSWindow
             MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
+        })
+        // The window moved to another screen, or that screen's scale or color space changed. Nothing
+        // else asks for a layout, so the renders for the new raster start from here.
+        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeBackingPropertiesNotification, object: nil, queue: .main) { [weak self] notification in
+            let window = notification.object as? NSWindow
+            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
+        })
+        // The drag is over and the width it left behind is the one to render for. This is the whole of
+        // what the editor has to know about a drag: nothing waits, nothing polls, and the renders start
+        // at the moment the mouse comes up rather than some interval after it.
+        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: nil, queue: .main) { [weak self] notification in
+            let window = notification.object as? NSWindow
+            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.adoptSettledEnvironment() } }
         })
         scrollView.contentView.postsBoundsChangedNotifications = true
         observations.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
@@ -379,6 +408,10 @@ import os
     private var environment: RenderEnvironment {
         RenderEnvironment(width: Double(max(100, scrollView.contentSize.width - 2 * textView.textContainerInset.width)), fontSize: Double(fontSize), scale: Double(view.window?.backingScaleFactor ?? 2), dark: view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua, background: backgroundCSS)
     }
+    /// The environment the editor is measuring in, which lags the live one while the window is being
+    /// dragged. Paragraphs ask this one for an element's metrics, and clamp what they draw to the width
+    /// there is now, so a resize scales the rendered element in place instead of unrendering it.
+    private var layoutEnvironment: RenderEnvironment { renderEnvironment ?? environment }
     /// The text background resolved in the view's current appearance, as a CSS hex color.
     private var backgroundCSS: String {
         var color = NSColor.textBackgroundColor
@@ -387,13 +420,23 @@ import os
     }
     private func scheduleRenders() {
         guard isViewLoaded, view.window != nil, view.window?.isMiniaturized != true, parsed.revision == revision else { return }
-        let environment = environment
-        if renderEnvironment != environment {
-            renderEnvironment = environment
-            for task in renderTasks.values { task.cancel() }
-            renderTasks.removeAll(); renderTokens.removeAll(); artifacts.removeAll(); errors.removeAll()
-            invalidatePresentation(spans: parsed.elements.map(\.span))
+        let live = self.environment
+        if renderEnvironment != live {
+            if let settled = renderEnvironment, settled.matchesAppearance(of: live), artifacts.count > 0 {
+                // Only the geometry moved, as it does on every step of a window drag. Keep measuring and
+                // drawing in `settled` until it holds still: a render started at an intermediate width is
+                // thrown away by the next step, and dropping every element back to its source text at
+                // each step is what made a drag flash.
+                //
+                // A drag reports its own end, so during one there is nothing to wait for. Geometry that
+                // moves without a drag reports nothing, and is coalesced by a short wait instead.
+                if !view.inLiveResize { scheduleEnvironmentChange() }
+                releaseDistantPixels()
+                return
+            }
+            adoptEnvironment(live)
         }
+        let environment = live
         let currentRevision = revision
         releaseDistantPixels()
         let windows = renderWindows()
@@ -417,7 +460,9 @@ import os
                 }
                 do {
                     let artifact = try await RenderService.shared.render(element, environment: environment, baseURL: fileURL, host: view)
-                    guard !Task.isCancelled, revision == currentRevision, self.environment == environment else { return }
+                    // The environment the editor measures in, not the live one: a result that arrives
+                    // while the window is being dragged still belongs to what is on screen.
+                    guard !Task.isCancelled, revision == currentRevision, renderEnvironment == environment else { return }
                     artifacts.store(artifact, at: element.span, environment: environment)
                     setIssue(nil, at: element.span)
                     releaseDistantPixels()
@@ -453,6 +498,40 @@ import os
         }
     }
     public override func viewDidAppear() { super.viewDidAppear(); scheduleRenders() }
+
+    /// Starts measuring and drawing in `next`. What was measured in an environment of the same
+    /// appearance is kept as temporary geometry, so each element keeps its attachment at its old size,
+    /// scaled into the width available now, until its new pixels arrive. A change of font size, theme or
+    /// background paints something else, and there the measurements go.
+    private func adoptEnvironment(_ next: RenderEnvironment) {
+        environmentTask?.cancel(); environmentTask = nil
+        let previous = renderEnvironment
+        renderEnvironment = next
+        for task in renderTasks.values { task.cancel() }
+        renderTasks.removeAll(); renderTokens.removeAll(); errors.removeAll()
+        if let previous, previous.matchesAppearance(of: next) { artifacts.holdGeometry() } else { artifacts.removeAll() }
+        invalidatePresentation(spans: parsed.elements.map(\.span))
+    }
+    /// Adopts the current environment once geometry that reports no end of its own has held still for
+    /// `environmentSettleDelay`. Every change restarts the wait, so one transition costs one
+    /// environment change and one round of renders instead of one per frame. A drag that starts during
+    /// the wait drops it; `didEndLiveResize` adopts that one.
+    private func scheduleEnvironmentChange() {
+        environmentTask?.cancel()
+        environmentTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.environmentSettleDelay)
+            guard !Task.isCancelled, let self, !view.inLiveResize else { return }
+            adoptSettledEnvironment()
+        }
+    }
+    /// Starts measuring and drawing in the environment there is now, and renders for it. The end of
+    /// every wait and every drag arrives here.
+    private func adoptSettledEnvironment() {
+        environmentTask?.cancel(); environmentTask = nil
+        guard isViewLoaded, view.window != nil, renderEnvironment != environment else { return }
+        adoptEnvironment(environment)
+        scheduleRenders()
+    }
 
     /// Pixels near the viewport stay; farther ones go, then the farthest while over budget. Layout
     /// metrics stay, so the document does not move, and scrolling back renders them again.
@@ -667,13 +746,14 @@ import os
             }
         }
         result.addAttribute(.paragraphStyle, value: paragraph.copy(), range: entire)
-        let environment = environment
+        let environment = layoutEnvironment
+        let available = self.environment.width
         for element in elements(intersecting: range) where !isEditing(element.span) {
             if let (metrics, entry) = artifacts.layout(at: element.span, environment: environment) {
                 conceal(element.span, in: result, paragraphRange: range)
                 if current.contains(element.span.location) {
                     let local = element.span.location - range.location
-                    let width = min(metrics.size.width, environment.width)
+                    let width = min(metrics.size.width, available)
                     let factor = element.inline ? 1.0 : min(1, width / metrics.size.width)
                     let height = metrics.size.height * factor
                     // Sized from metrics; pixels are fetched when drawn and may be released meanwhile.
@@ -773,7 +853,7 @@ import os
                 units.append(ConcealUnit(kind: kind, range: marker.nsRange, removal: removal))
             }
         }
-        let environment = environment
+        let environment = layoutEnvironment
         for element in elements(intersecting: window) where element.span.length > 1 && artifacts.layout(at: element.span, environment: environment) != nil && !isEditing(element.span) {
             units.append(ConcealUnit(kind: .element, range: element.span.nsRange, removal: element.span.nsRange))
         }

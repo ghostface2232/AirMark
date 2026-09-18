@@ -1,0 +1,6 @@
+PROBE value after typing: Optional("DISCARD ME")
+PROBE sheet buttons: ["Delete", "Cancel", "Save"]
+PROBE after Delete: sheets=0 windows=0 running=4
+PROBE recovery dir: ["472EC8D8-56C1-49F6-AD10-DD97862631FA.2DD6AFAA-7D02-4211-8427-0AA1F27E28CE.source", "472EC8D8-56C1-49F6-AD10-DD97862631FA.json"]
+PROBE record state=closed hasUnsavedChanges=1 filePath=nil sourceFile=472EC8D8-56C1-49F6-AD10-DD97862631FA.2DD6AFAA-7D02-4211-8427-0AA1F27E28CE.source
+PROBE source file holds: "DISCARD ME"

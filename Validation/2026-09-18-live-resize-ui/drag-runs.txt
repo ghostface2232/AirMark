@@ -1,0 +1,3 @@
+window 880.0 -> 640.0 passed (  (ui-drag5)
+window 880.0 -> 640.0 passed (  (ui-drag6-1)
+window 880.0 -> 640.0 passed (  (ui-drag6-2)

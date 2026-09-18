@@ -35,6 +35,8 @@ public final class DocumentSnapshot: @unchecked Sendable {
     public static var recoveryStore: RecoveryStore?
     /// Launch milestones for Scripts/measure.sh; nil unless AIRMARK_LAUNCH_LOG is set.
     public static var launchTimeline: LaunchTimeline?
+    /// Set while AirMark is quitting, so a document closed by the quit keeps the record the quit wrote.
+    public static var isTerminating = false
     public nonisolated let snapshot = DocumentSnapshot()
     public var editor: EditorController?
     public var identity = UUID()
@@ -60,6 +62,15 @@ public final class DocumentSnapshot: @unchecked Sendable {
         window.contentViewController = controller
         window.tabbingMode = .disallowed
         window.center(); window.setFrameAutosaveName("AirMarkDocument")
+        // Two documents open at once must not stack their windows exactly, and a launch that restores a
+        // whole session would otherwise put every window in the same place. A second or later window
+        // steps down from the one before it instead of staying centred. Only the first window holds the
+        // autosave name — the others' `setFrameAutosaveName` call fails because the name is taken — so
+        // the stepped positions are never written back and the remembered frame does not drift.
+        let others = NSDocumentController.shared.documents.compactMap { ($0 as? MarkdownDocument)?.windowControllers.first?.window }
+        if let last = others.last(where: { $0 !== window }) {
+            window.setFrameTopLeftPoint(NSPoint(x: last.frame.minX + 24, y: last.frame.maxY - 24))
+        }
         addWindowController(NSWindowController(window: window))
         window.isRestorable = false
         controller.onChange = { [weak self] in
@@ -174,9 +185,26 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// The record's revision is the snapshot's version, not the editor's: the recovery store writes the
     /// source again only when the revision changes, and the snapshot also changes without an editor
     /// edit, as when the file is read again.
-    public func record() -> RecoveryRecord {
+    ///
+    /// `state` says where in the document's life the record is written; a launch restores the documents
+    /// that were still open when AirMark stopped. Whether the text is anywhere but in the record is a
+    /// separate question, and `isDocumentEdited` already answers it: it is what the window's dirty mark
+    /// shows, it survives a failed save, and reading it costs nothing. Comparing the source with the
+    /// bytes on disk instead would encode the whole document on every caret move.
+    /// `sessionID` is the recovery store's, so every record this run writes names this run and a launch
+    /// restores the last session rather than every session that ever ended with a document open.
+    /// `order` is the document's place in the window order, front first, recorded with each record so
+    /// the session's stacking survives the quit; a document with no window in the order has none.
+    public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
-        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version, selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll)
+        return record(state: state, bytes: bytes, revision: version, hasUnsavedChanges: isDocumentEdited)
+    }
+    private func record(state: RecoveryState, bytes: DocumentBytes, revision: UInt64, hasUnsavedChanges: Bool) -> RecoveryRecord {
+        RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: revision,
+                       selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
+                       state: state, hasUnsavedChanges: hasUnsavedChanges,
+                       sessionID: Self.recoveryStore?.sessionID,
+                       order: NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()
@@ -190,8 +218,37 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     public override func close() {
         recoveryTask?.cancel()
-        let saved = record()
-        if let store = Self.recoveryStore { Task { try? await store.save(saved) } }
+        // Skipped while quitting: the quit writes every open document's record itself and AppKit closes
+        // the documents afterwards, so a close record written then would say the user had put them away.
+        //
+        // Synchronous, not a Task: closing a document and quitting straight after left a detached save
+        // unrun, and the record still said the document was open. The cancelled debounced save cannot
+        // undo this one — same revision, earlier date, which the writer's ordering gate rejects. The
+        // error goes nowhere because the window is going: a failed write here costs a reopened document.
+        if !Self.isTerminating, let store = Self.recoveryStore {
+            if isDocumentEdited { discardRecovery(in: store) } else { try? store.saveImmediately(record(state: .closed)) }
+        }
         super.close()
+    }
+    /// The document is closing with changes still on it, so they are not being kept: the user chose
+    /// Delete in the close panel of an unsaved draft, or Don't Save where that is offered. Recording
+    /// them would hand back at the next launch exactly what was just thrown away.
+    ///
+    /// An untitled draft was never anywhere but in its record, so the record goes with it. A document
+    /// with a file is replaced by a record of the file — the next launch opens what is on disk, at the
+    /// position it was left at.
+    ///
+    /// One store operation, not a remove and then a write: a failed remove followed by a write would
+    /// have left the discarded source on disk under a record claiming to hold the file's text, because
+    /// the writer reuses the source it last wrote for a revision. `discardImmediately` drops the record
+    /// and writes the replacement fresh under one lock, and if it fails part way it fails towards
+    /// having thrown the document away rather than towards bringing it back.
+    private func discardRecovery(in store: RecoveryStore) {
+        var replacement: RecoveryRecord?
+        if fileURL != nil {
+            let onDisk = snapshot.persistedData().flatMap { try? DocumentBytes(data: $0) } ?? DocumentBytes()
+            replacement = record(state: .closed, bytes: onDisk, revision: snapshot.versioned().version, hasUnsavedChanges: false)
+        }
+        try? store.discardImmediately(identity, replacingWith: replacement)
     }
 }

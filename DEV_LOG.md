@@ -135,3 +135,176 @@ Host and raw output: `Validation/2026-09-17-parse-latency/` (Release, Mac17,3, m
 - **Windowed parses in the editor.** `MarkdownParsingWorker` keeps its last parse and the edit number it was made at; the editor sends the logged edits since then, and the worker reparses the touched blocks when it can. When the drawn presentation came from that same parse, the editor compares only the elements inside the reported window and invalidates only the window, instead of diffing every style and element (about 25 ms of a 35 ms install at 10MB, measured with temporary timers). The worker also keeps the previous parse until the next one, so the editor's release of a document-sized parse is not the last one. `EditorTests/windowedParsesDrawWhatAWholeParseDraws` types with parses landing in between and checks that the drawn styles and `parsed` equal a whole parse; it failed when one logged edit was left out.
 - **Measured.** Against `main` and against the cheaper whole parse (`8dba8b9`), three rotated Release runs each. A keystroke after a pause reaches the presentation in 51/56/93 ms at 100KB/1MB/10MB (`main`: 113/382/3,149 ms). During 35 s of typing 80 ms apart every key is parsed and installed — 438 of 438 at 100KB and 1MB, where `main` installed 33–46 and 1 — and the longest a key waited was 61 ms at 1MB and 101 ms at 10MB, against 35.6 s and 39.7 s on `main`. Typing 200–400 ms apart on 10MB waits 112 ms at worst instead of 39.4 s. Settling after a burst at 10MB is 75 ms instead of 5.1 s. The key gaps during typing are back to `main`'s 90 ms, so installing a windowed parse costs nothing a key can see. Raw output and the whole table: `Validation/2026-09-17-parse-latency/`.
 - **What it costs.** A document with `]:` anywhere is parsed whole on every keystroke; recording block spans and scanning for `]:` then makes it about 6% slower than before this work (10MB keystroke 2,021 → 2,158 ms p50), of which the block spans were 61 ms of a 1,742 ms parse until they were taken from the walk (`fa5de7c`, 1,681 ms). A top-level list is one block, so editing in a long list reparses that list.
+
+## 2026-09-18 — Recovery sessions, discard, table raster, live resize
+
+Everything below landed on this branch on 2026-09-18, on top of the parse-locality work. It replaces an
+earlier entry for the same changes that was written in a container with no toolchain and described code
+that has since changed: the settle delay, the table's colour space and the launch's session scoping are
+all different now, and all of it has since been built, run and measured.
+
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4, idle machine. Raw output
+under `Validation/2026-09-18-*/`. Each change below is problem, fix, and what was actually run.
+
+### Restore the last session, not every session
+
+A record says a document was open when AirMark stopped, not at which stop, and only that document
+rewrites it. A session launched on a file from Finder restores nothing, so it left the session before it
+with `.open`/`.quit` records untouched and every later launch reopened them. Records now carry
+`sessionID` (one per store, one store per launch) and `order`; the newest record names the last session,
+so no manifest. An excluded record still qualifies as the single most-recently-put-away document, so
+nothing becomes unreachable. — 3 new tests fail on the old logic with 5 assertions; end to end,
+`UITests.testRelaunchRestoresTheLastSessionAndNotTheOneBefore` restores two documents and leaves the
+older session's alone.
+
+### The closed record is durable, and the quit flag stays set
+
+`close()` handed the `.closed` record to a detached Task, so closing and quitting straight after left
+the record saying the document was open. It now goes through `saveImmediately`. Separately,
+`isTerminating` was cleared by a Task on the next run-loop turn; measured that the flag is load-bearing
+— with it never set, a real Cmd-Q leaves `.closed` — so it stays set for the whole quit and only the
+`.terminateCancel` path clears it. — `closingWritesTheRecordBeforeItReturns` reads the JSON off disk
+with no await and fails on the old code; `UITests.testQuitRestoresTheDocumentThatWasOpen` covers the
+round trip. **The `isTerminating` race was never reproduced** (5/5 passes with the Task in place); that
+change removes a dependence on scheduling, not an observed failure.
+
+### Discarded changes are not offered back
+
+Clicking Delete on an unsaved draft left a `.closed` record holding the discarded text, and the launch
+fallback revived it. `close()` now asks whether the changes are being kept: a draft's record is removed,
+a document with a file keeps a clean record of the file. Cancel needs no code. Probed first rather than
+assumed: a document **with a file is never asked about** — `autosavesInPlace` writes the edit and closes
+— so there is no Don't Save for a saved file; a draft is asked, and macOS labels the discard button
+**Delete**. — 2 tests fail on the old `close()` with 7 assertions;
+`UITests.testDiscardedDraftIsNotRestoredAfterRelaunch` fails on it with "the discarded draft came back".
+
+### One table raster policy, named by the cache key
+
+`drawTable` read the host screen's colour space and the process writing direction; the key carried
+neither, so two windows at one scale on differently profiled screens shared an entry.
+`TableRenderer.raster(for:)` is now the only place the policy lives and the key hashes what it reads:
+the window's scale, a fixed sRGB, and the alignment. Fixing sRGB is safe and the test says why, measured
+— a table draws neutral greys, and greys are byte-identical in sRGB and Display P3, so the test fails if
+a table ever draws a saturated colour. — Dropping the scale from the key fails the cache test on 4
+assertions, including a 1× window handed the 2× bitmap.
+
+### A launch reads the records, not every document
+
+`records()` loaded every source in full and `resolve` then ran on the main actor, reading each
+document's file and comparing. Most comparisons decided nothing: a record written while the text was on
+disk is not the only copy, and both answers open the file. `RecoveryMetadata` carries the source's
+length, taken from the directory listing; `launchPlans` resolves inside the store actor. Release, p50 of
+3, against the old decision written out in full:
+
+| documents × size | old way | `launchPlans` | files read |
+|---:|---:|---:|---:|
+| 1 × 10 MB | 4.63 ms | **0.09 ms** | 0 |
+| 8 × 10 MB | 37.86 ms | **0.43 ms** | 0 |
+| 32 × 10 MB | 148.16 ms | **1.41 ms** | 0 |
+
+The shape is the point: cost no longer follows document size (one document is 0.08 ms at 1 MB and
+0.09 ms at 10 MB). Warm cache, which flatters the old numbers, not the new.
+
+### A drag says when it is over
+
+The editor armed a 150 ms wait while geometry moved and re-armed it whenever it woke during a drag, so a
+drag was a poll and its end was noticed up to 150 ms late, on a number with no basis. Nothing is armed
+during a drag now; `didEndLiveResize` adopts, 0.3 ms after the event. Geometry that reports no end is
+still coalesced, and the measurement keeps it: adopting every layout pass turns a 21-step burst into 21
+rounds of renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms.
+Release, 12 elements, 21 steps: 0 renders for widths passed through, all 12 keeping their metrics, one
+round starting 53.4 ms after the last step with pixels back at 58.8 ms, main thread held 0.75 ms per
+step (0.95 ms worst, 16.4 ms over the drag).
+
+### Tests and measurement
+
+`RecoveryResizeTableBench` holds the Release numbers, gated on `AIRMARK_BENCH` and skipped in 0.001 s
+without it. Nothing in it repeats the parse benchmarks. Table: a 40×5 miss is 12–14 ms, a hit 0.02 ms,
+and 1×/2× stay two entries with the table on the same points and both bitmaps sRGB.
+
+Suites at the time of these changes: Release 109 tests in 16 suites and 55 in 4 suites, Debug the same,
+and the whole UI file passing in Release, 11 of 11, including both typing tests. The core count is 60
+after the review fixes below; the UI state after them is in that entry.
+
+### Not verified
+
+- `view.inLiveResize == true` was uncovered here, and is covered since — see the live-resize entry
+  below. XCUITest's own drag resizes nothing and a title-bar double click does not zoom; HID `CGEvent`s
+  and the accessibility API failed only because the test runner was not trusted for Accessibility. The
+  full-screen button resizes the window too, but terminating out of its space broke the next test, so
+  that test was written, measured and removed.
+- `Close → Don't Save` on a saved file cannot be reached while `autosavesInPlace` is true. The handling
+  exists and is unit-tested against a programmatic close; no UI test opens that panel.
+- The close panel's Save button is not driven from the UI: the app is sandboxed, so that panel is the
+  system's powerbox. What Save leads to is asserted at the document level.
+- `repeatedSavesPreserveBytesWithoutFalseConflicts` failed about one run in ten before this work. The
+  cause was found — an autosave-in-place between the append and the assertion, which clears the dirty
+  flag, caught by overriding `updateChangeCount(withToken:for:)` — and the assertion moved to before the
+  first await, where no autosave can intervene. 640 append-and-save cycles since, with no failure.
+
+## 2026-09-18 — Three fixes from review
+
+`Validation/2026-09-18-review-fixes/`. Debug and Release, 109 tests in 16 suites and 60 in 4 suites.
+
+- **An unreadable source size is not zero.** `metadata()` wrote `?? 0` when the listing could not size a
+  source, and a zero-byte record is an empty one — no window, and nothing else holds a draft's text, so
+  the draft was silently lost. An unknown size is now left out and the loader falls back: listing, stat,
+  then the file. Only a source that cannot be read at all still drops the record. The stat failure is
+  not injectable, so the tests cover the fallback and say so; this is a defensive fix.
+- **Window order applied, not inherited.** The launch asked the last plan to come to the front and left
+  the rest to whatever order the asynchronous opens completed in, though the session had recorded which
+  window was in front. The opens still run together, each reporting into a main-actor collector, and
+  when the last lands the windows are ordered back to front and the last made key. Verified end to end
+  by restoring three documents and asserting the whole stacking: the old code gave
+  `["Middle.md", "Front.md", "Back.md"]` in two runs of three, this change `["Front.md", "Middle.md",
+  "Back.md"]` in five of five. The first version of that test used two documents and passed on the old
+  code too, so it was rewritten until it could fail. It could not be run for a while — from 14:21 every
+  UI run failed to activate the app, reproduced with `main.swift` reverted — and ran once the machine
+  was attended to; a prompt waiting on the console is the likely cause, not observed from here.
+- **Discard is one writer operation.** `discardRecovery` removed the record, ignored the result, then
+  saved a replacement at the same revision — and the writer reuses the source it last wrote for a
+  revision, so a failed remove left the discarded text on disk under a record claiming the file's.
+  `discardImmediately(_:replacingWith:)` drops the record, drops its sources and writes the replacement
+  fresh under one lock. The JSON goes first, the opposite of `save`'s order and for the opposite reason:
+  it is the only thing that makes a source reachable, so an interrupted discard leaves nothing of what
+  was discarded. Three tests; the two that matter fail on the old two-step path with the discarded text
+  surviving.
+- **Also.** `recordsNameTheSessionThatWroteThem` resolved a launch over every record in a recovery
+  directory shared with the suites running alongside, so a neighbour's record could decide it. It failed
+  that way once here and now resolves over its own two records.
+- **UI tests after the fixes.** Release, the whole file: 7 of 11. The seven that type nothing pass,
+  including the window-order test above. The four that type fail, and all four for one reason: the
+  keystrokes arrive through the active Korean input method — `"DISCARD ME"` became `"얀ㅊㅁㄲㅇ 뜨"`,
+  `"Save 1."` became `"ㄴㅁㅍㄷ 1."`. The machine was in use, with the third-party input method
+  `com.pritype.inputmethod.v2` selected. `useASCIIInputSource()` does select `com.apple.keylayout.ABC`,
+  and selecting it after focusing the editor instead of before made no difference, so it does not
+  overcome this input method. The same four passed at 12:16 on an idle machine. Not a regression in
+  this branch; run the typing tests with ABC selected.
+- **Then 11 of 11.** Run at the console, Release, the whole file: 11 tests, 0 failures, including all
+  four that type and the window-order test. That settles both the input-method diagnosis and the branch.
+
+## 2026-09-18 — A real edge drag, and quitting without Cmd-Q
+
+`Validation/2026-09-18-live-resize-ui/`, with captures.
+
+- **`view.inLiveResize == true` is covered.** `testLiveResizeByDraggingTheWindowEdge` drags the window's
+  right edge with HID mouse events, the ones a hand produces, from a frame pinned at 880 points through
+  the argument domain — the window autosaves its frame, and a second run that started where the first
+  one's drag left it had nothing left to drag. Three consecutive runs, 880 → 640, passing. Without
+  Accessibility it skips rather than failing.
+- **What the drag showed.** Text reflows during the drag and no rendered element falls back to its
+  source. A diagram wider than the new width is not scaled while the drag lasts — the paragraphs are not
+  rebuilt, so it keeps its old size and the window clips it — and is rendered for the final width once
+  the mouse comes up. `ResizeTests` said elements were scaled during a drag; its fixture never met the
+  case, and it now says what the real drag showed.
+- **Quitting through the menu.** Three tests failed with "Cmd-Q did not quit the app", alone as well as
+  in the suite, with no product change since they last passed. The recording showed the menu bar reading
+  `한`: with the Korean input method selected, a synthesized Cmd-Q arrives as Cmd-ㅂ and matches no menu
+  item. The two tests that pinned an ASCII input source first passed in the same run, which settles it.
+  All five Cmd-Qs now go through a helper that clicks AirMark ▸ Quit AirMark — the same terminate path,
+  independent of the layout — and the three pass with the Korean input method still selected.
+- **UI, Release, the whole file:** 11 passed and the drag test skipped, because the rebuild that brought
+  in the helper dropped the runner's grant; the drag test itself did not change in that rebuild. The
+  runner is ad-hoc signed, so any change to the UI tests drops its Accessibility grant: remove the entry
+  and add the new build, then run with `test-without-building`. Toggling the old entry is not enough.
+

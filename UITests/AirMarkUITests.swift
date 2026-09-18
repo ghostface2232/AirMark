@@ -1,5 +1,6 @@
 import XCTest
 import Carbon
+import ApplicationServices
 
 @MainActor final class AirMarkUITests: XCTestCase {
     /// Fixtures are bundled with the runner; reading them from the source tree would trigger the
@@ -130,10 +131,386 @@ import Carbon
         attachment.name = "inline-math"; attachment.lifetime = .keepAlways
         add(attachment)
         // Quit goes through applicationShouldTerminate and must actually end the process.
-        app.typeKey("q", modifierFlags: .command)
+        quit(app)
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
         let recovery = try FileManager.default.contentsOfDirectory(atPath: output.appendingPathComponent("Recovery").path)
         XCTAssertFalse(recovery.filter { $0.hasSuffix(".json") }.isEmpty, "quit should leave a recovery record")
+    }
+
+    /// A document open at a Cmd-Q is recorded as `.quit`, not `.closed`. AppKit closes the documents
+    /// around the quit, and `MarkdownDocument.close()` writes a `.closed` record for a document the user
+    /// put away; `isTerminating` is what tells the two apart. It used to be cleared on the next turn of
+    /// the run loop, so whether the session survived a quit depended on which ran first. Nothing but a
+    /// real quit exercises that ordering, so this is a UI test. No input beyond Cmd-Q is synthesized.
+    func testQuitRecordsAnOpenDocumentAsQuitNotClosed() throws {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkQuit-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let copy = output.appendingPathComponent("InlineMath.md")
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("InlineMath.md"), to: copy)
+        let recovery = output.appendingPathComponent("Recovery")
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", copy.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+        quit(app)
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "Cmd-Q did not quit the app")
+
+        let names = try FileManager.default.contentsOfDirectory(atPath: recovery.path).filter { $0.hasSuffix(".json") }
+        XCTAssertEqual(names.count, 1, "one document was open: \(names)")
+        let name = try XCTUnwrap(names.first)
+        let stored = try XCTUnwrap(JSONSerialization.jsonObject(with: try Data(contentsOf: recovery.appendingPathComponent(name))) as? [String: Any])
+        XCTAssertEqual(stored["state"] as? String, "quit", "the quit record was overwritten by a close record")
+        XCTAssertEqual(stored["filePath"] as? String, copy.path)
+        XCTAssertNotNil(stored["sessionID"] as? String, "the record does not name the run that wrote it")
+    }
+
+    /// The close panel of an unsaved draft, and what each of its three buttons leaves for the next
+    /// launch. Needs an idle machine: these type into the app.
+    ///
+    /// The panel appears for a draft because `autosavesDrafts` is false. macOS labels its discard
+    /// button **Delete**, not Don't Save, which is the wording for a document that has a file.
+    private func draftCloseScenario(_ output: URL, type text: String) -> (XCUIApplication, XCUIElement) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--blank"]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        useASCIIInputSource()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click(); editor.typeText(text)
+        XCTAssertEqual(editor.value as? String, text)
+        app.typeKey("w", modifierFlags: .command)
+        return (app, editor)
+    }
+    /// Relaunches into the same recovery directory, with no file and no `--blank`, so the launch
+    /// decides from the recovery records alone.
+    private func relaunch(_ app: XCUIApplication, _ output: URL) -> XCUIElement {
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15), "the app did not quit")
+        app.launchArguments = []
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 15))
+        return editor
+    }
+    /// Quits through the app's own menu, which ends in the same `NSApplication.terminate` and
+    /// `applicationShouldTerminate` as Cmd-Q. Not Cmd-Q itself: with a Korean input method selected, a
+    /// synthesized Cmd-Q arrives as Cmd-ㅂ and matches no menu item, and the app stays up. That failed
+    /// every test here that did not pin an ASCII input source first, and passed every one that did.
+    private func quit(_ app: XCUIApplication) {
+        app.menuBars.menuBarItems["AirMark"].click()
+        app.menuItems["Quit AirMark"].click()
+    }
+    private func temporaryOutput(_ name: String) throws -> URL {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(name + "-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        return output
+    }
+
+    /// Delete throws the draft away, so the next launch must not offer it back. The record used to be
+    /// written as closed with the discarded text still in it, and a launch with nothing else to open
+    /// revived it as a "Recovered" window.
+    func testDiscardedDraftIsNotRestoredAfterRelaunch() throws {
+        let output = try temporaryOutput("AirMarkDiscard")
+        let (app, _) = draftCloseScenario(output, type: "DISCARD ME")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "closing an edited draft did not ask")
+        XCTAssertTrue(sheet.buttons["Delete"].exists, "buttons: \(sheet.buttons.allElementsBoundByIndex.map { $0.title })")
+        sheet.buttons["Delete"].click()
+        let recovery = output.appendingPathComponent("Recovery")
+        var records: [String] = []
+        for _ in 0..<40 {
+            records = ((try? FileManager.default.contentsOfDirectory(atPath: recovery.path)) ?? []).filter { $0.hasSuffix(".json") }
+            if records.isEmpty { break }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        XCTAssertTrue(records.isEmpty, "the discarded draft is still recorded: \(records)")
+        quit(app)
+
+        let editor = relaunch(app, output)
+        let restored = (editor.value as? String) ?? ""
+        XCTAssertFalse(restored.contains("DISCARD ME"), "the discarded draft came back: \(restored.debugDescription)")
+        for window in app.windows.allElementsBoundByIndex {
+            XCTAssertFalse(window.title.contains("Recovered"), "a recovered window for a discarded draft: \(window.title)")
+        }
+        app.terminate()
+    }
+
+    /// Cancel is not a close. The draft stays open and its recovery stands, so quitting and coming back
+    /// brings it with it.
+    func testCancelledCloseKeepsTheDraftAfterRelaunch() throws {
+        let output = try temporaryOutput("AirMarkCancel")
+        let (app, editor) = draftCloseScenario(output, type: "KEEP ME")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+        sheet.buttons["Cancel"].click()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5), "Cancel closed the window")
+        XCTAssertEqual(editor.value as? String, "KEEP ME", "Cancel lost the draft's text")
+        // The record still holds the draft: Cancel is not a close, so nothing discarded it.
+        let recovery = output.appendingPathComponent("Recovery")
+        var kept = false
+        for _ in 0..<40 where !kept {
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: recovery.path)) ?? []
+            kept = names.filter { $0.hasSuffix(".source") }.contains {
+                ((try? String(contentsOf: recovery.appendingPathComponent($0), encoding: .utf8)) ?? "").contains("KEEP ME")
+            }
+            if !kept { Thread.sleep(forTimeInterval: 0.25) }
+        }
+        XCTAssertTrue(kept, "Cancel dropped the draft's recovery")
+        // Force quit rather than Cmd-Q: a clean quit asks about the unsaved draft all over again, and
+        // an unsaved draft surviving a stop that never asked is the whole point of recovery.
+        app.terminate()
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "KEEP ME", "the draft kept by Cancel was not restored")
+        app.terminate()
+    }
+
+    // The close panel's third button, Save, is not driven from here. The app is sandboxed, so the save
+    // panel it opens for an untitled draft belongs to the system's powerbox and not to this app, and
+    // automating it is fragile in a way that would say more about the panel than about AirMark. What
+    // Save leads to — the draft gets a file, its record is clean and names it, and the next launch
+    // opens the file — is covered at the document level by
+    // `DocumentTests.savingADraftOnCloseLeavesItsFileToOpen`.
+
+    /// A document with a file is never asked about: `autosavesInPlace` writes the edit and closes. This
+    /// pins that, because it is why the panel above says Delete and why there is no Don't Save to test
+    /// for a saved file — the edit is kept, and the next launch opens the file holding it.
+    func testEditingASavedFileIsKeptOnCloseAndRelaunch() throws {
+        let output = try temporaryOutput("AirMarkSavedFile")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("original\n".utf8).write(to: file)
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        useASCIIInputSource()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        app.typeKey(.downArrow, modifierFlags: .command)
+        editor.typeText("EDITED")
+        app.typeKey("w", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(app.sheets.count, 0, "a saved file was asked about; autosavesInPlace should have kept it")
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "original\nEDITED", "the close did not keep the edit")
+        quit(app)
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "original\nEDITED", "the file's content did not come back")
+        app.terminate()
+    }
+
+    /// Writes a recovery record the way `RecoveryStore` writes one: the metadata as `<id>.json` and the
+    /// source in its own file beside it. Used to hand a launch the directory a previous session would
+    /// have left, which is the only way to put several documents and two sessions in front of it
+    /// without driving several windows open by hand.
+    @discardableResult
+    private func seedRecord(in directory: URL, file: URL?, source: String, session: UUID, order: Int,
+                            state: String = "quit", unsaved: Bool = false, age: TimeInterval = 0) throws -> UUID {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = UUID(), sourceName = "\(id.uuidString).\(UUID().uuidString).source"
+        try Data(source.utf8).write(to: directory.appendingPathComponent(sourceName))
+        var record: [String: Any] = [
+            "id": id.uuidString, "sourceFile": sourceName, "hasBOM": false, "revision": 1,
+            "selection": ["location": 0, "length": 0], "scrollY": 0,
+            "date": Date().timeIntervalSinceReferenceDate - age,
+            "state": state, "hasUnsavedChanges": unsaved,
+            "sessionID": session.uuidString, "order": order,
+        ]
+        if let file { record["filePath"] = file.path }
+        try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+            .write(to: directory.appendingPathComponent(id.uuidString + ".json"))
+        return id
+    }
+
+    /// Every document the last session had open comes back, and the session before it stays where it
+    /// is. Taking `records.first` opened one window and left the rest unreachable; restoring every
+    /// `.quit` record whatever session wrote it opened windows the user had not seen in two launches.
+    func testRelaunchRestoresTheLastSessionAndNotTheOneBefore() throws {
+        let output = try temporaryOutput("AirMarkSession")
+        let recovery = output.appendingPathComponent("Recovery")
+        func write(_ name: String, _ text: String) throws -> URL {
+            let url = output.appendingPathComponent(name)
+            try Data(text.utf8).write(to: url)
+            return url
+        }
+        let last = UUID(), previous = UUID()
+        // Three documents open when the last session stopped, and one left by the session before it.
+        //
+        // Three, because two proved nothing: with two small documents the old code — which asked only the
+        // last one for the front, from its own completion — happened to come out right every time. With
+        // three it came out wrong in two runs of three, as ["Middle.md", "Front.md", "Back.md"]: Front's
+        // completion brought it forward and Middle's landed after, on top of it. Back is large to spread
+        // the completions further apart; whether that is what exposes the race was not isolated.
+        let backText = "BACK DOCUMENT\n" + String(repeating: "A line of a large document, back of the stack.\n", count: 90_000)
+        let front_ = try write("Front.md", "FRONT DOCUMENT\n")
+        let middle = try write("Middle.md", "MIDDLE DOCUMENT\n")
+        let back = try write("Back.md", backText)
+        let stale = try write("Stale.md", "STALE DOCUMENT\n")
+        try seedRecord(in: recovery, file: stale, source: "STALE DOCUMENT\n", session: previous, order: 0, age: 7200)
+        try seedRecord(in: recovery, file: back, source: backText, session: last, order: 2, age: 30)
+        try seedRecord(in: recovery, file: middle, source: "MIDDLE DOCUMENT\n", session: last, order: 1, age: 20)
+        try seedRecord(in: recovery, file: front_, source: "FRONT DOCUMENT\n", session: last, order: 0, age: 10)
+
+        let app = XCUIApplication()
+        app.launchArguments = []
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        XCTAssertTrue(app.textViews["markdown-editor"].firstMatch.waitForExistence(timeout: 15))
+        // Both windows, and only those two.
+        var editors: [String] = []
+        for _ in 0..<60 {
+            editors = app.textViews.matching(identifier: "markdown-editor").allElementsBoundByIndex.compactMap { $0.value as? String }
+            if editors.count >= 3 { break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertEqual(editors.count, 3, "the last session had three documents open, got \(editors.count)")
+        for expected in ["FRONT DOCUMENT", "MIDDLE DOCUMENT", "BACK DOCUMENT"] {
+            XCTAssertTrue(editors.contains { $0.contains(expected) }, "\(expected) did not come back")
+        }
+        XCTAssertFalse(editors.contains { $0.contains("STALE DOCUMENT") }, "a document from an older session came back")
+
+        // Which document is actually in front, not just how many came back. The session recorded
+        // Front.md at order 0, and the opens finish in whatever order they finish in, so this is the
+        // part that depends on the stacking being re-applied rather than inherited from a completion.
+        //
+        let titles = app.windows.allElementsBoundByIndex.map(\.title)
+        print("RELAUNCH_SESSION window titles, front to back: \(titles)")
+        XCTAssertEqual(titles, ["Front.md", "Middle.md", "Back.md"],
+                       "the windows are not stacked the way the session recorded them")
+        // The files are untouched by a restore.
+        XCTAssertEqual(try String(contentsOf: front_, encoding: .utf8), "FRONT DOCUMENT\n")
+        XCTAssertEqual(try String(contentsOf: middle, encoding: .utf8), "MIDDLE DOCUMENT\n")
+        app.terminate()
+    }
+
+    /// Quitting with a document open records it as open at the quit, and the next launch brings it
+    /// back. The writing half is `testQuitRecordsAnOpenDocumentAsQuitNotClosed`; this is the round trip.
+    func testQuitRestoresTheDocumentThatWasOpen() throws {
+        let output = try temporaryOutput("AirMarkQuitRestore")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("QUIT AND COME BACK\n".utf8).write(to: file)
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertEqual(editor.value as? String, "QUIT AND COME BACK\n")
+        // Let the launch settle before the quit: the first parse and render land after the window, and
+        // a Cmd-Q that arrives before the app is ready for keys is not the thing under test.
+        sleep(3)
+        quit(app)
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "QUIT AND COME BACK\n", "the document open at the quit did not come back")
+        app.terminate()
+    }
+
+    // There is no UI test for a window resize, and not for want of trying. Four ways were measured on
+    // this machine and none of them both resizes the window and leaves the suite usable:
+    //
+    //   - `XCUICoordinate.press(forDuration:thenDragTo:)` across the whole resize margin, and on the
+    //     title bar: the window neither moved nor resized, for any grab point.
+    //   - HID `CGEvent`s posted to `.cghidEventTap`: `NSEvent.mouseLocation` was unchanged afterwards,
+    //     so the runner does not get to post them here.
+    //   - The accessibility API, to set the window's size directly: `kAXErrorAPIDisabled`.
+    //   - Double-clicking the title bar to zoom: harmless, and it does not zoom this window.
+    //
+    // The full-screen button does work and does resize the window, dramatically — and terminating out
+    // of the space it creates left the next test failing with "Cmd-Q did not quit the app", twice,
+    // including a test that passes on its own. A resize test that breaks the tests after it is worse
+    // than no resize test.
+    //
+    // What resize coverage there is lives elsewhere: `ResizeTests` for the behaviour and
+    // `RecoveryResizeTableBench.liveResizeCost` for the numbers, both driving frame changes on a real
+    // window in process. Neither puts `view.inLiveResize` true, so the one line that arms no wait
+    // during a drag is still uncovered.
+
+    /// A real live resize: the right edge of the window grabbed and dragged with HID mouse events, the
+    /// same events a person's drag produces. It is the only test that puts `NSView.inLiveResize` true,
+    /// and so the only cover for the branch that arms no wait during a drag and adopts the final width
+    /// on `didEndLiveResize`. `XCUICoordinate.press(forDuration:thenDragTo:)` does not do this — it moved
+    /// and resized nothing along the whole margin — so the events are posted directly.
+    ///
+    /// Posting them needs the test runner trusted for Accessibility. The runner is ad-hoc signed, so the
+    /// grant belongs to one build of it and a rebuild drops it: build for testing, grant the runner in
+    /// System Settings, then run with `test-without-building`. Without the grant this skips, rather than
+    /// failing a suite that has nothing wrong with it.
+    ///
+    /// What it asserts is what can be seen from outside: the window really resized, and the document's
+    /// text is untouched in the editor and on disk. Render counts during a drag are not visible from
+    /// here; `RecoveryResizeTableBench.liveResizeCost` measures those. Window captures are attached.
+    func testLiveResizeByDraggingTheWindowEdge() throws {
+        // With AIRMARK_REQUEST_ACCESSIBILITY=1 — passed through xcodebuild as
+        // TEST_RUNNER_AIRMARK_REQUEST_ACCESSIBILITY=1 — macOS is asked to prompt, which names the app it
+        // wants trusted and adds that app to the right list. Which process macOS holds responsible for
+        // the runner is not something to guess: two guesses here were wrong. Without it, this is silent.
+        let request = ProcessInfo.processInfo.environment["AIRMARK_REQUEST_ACCESSIBILITY"] == "1"
+        let trusted = request
+            ? AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            : AXIsProcessTrusted()
+        print("LIVE_RESIZE accessibility trusted=\(trusted) requested=\(request) runner=\(Bundle.main.bundlePath)")
+        try XCTSkipUnless(trusted,
+                          "the test runner is not trusted for Accessibility, so it cannot post the mouse events a window drag needs")
+        let fixture = Self.fixtures.appendingPathComponent("Showcase.md")
+        let output = try temporaryOutput("AirMarkLiveResize")
+        let copy = output.appendingPathComponent("Showcase.md")
+        try FileManager.default.copyItem(at: fixture, to: copy)
+        try FileManager.default.copyItem(at: Self.fixtures.appendingPathComponent("swatch.png"), to: output.appendingPathComponent("swatch.png"))
+        let app = XCUIApplication()
+        // The window starts at a known frame, not the one the last run left behind. The document window
+        // autosaves its frame, so without this a second run starts where the first one's drag ended —
+        // it did, at 470 points — and the minimum width of 440 leaves the drag almost nothing to do. The
+        // argument domain outranks the saved default, and the frame string is the window's rect and then
+        // the screen's, in AppKit's bottom-left coordinates.
+        let screen = try XCTUnwrap(NSScreen.main).visibleFrame
+        let start = NSRect(x: screen.minX + 120, y: screen.maxY - 820, width: 880, height: 760)
+        let frame = [start.minX, start.minY, start.width, start.height, screen.minX, screen.minY, screen.width, screen.height]
+            .map { String(Int($0)) }.joined(separator: " ")
+        app.launchArguments = ["--open", copy.path, "-NSWindow Frame AirMarkDocument", frame]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        // Let the first renders land, so the drag has rendered elements to keep in place.
+        sleep(5)
+        func capture(_ name: String) {
+            let attachment = XCTAttachment(screenshot: window.screenshot())
+            attachment.name = name; attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        capture("live-resize-before")
+        let before = window.frame
+        XCTAssertGreaterThan(before.width, 700, "the window did not start at the frame it was given: \(before)")
+        let text = editor.value as? String
+
+        func post(_ type: CGEventType, _ point: CGPoint) {
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        // One point inside the right edge, dragged left in frame-sized steps and held at the end, as a
+        // hand does. The frame is screen coordinates from the top left, which is what CGEvent takes.
+        let grab = CGPoint(x: before.maxX - 1, y: before.midY)
+        post(.mouseMoved, grab); usleep(200_000)
+        post(.leftMouseDown, grab); usleep(150_000)
+        for step in 1...40 { post(.leftMouseDragged, CGPoint(x: grab.x - Double(step) * 6, y: grab.y)); usleep(16_000) }
+        capture("live-resize-during")
+        post(.leftMouseUp, CGPoint(x: grab.x - 240, y: grab.y))
+        sleep(3)
+        capture("live-resize-after")
+
+        let after = window.frame
+        print("LIVE_RESIZE window \(before.width) -> \(after.width)")
+        XCTAssertLessThan(after.width, before.width - 150, "the drag did not resize the window: \(before) -> \(after)")
+        XCTAssertEqual(app.state, .runningForeground, "the app did not survive the drag")
+        XCTAssertEqual(editor.value as? String, text, "the resize changed the document's text")
+        XCTAssertEqual(try String(contentsOf: copy, encoding: .utf8), try String(contentsOf: fixture, encoding: .utf8),
+                       "the resize wrote to the file")
+        app.terminate()
     }
 
     /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.

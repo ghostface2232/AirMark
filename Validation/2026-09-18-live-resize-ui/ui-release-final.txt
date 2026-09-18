@@ -1,0 +1,12 @@
+testCancelledCloseKeepsTheDraftAfterRelaunch]' passed
+testDiscardedDraftIsNotRestoredAfterRelaunch]' passed
+testEditingASavedFileIsKeptOnCloseAndRelaunch]' passed
+testInlineMathFixtureScreenshot]' passed
+testLiveResizeByDraggingTheWindowEdge]' skipped
+testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed
+testQuitRestoresTheDocumentThatWasOpen]' passed
+testRelaunchRestoresTheLastSessionAndNotTheOneBefore]' passed
+testRepeatedAsynchronousSavesPreserveSource]' passed
+testShowcaseDarkAppearanceScreenshot]' passed
+testShowcaseRendersSpecialContent]' passed
+testTypingUndoAndReplaceAll]' passed

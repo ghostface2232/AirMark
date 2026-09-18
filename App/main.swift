@@ -19,6 +19,25 @@ import os
     }
 }
 
+/// Where a launch collects the documents it is opening, so their windows can be stacked once they all
+/// exist. The opens run together and finish in no particular order; each reports its place, and the
+/// last one to land hands over the windows back to front.
+@MainActor final class OpenedDocuments {
+    private var documents: [MarkdownDocument?]
+    private var outstanding: Int
+    private let stack: ([NSWindow]) -> Void
+    init(count: Int, stack: @escaping ([NSWindow]) -> Void) {
+        documents = Array(repeating: nil, count: count); outstanding = count; self.stack = stack
+        if count == 0 { stack([]) }
+    }
+    func record(_ document: MarkdownDocument?, at index: Int) {
+        documents[index] = document
+        outstanding -= 1
+        guard outstanding == 0 else { return }
+        stack(documents.compactMap { $0?.windowControllers.first?.window })
+    }
+}
+
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     static let recovery: RecoveryStore = {
         let root: URL
@@ -46,22 +65,38 @@ import os
             if let flag = CommandLine.arguments.firstIndex(of: "--open"), CommandLine.arguments.indices.contains(flag + 1) {
                 open(URL(fileURLWithPath: CommandLine.arguments[flag + 1])); return
             }
-            let records = await Self.recovery.records()
-            guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
             let recent = NSDocumentController.shared.recentDocumentURLs.map(\.path)
-            switch LaunchPlan.resolve(records: records, recentPaths: recent, fileData: { try? Data(contentsOf: URL(fileURLWithPath: $0)) }) {
-            case .openFile(let path, let record): open(URL(fileURLWithPath: path), recovery: record)
-            case .openRecent(let path): open(URL(fileURLWithPath: path))
-            case .newDocument: newDocument(nil)
-            case .recoverDraft(let record):
-                let document = MarkdownDocument(); document.identity = record.id
-                document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
-                document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
-                NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
-                if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
-                if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
+            // Every document the last session had open comes back, not only the newest record and not
+            // the documents an earlier session left behind. The plans arrive in the order to open them,
+            // back to front; the last one belongs in front.
+            //
+            // Resolved inside the store, which is not the main actor: deciding this reads recovery
+            // records and, for a document that may hold unsaved text, that document's file. None of
+            // that belongs on the thread that has a window to put up.
+            let plans = await Self.recovery.launchPlans(recentPaths: recent)
+            guard !openedFile, NSDocumentController.shared.documents.isEmpty else { return }
+            // Opened together, then stacked. A document opened from a file gets its window through an
+            // asynchronous completion, so the order the windows turn up in says nothing about the order
+            // they should be in. The session recorded which window was in front; that is applied here,
+            // once every window exists, rather than left to whichever completion ran last.
+            let opened = OpenedDocuments(count: plans.count) { windows in
+                // Plans arrive back to front, so ordering each window in turn leaves the last on top.
+                for window in windows { window.orderFront(nil) }
+                windows.last?.makeKeyAndOrderFront(nil)
+                NSApp.activate()
             }
-            NSApp.activate()
+            for (index, plan) in plans.enumerated() {
+                switch plan {
+                case .openFile(let path, let record):
+                    open(URL(fileURLWithPath: path), recovery: record) { opened.record($0, at: index) }
+                case .openRecent(let path):
+                    open(URL(fileURLWithPath: path)) { opened.record($0, at: index) }
+                case .newDocument:
+                    opened.record(makeBlankDocument(), at: index)
+                case .recoverDraft(let record):
+                    opened.record(recoverDraft(record), at: index)
+                }
+            }
         }
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
@@ -69,30 +104,58 @@ import os
         for filename in filenames { open(URL(fileURLWithPath: filename)) }
         sender.reply(toOpenOrPrint: .success)
     }
-    func open(_ url: URL, recovery: RecoveryRecord? = nil) {
+    /// Opens `url`, and reports the document so a launch can stack the windows once they all exist.
+    /// AppKit calls the completion on the main thread, which is what the body here has always assumed.
+    func open(_ url: URL, recovery: RecoveryMetadata? = nil, completion: ((MarkdownDocument?) -> Void)? = nil) {
         openedFile = true
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { document, _, error in
             if let error { NSApp.presentError(error); if NSDocumentController.shared.documents.isEmpty { self.newDocument(nil) } }
-            if let document = document as? MarkdownDocument, let recovery {
-                document.identity = recovery.id; document.editor?.restore(selection: recovery.selection, scrollY: recovery.scrollY)
+            let opened = document as? MarkdownDocument
+            if let opened, let recovery {
+                opened.identity = recovery.id; opened.editor?.restore(selection: recovery.selection, scrollY: recovery.scrollY)
             }
             NSApp.activate()
+            completion?(opened)
         }
     }
-    @objc func newDocument(_ sender: Any?) {
+    /// Opens a record whose text is on no disk as an unsaved draft.
+    @discardableResult
+    func recoverDraft(_ record: RecoveryRecord) -> MarkdownDocument {
+        let document = MarkdownDocument(); document.identity = record.id
+        document.snapshot.set(DocumentBytes(source: record.source, hasBOM: record.hasBOM))
+        document.restoredSelection = record.selection; document.restoredScroll = record.scrollY
+        NSDocumentController.shared.addDocument(document); document.makeWindowControllers(); document.showWindows()
+        if let path = record.filePath { document.displayName = "Recovered \u{2014} " + URL(fileURLWithPath: path).lastPathComponent }
+        if !record.source.isEmpty { document.updateChangeCount(.changeDone) }
+        return document
+    }
+    @discardableResult
+    func makeBlankDocument() -> MarkdownDocument {
         let document = MarkdownDocument()
         NSDocumentController.shared.addDocument(document)
         document.makeWindowControllers(); document.showWindows()
+        return document
     }
+    @objc func newDocument(_ sender: Any?) { makeBlankDocument() }
     @objc func openRecent(_ sender: NSMenuItem) {
         if let url = sender.representedObject as? URL { open(url) }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
         // never runs a main-actor Task, so an asynchronous reply would hang the quit.
+        //
+        // The flag stays set for the rest of a quit that goes through. AppKit closes the documents
+        // after this returns, and `close()` would write `.closed` over the `.quit` records written
+        // here; nothing clears the flag on a timer, because that is a race the quit does not decide.
+        // A logout cancelled after this returns leaves it set on a process that keeps running, and a
+        // document closed then comes back at the next launch — a window to close again, against a
+        // session that never returns. No callback reports that cancellation; it is the one case left.
+        MarkdownDocument.isTerminating = true
         for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
-            do { try Self.recovery.saveImmediately(document.record()) }
-            catch { NSApp.presentError(error); return .terminateCancel }
+            // Recorded as open at the quit, so the next launch restores every one of these windows.
+            // The one path that really does cancel the quit is the one that clears the flag.
+            do { try Self.recovery.saveImmediately(document.record(state: .quit)) }
+            catch { MarkdownDocument.isTerminating = false; NSApp.presentError(error); return .terminateCancel }
         }
         return .terminateNow
     }

@@ -89,16 +89,26 @@ import AirMarkCore
         ("single-column", table(rows: 5, columns: 1) { row, _ in "only \(row)" }),
     ]
 
+    /// The table renderer in the raster the AppKit reference used: the main screen's scale and color
+    /// space, which is what `NSImage` rasterized into. Which raster the app asks for is a separate
+    /// question, pinned by `tableRasterFollowsTheRequestingWindow`.
+    static func coreTextInTheReferenceRaster(_ element: RenderElement, environment: RenderEnvironment) throws -> RenderArtifact {
+        let screen = NSScreen.main
+        let raster = TableRenderer.Raster(scale: screen.map { Double($0.backingScaleFactor) } ?? environment.scale,
+                                          colorSpace: screen?.colorSpace?.cgColorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          alignment: NSParagraphStyle.defaultWritingDirection(forLanguage: nil) == .rightToLeft ? .right : .left)
+        return try TableRenderer.render(element.content, label: element.label, environment: environment, raster: raster,
+                                        memoryLimit: ReferenceTableRenderer.memoryLimit)
+    }
+
     /// The CoreText renderer against the AppKit reference: same outcome and failure message, same size,
     /// pixel dimensions, bytes and baseline, and pixels that differ only by glyph rasterization.
     @Test func matchesTheAppKitReference() async throws {
         _ = NSApplication.shared
-        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         for environment in [RenderEnvironment(width: 680, fontSize: 16, scale: 2, dark: false), RenderEnvironment(width: 600.25, fontSize: 13, scale: 1, dark: true), RenderEnvironment(width: 720.5, fontSize: 19, scale: 2, dark: false)] {
             for (name, element) in Self.equivalenceCorpus {
                 let expected = Result { try ReferenceTableRenderer.render(element, environment: environment) }
-                let actual: Result<RenderArtifact, any Error>
-                do { actual = .success(try await RenderService().render(element, environment: environment, baseURL: nil, host: host)) } catch { actual = .failure(error) }
+                let actual = Result { try Self.coreTextInTheReferenceRaster(element, environment: environment) }
                 switch (expected, actual) {
                 case (.success(let old), .success(let new)):
                     #expect(new.size == old.size, "\(name) \(environment.fontSize): size \(new.size) vs \(old.size)")
@@ -126,6 +136,103 @@ import AirMarkCore
                 }
             }
         }
+    }
+
+    /// The raster follows the window the table will be drawn in. Both bitmaps used to come out at
+    /// `NSScreen.main`'s scale whatever the requesting window's was, so a window on a 1× display beside a
+    /// Retina main display got 2× pixels and a Retina window beside a 1× main display got 1×, while
+    /// every other element on the page followed the window.
+    @Test func tableRasterFollowsTheRequestingWindow() async throws {
+        _ = NSApplication.shared
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let element = Self.table(rows: 4, columns: 3) { "r\($0)c\($1)" }
+        // Two scales, neither of which can be the main screen's at the same time: the previous code
+        // produced one bitmap size for both.
+        var rendered: [Double: RenderArtifact] = [:]
+        for scale in [1.0, 3.0] {
+            rendered[scale] = try await RenderService().render(element, environment: RenderEnvironment(width: 400, fontSize: 16, scale: scale, dark: false), baseURL: nil, host: host)
+        }
+        let one = try #require(rendered[1.0]), three = try #require(rendered[3.0])
+        print("TABLE_RASTER size=\(one.size) 1x=\(one.image.width)x\(one.image.height) 3x=\(three.image.width)x\(three.image.height) main=\(NSScreen.main?.backingScaleFactor ?? 0)")
+        #expect(one.size == three.size, "the table's points must not depend on the raster")
+        #expect(one.image.width == Int(ceil(one.size.width)) && one.image.height == Int(ceil(one.size.height)))
+        #expect(three.image.width == Int(ceil(three.size.width * 3)) && three.image.height == Int(ceil(three.size.height * 3)))
+    }
+
+    /// The bitmap is sRGB whatever screen asked for it. A per-screen color space would be an input to
+    /// the pixels that the cache key does not name, so two windows on differently profiled screens
+    /// would share whichever bitmap was rendered first. Fixing it removes the input instead of adding
+    /// it to the key: a table is neutral grays over alpha and reaches nowhere near the sRGB gamut edge.
+    @Test func tableRasterIsSRGBWhicheverScreenAsks() async throws {
+        _ = NSApplication.shared
+        let element = Self.table(rows: 2, columns: 2) { "r\($0)c\($1)" }
+        let environment = RenderEnvironment(width: 300, fontSize: 16, scale: 2, dark: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320), styleMask: [.titled], backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let onScreen = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        window.contentView?.addSubview(onScreen)
+        // A host in a window on a screen, and one in no window at all: the two used to read their color
+        // space from different places, and neither place is named by the key they share.
+        for host in [onScreen, NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))] {
+            let artifact = try await RenderService().render(element, environment: environment, baseURL: nil, host: host)
+            let produced = try #require(artifact.image.colorSpace)
+            #expect(CFEqual(produced, TableRenderer.colorSpace), "rasterized in \(produced), not sRGB")
+            #expect(produced.name == CGColorSpace.sRGB)
+        }
+
+        // What makes fixing it safe rather than merely convenient: a table's palette is neutral, and a
+        // gray has the same coordinates in sRGB and in Display P3 — same white point, same transfer
+        // curve, and the primaries never come into it. Drawn into either profile the bitmap is
+        // identical byte for byte, so no window is being shown another window's colors.
+        //
+        // This is a guard, not a formality. Give a table a saturated color — a link, a status tint —
+        // and these bytes diverge, and the profile becomes an input that a fixed sRGB raster would be
+        // wrong to drop and the cache key would have to name.
+        let inSRGB = try TableRenderer.render(element.content, label: "", environment: environment,
+                                              raster: TableRenderer.Raster(scale: 2, colorSpace: TableRenderer.colorSpace),
+                                              memoryLimit: 48 * 1024 * 1024)
+        let inP3 = try TableRenderer.render(element.content, label: "", environment: environment,
+                                            raster: TableRenderer.Raster(scale: 2, colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!),
+                                            memoryLimit: 48 * 1024 * 1024)
+        #expect(inSRGB.size == inP3.size, "the color space must not move the table")
+        let srgbBytes = try #require(inSRGB.image.dataProvider?.data as Data?)
+        let p3Bytes = try #require(inP3.image.dataProvider?.data as Data?)
+        #expect(srgbBytes == p3Bytes, "a table now draws a color that the display profile changes, so the profile is an input again")
+        print("TABLE_PROFILE sRGB and Display P3 bytes identical: \(srgbBytes == p3Bytes), \(srgbBytes.count) bytes")
+    }
+
+    /// The cache key names everything that shapes a table's pixels. A 1× and a 2× window get their own
+    /// bitmaps; two windows at one scale, whatever screen they are on, share one render.
+    @Test func tableCacheKeyCoversTheRasterAndNothingElse() async throws {
+        _ = NSApplication.shared
+        let service = RenderService()
+        let element = Self.table(rows: 3, columns: 2) { "r\($0)c\($1)" }
+        func environment(_ scale: Double) -> RenderEnvironment { RenderEnvironment(width: 400, fontSize: 16, scale: scale, dark: false) }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320), styleMask: [.titled], backing: .buffered, defer: false)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        let onScreen = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+        window.contentView?.addSubview(onScreen)
+        let detached = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 320))
+
+        // 1× and 2×: different keys, one render each, and pixel dimensions that follow the scale.
+        let one = try await service.render(element, environment: environment(1), baseURL: nil, host: onScreen)
+        let two = try await service.render(element, environment: environment(2), baseURL: nil, host: onScreen)
+        #expect(service.key(element, environment: environment(1), baseURL: nil) != service.key(element, environment: environment(2), baseURL: nil))
+        #expect(service.renderedCount == 2, "a scale change must not be served from the other scale's entry")
+        #expect(one.size == two.size, "the raster must not move the table")
+        #expect(one.image.width == Int(ceil(one.size.width)))
+        #expect(two.image.width == Int(ceil(two.size.width * 2)))
+
+        // The same scale from a host on a screen and a host on none: one key, one render, and the
+        // second call is served from the cache.
+        let again = try await service.render(element, environment: environment(2), baseURL: nil, host: detached)
+        #expect(service.renderedCount == 2, "the same scale was rendered twice for two hosts")
+        #expect(again.image === two.image, "a second host at the same scale did not get the cached bitmap")
+        let key = service.key(element, environment: environment(2), baseURL: nil)
+        #expect(service.cached(key)?.image === two.image)
+        print("TABLE_CACHE keys 1x/2x differ, renders=\(service.renderedCount), 2x bitmap \(two.image.width)x\(two.image.height) \(two.image.colorSpace?.name as String? ?? "?")")
     }
 
     /// A table whose row and column counts already exceed a limit is rejected without measuring its

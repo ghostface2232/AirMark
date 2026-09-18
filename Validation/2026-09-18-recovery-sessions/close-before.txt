@@ -1,0 +1,29 @@
+Building for debugging...
+[1 / 1]
+[2 / 12] AirMarkEditor
+[4 / 14] AirMarkEditor
+[9 / 17] AirMarkEditor
+[11 / 12] AirMarkEditorTests-product
+Build complete! (1.11 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DocumentTests started.
+◇ Test closingWritesTheRecordBeforeItReturns() started.
+✘ Test closingWritesTheRecordBeforeItReturns() recorded an issue at DocumentTests.swift:298:9: Expectation failed: stored?["state"] as? String == "closed"
+↳ close() returned before the record was written
+↳ stored?["state"] as? String == "closed" → false
+↳   stored?["state"] as? String → "open"
+↳     some → "open"
+↳     some → "closed"
+✘ Test closingWritesTheRecordBeforeItReturns() failed after 0.737 seconds with 1 issue.
+↳ /// The closed record is on disk before `close()` returns. It used to be written from a detached
+↳ /// Task, so closing a document and quitting straight after left the record saying the document was
+↳ /// open, and the next launch brought back a window the user had put away.
+✘ Suite DocumentTests failed after 0.737 seconds with 1 issue.
+↳ /// Saving, external-change detection and recovery without XCUIAutomation.
+↳ /// Other suites run in parallel and their documents also write to `MarkdownDocument.recoveryStore`,
+↳ /// so recovery assertions select this test's record by document identity.
+✘ Test run with 1 test in 1 suite failed after 0.737 seconds with 1 issue.
+Note: Some test targets reported failures:
+  - AirMarkEditorTests (Swift Testing)

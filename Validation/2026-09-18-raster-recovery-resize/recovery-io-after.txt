@@ -1,0 +1,545 @@
+Building for debugging...
+[Using on-disk description]
+[2 / 7] AirMarkEditorTests-product
+[4 / 9] AirMarkEditorTests-product
+[8 / 11] AirMarkEditorTests-product
+[10 / 14] AirMarkEditorTests-product
+Build complete! (1.95 sec)
+Test Suite 'All tests' started at 2026-09-18 08:59:44.590.
+Test Suite 'All tests' passed at 2026-09-18 08:59:44.590.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'All tests' started at 2026-09-18 08:59:44.651.
+Test Suite 'All tests' passed at 2026-09-18 08:59:44.652.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite RenderLifecycleTests started.
+◇ Suite ArtifactResidencyTests started.
+◇ Suite RenderCancellationTests started.
+◇ Suite MemoryTests started.
+◇ Suite ParsePacingBench started.
+◇ Suite ArtifactStoreDifferentialTests started.
+◇ Suite EditorTests started.
+◇ Suite LayoutTests started.
+◇ Test renderedImageIsDrawnByItsLayoutFragment() started.
+◇ Suite ScaleTests started.
+◇ Suite TableRenderTests started.
+➜ Test obsoleteRunningJobDelaysTheNextRender() skipped.
+◇ Test obsoleteRunningRenderYieldsToAWaitingJob() started.
+◇ Suite RecoveryIOTests started.
+➜ Test parsePacing() skipped.
+➜ Test scrollingManyImagesKeepsMemoryBounded() skipped.
+◇ Suite DocumentTests started.
+◇ Suite ResizeTests started.
+◇ Test layoutFragmentsDoNotOverlap() started.
+◇ Suite MermaidCorpusTests started.
+◇ Test matchesTheAppKitReference() started.
+◇ Test presentationDoesNotChangeSource() started.
+◇ Test matchesReferenceOnRandomOperations() started.
+✔ Suite MemoryTests passed after 0.001 seconds.
+◇ Suite RenderTests started.
+◇ Test largeDocumentRendersNearTheViewportAndStaysResponsive() started.
+➜ Test tenMegabyteRecoveryWrites() skipped.
+✔ Suite ParsePacingBench passed after 0.001 seconds.
+◇ Test draggingAWindowKeepsRenderedElementsInPlace() started.
+◇ Test repeatedSavesPreserveBytesWithoutFalseConflicts() started.
+➜ Test firstRenderOnAFreshPage() skipped.
+➜ Test editorEditsDuringARunningRender() skipped.
+◇ Test offlineMathAndDiagramSnapshots() started.
+✔ Suite RecoveryIOTests passed after 0.001 seconds.
+✔ Suite RenderCancellationTests passed after 0.001 seconds.
+◇ Test everyDiagramTypeRenders() started.
+TABLE_EQUIVALENCE two-by-two font=16 dark=no size=680.00x82.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE header-wider font=16 dark=no size=680.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=16 dark=no size=680.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=16 dark=no size=680.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=16 dark=no size=680.00x206.00 mean_abs=0.1384 max=133 over32=0.00133
+TABLE_EQUIVALENCE trailing-spaces font=16 dark=no size=680.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=16 dark=no size=900.00x164.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=16 dark=no size=1749.00x123.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=16 dark=no size=680.00x123.60 mean_abs=0.3451 max=255 over32=0.00259
+TABLE_EQUIVALENCE digits-and-symbols font=16 dark=no size=680.00x247.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=16 dark=no size=680.00x1648.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=16.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-cells font=16.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=16.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE single-column font=16 dark=no size=680.00x206.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE two-by-two font=13 dark=yes size=600.25x72.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE header-wider font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=13 dark=yes size=600.25x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=13 dark=yes size=600.25x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=13 dark=yes size=600.25x180.50 mean_abs=0.2462 max=158 over32=0.00263
+TABLE_EQUIVALENCE trailing-spaces font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=13 dark=yes size=900.00x144.40 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=13 dark=yes size=1518.00x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=13 dark=yes size=600.25x108.30 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE digits-and-symbols font=13 dark=yes size=600.25x216.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=13 dark=yes size=600.25x1444.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=13 dark=yes size=600.25x2166.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-display-limit-by-cells font=13.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=13.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE single-column font=13 dark=yes size=600.25x180.50 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE two-by-two font=19 dark=no size=720.50x92.60 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE header-wider font=19 dark=no size=720.50x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE ragged font=19 dark=no size=720.50x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE empty-cells font=19 dark=no size=720.50x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE hangul-emoji font=19 dark=no size=720.50x231.50 mean_abs=0.1456 max=139 over32=0.00140
+TABLE_EQUIVALENCE trailing-spaces font=19 dark=no size=720.50x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE long-wrapping font=19 dark=no size=900.00x185.20 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE wide-sum font=19 dark=no size=1988.00x138.90 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE rtl font=19 dark=no size=720.50x138.90 mean_abs=0.3457 max=255 over32=0.00263
+TABLE_EQUIVALENCE digits-and-symbols font=19 dark=no size=720.50x277.80 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE near-memory-limit font=19 dark=no size=720.50x1852.00 mean_abs=0.0000 max=0 over32=0.00000
+TABLE_EQUIVALENCE over-memory-limit font=19.0 both fail: This image is too large to display.
+TABLE_EQUIVALENCE over-display-limit-by-cells font=19.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE over-display-limit-by-rows font=19.0 both fail: Table is too large to render.
+TABLE_EQUIVALENCE single-column font=19 dark=no size=720.50x231.50 mean_abs=0.0000 max=0 over32=0.00000
+✔ Test matchesTheAppKitReference() passed after 11.705 seconds.
+◇ Test tableRasterFollowsTheRequestingWindow() started.
+✔ Test matchesReferenceOnRandomOperations() passed after 14.447 seconds.
+✔ Suite ArtifactStoreDifferentialTests passed after 14.447 seconds.
+✔ Test presentationDoesNotChangeSource() passed after 14.576 seconds.
+◇ Test editsKeepMarkdownAndUndo() started.
+TABLE_RASTER size=(400.0, 164.8) 1x=400x165 3x=1200x495 main=2.0
+✔ Test tableRasterFollowsTheRequestingWindow() passed after 2.943 seconds.
+◇ Test tableRasterIsSRGBWhicheverScreenAsks() started.
+✔ Test editsKeepMarkdownAndUndo() passed after 0.090 seconds.
+◇ Test movingCaretNeverChangesPresentation() started.
+RESIZE drag steps=21 measured=(32.0, 20.0) drawn width 32.0 to 32.0 requests=0
+RESIDENCY drawn frame=(0.0, 64.0, 32.1750537109375, 33.0) colored=119
+✔ Test renderedImageIsDrawnByItsLayoutFragment() passed after 14.679 seconds.
+◇ Test releasedPixelsKeepLayoutAndReturnOnRequest() started.
+TABLE_PROFILE sRGB and Display P3 bytes identical: true, 792000 bytes
+✔ Test tableRasterIsSRGBWhicheverScreenAsks() passed after 0.064 seconds.
+◇ Test tableCacheKeyCoversTheRasterAndNothingElse() started.
+✔ Test movingCaretNeverChangesPresentation() passed after 0.081 seconds.
+◇ Test headingKeepsFontBeforeBackgroundParse() started.
+✔ Test releasedPixelsKeepLayoutAndReturnOnRequest() passed after 0.075 seconds.
+◇ Test metricsBelongToTheirEnvironment() started.
+✔ Test metricsBelongToTheirEnvironment() passed after 0.008 seconds.
+◇ Test heldGeometryStandsInUntilTheElementIsMeasuredAgain() started.
+TABLE_CACHE keys 1x/2x differ, renders=2, 2x bitmap 800x248 kCGColorSpaceSRGB
+✔ Test tableCacheKeyCoversTheRasterAndNothingElse() passed after 0.049 seconds.
+◇ Test preflightDecidesOnlyWhatCountsDecide() started.
+✔ Test preflightDecidesOnlyWhatCountsDecide() passed after 0.009 seconds.
+✔ Test heldGeometryStandsInUntilTheElementIsMeasuredAgain() passed after 0.010 seconds.
+➜ Test pathologicalTablesMainThreadStalls() skipped.
+◇ Test releaseOrderAndIdentityAcrossEdits() started.
+✔ Suite TableRenderTests passed after 14.773 seconds.
+✔ Test releaseOrderAndIdentityAcrossEdits() passed after 0.001 seconds.
+◇ Test failedRerenderAfterReleaseShowsSourceAndError() started.
+✔ Test headingKeepsFontBeforeBackgroundParse() passed after 0.049 seconds.
+◇ Test listsAndFencesArePresentedAsSymbols() started.
+✔ Test failedRerenderAfterReleaseShowsSourceAndError() passed after 0.072 seconds.
+✔ Suite ArtifactResidencyTests passed after 14.846 seconds.
+MERMAID_CORPUS well-formed flowchart renders size=553x78 ink=0.058 ms=3113 injected="undefined"
+✔ Test draggingAWindowKeepsRenderedElementsInPlace() passed after 14.878 seconds.
+◇ Test changingTheFontSizeRemeasuresFromScratch() started.
+✔ Test listsAndFencesArePresentedAsSymbols() passed after 0.105 seconds.
+◇ Test caretStaysOutsideConcealedMarkers() started.
+y=    0.0 h=  62.5 lines=[52.5] # A quieter place to write⏎
+y=   62.5 h=  32.0 lines=[27.0] ⏎
+y=   94.5 h=  32.0 lines=[27.0] AirMark keeps your words in **plain Mark
+y=  126.5 h=  32.0 lines=[27.0] ⏎
+y=  158.5 h=  66.0 lines=[42.0] ## 생각을 바로 적으세요⏎
+y=  224.5 h=  32.0 lines=[27.0] ⏎
+y=  256.5 h=  32.0 lines=[27.0] 한글과 English, 이모지 👩🏽‍💻를 자연스럽게 함께 씁니다. *입력 중에
+y=  288.5 h=  32.0 lines=[27.0] ⏎
+  attachment run {2, 1} ArtifactAttachment bounds (0.0, -2.86328125, 17.0, 17.0)
+y=  320.5 h=  32.0 lines=[27.0] - [ ] Write something worth keeping⏎
+  attachment run {2, 1} ArtifactAttachment bounds (0.0, -2.86328125, 17.0, 17.0)
+y=  352.5 h=  32.0 lines=[27.0] - [x] Keep your files yours⏎
+y=  384.5 h=  32.0 lines=[27.0] ⏎
+y=  416.5 h=  66.0 lines=[42.0] ## Mathematics, in the flow⏎
+y=  482.5 h=  32.0 lines=[27.0] ⏎
+  attachment run {10, 1} ArtifactAttachment bounds (0.0, -8.359375, 64.0, 25.0)
+y=  514.5 h=  37.4 lines=[32.4] Energy is $E = mc^2$, and the roots are:
+y=  551.9 h=  32.0 lines=[27.0] ⏎
+  attachment run {0, 1} ArtifactAttachment bounds (0.0, -4.0, 151.0, 63.0)
+y=  583.9 h=  68.0 lines=[63.0] $$⏎
+y=  651.9 h=   0.0 lines=[0.0] x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}⏎
+y=  651.9 h=   0.0 lines=[0.0] $$⏎
+y=  651.9 h=  32.0 lines=[27.0] ⏎
+y=  683.9 h=  66.0 lines=[42.0] ## Connected ideas⏎
+y=  749.9 h=  32.0 lines=[27.0] ⏎
+  attachment run {0, 1} ArtifactAttachment bounds (0.0, -4.0, 553.0, 78.0)
+y=  781.9 h=  83.0 lines=[78.0] ```mermaid⏎
+y=  864.9 h=   0.0 lines=[0.0] flowchart LR⏎
+y=  864.9 h=   0.0 lines=[0.0]     A[An idea] --> B[Plain text]⏎
+y=  864.9 h=   0.0 lines=[0.0]     B --> C[A clear document]⏎
+y=  864.9 h=   0.0 lines=[0.0] ```⏎
+y=  864.9 h=  32.0 lines=[27.0] ⏎
+  attachment run {0, 1} ArtifactAttachment bounds (0.0, -4.0, 720.0, 164.8)
+y=  896.9 h= 169.8 lines=[164.8,0.0] | Principle | What it means |⏎
+y= 1066.7 h=   0.0 lines=[0.0] | --- | --- |⏎
+y= 1066.7 h=   0.0 lines=[0.0] | Fast | Start with your words |⏎
+y= 1066.7 h=   0.0 lines=[0.0] | Local | Markdown files on your Mac |⏎
+y= 1066.7 h=   0.0 lines=[0.0] | Native | A familiar place to think |⏎
+y= 1066.8 h=  32.0 lines=[27.0] ⏎
+y= 1098.8 h=  32.0 lines=[27.0] > Small details make a place feel calm.⏎
+y= 1130.8 h=  32.0 lines=[27.0] ⏎
+  attachment run {0, 1} ArtifactAttachment bounds (0.0, -4.0, 32.0, 20.0)
+y= 1162.8 h=  33.0 lines=[28.0] ![Two color swatches](swatch.png)⏎
+y= 1195.8 h=  32.0 lines=[27.0] ⏎
+y= 1227.8 h=   5.0 lines=[0.0] ```swift⏎
+y= 1232.8 h=  30.5 lines=[25.5] let thought = "Start here."⏎
+y= 1263.3 h=  30.5 lines=[25.5] print(thought)⏎
+y= 1293.8 h=   5.0 lines=[0.0] ```⏎
+y= 1298.8 h=  32.0 lines=[27.0] ⏎
+y= 1330.8 h=  50.0 lines=[27.0,18.0] Continue writing here.⏎
+✔ Test layoutFragmentsDoNotOverlap() passed after 14.926 seconds.
+✔ Suite LayoutTests passed after 14.926 seconds.
+✔ Test caretStaysOutsideConcealedMarkers() passed after 0.028 seconds.
+◇ Test deletingAtMarkerEdgesEditsSourceUnits() started.
+MERMAID_CORPUS well-formed flowchart-shapes-subgraph renders size=243x581 ink=0.057 ms=63 injected="undefined"
+✔ Test changingTheFontSizeRemeasuresFromScratch() passed after 0.113 seconds.
+✔ Suite ResizeTests passed after 14.992 seconds.
+✔ Test offlineMathAndDiagramSnapshots() passed after 15.004 seconds.
+◇ Test displayMathAfterInlineKeepsNaturalWidth() started.
+✔ Test displayMathAfterInlineKeepsNaturalWidth() passed after 0.058 seconds.
+◇ Test localImageIsDownsampledToTheColumn() started.
+MERMAID_CORPUS well-formed flowchart-hangul renders size=171x286 ink=0.041 ms=84 injected="undefined"
+✔ Test deletingAtMarkerEdgesEditsSourceUnits() passed after 0.190 seconds.
+◇ Test koreanCompositionSequenceInsideBold() started.
+✔ Test localImageIsDownsampledToTheColumn() passed after 0.068 seconds.
+◇ Test snapshotsUseTheRequestedBackground() started.
+✔ Test snapshotsUseTheRequestedBackground() passed after 0.035 seconds.
+◇ Test nativeTableHasContentAndDimensions() started.
+MERMAID_CORPUS well-formed sequence renders size=458x623 ink=0.075 ms=78 injected="undefined"
+✔ Test nativeTableHasContentAndDimensions() passed after 0.128 seconds.
+✔ Suite RenderTests passed after 15.295 seconds.
+✔ Test koreanCompositionSequenceInsideBold() passed after 0.183 seconds.
+◇ Test findSelectsMatchesAndReplacingKeepsMarkdown() started.
+MERMAID_CORPUS well-formed class renders size=214x362 ink=0.059 ms=30 injected="undefined"
+✔ Test findSelectsMatchesAndReplacingKeepsMarkdown() passed after 0.181 seconds.
+◇ Test accessibilityExposesLabelsAndElementDescriptions() started.
+CANCEL obsolete yields: wanted after 0.265129625 seconds, loads 1, obsolete cached false
+MERMAID_CORPUS well-formed state renders size=145x563 ink=0.044 ms=1630 injected="undefined"
+✔ Test accessibilityExposesLabelsAndElementDescriptions() passed after 1.509 seconds.
+◇ Test markedTextIsNotConcealed() started.
+MERMAID_CORPUS well-formed er renders size=201x526 ink=0.048 ms=20 injected="undefined"
+✔ Test markedTextIsNotConcealed() passed after 0.051 seconds.
+◇ Test staleParseAndCompositionCannotApplyPresentation() started.
+MERMAID_CORPUS well-formed gantt renders size=688x107 ink=0.126 ms=19 injected="undefined"
+✔ Test staleParseAndCompositionCannotApplyPresentation() passed after 0.041 seconds.
+◇ Test staleParseIsInstalledMovedThroughLaterEdits() started.
+✔ Test staleParseIsInstalledMovedThroughLaterEdits() passed after 0.026 seconds.
+◇ Test windowedParsesDrawWhatAWholeParseDraws() started.
+MERMAID_CORPUS well-formed pie renders size=559x458 ink=0.037 ms=37 injected="undefined"
+MERMAID_CORPUS well-formed journey renders size=688x533 ink=0.020 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed gitgraph renders size=282x185 ink=0.122 ms=29 injected="undefined"
+MERMAID_CORPUS well-formed mindmap renders size=489x244 ink=0.199 ms=37 injected="undefined"
+MERMAID_CORPUS well-formed timeline renders size=688x374 ink=0.152 ms=23 injected="undefined"
+MERMAID_CORPUS well-formed quadrant renders size=508x508 ink=0.024 ms=13 injected="undefined"
+MERMAID_CORPUS well-formed xychart renders size=688x494 ink=0.015 ms=19 injected="undefined"
+MERMAID_CORPUS well-formed sankey renders size=608x408 ink=0.865 ms=22 injected="undefined"
+MERMAID_CORPUS well-formed block renders size=159x106 ink=0.076 ms=25 injected="undefined"
+MERMAID_CORPUS well-formed requirement renders size=176x393 ink=0.095 ms=30 injected="undefined"
+MERMAID_CORPUS well-formed c4 renders size=688x413 ink=0.090 ms=21 injected="undefined"
+✔ Test obsoleteRunningRenderYieldsToAWaitingJob() passed after 18.104 seconds.
+◇ Test runningRenderSharedWithAnotherCallerKeepsRunning() started.
+MERMAID_CORPUS well-formed packet renders size=688x50 ink=0.051 ms=54 injected="undefined"
+MERMAID_CORPUS well-formed architecture renders size=454x270 ink=0.119 ms=43 injected="undefined"
+MERMAID_CORPUS well-formed kanban renders size=433x107 ink=0.359 ms=16 injected="undefined"
+MERMAID_CORPUS well-formed radar renders size=688x688 ink=0.155 ms=27 injected="undefined"
+✔ Test repeatedSavesPreserveBytesWithoutFalseConflicts() passed after 18.476 seconds.
+◇ Test externalChangeWhileEditedBlocksOverwriteAndKeepsEdits() started.
+MERMAID_CORPUS well-formed treemap renders size=688x262 ink=0.905 ms=61 injected="undefined"
+✔ Test externalChangeWhileEditedBlocksOverwriteAndKeepsEdits() passed after 0.311 seconds.
+◇ Test externalRestoreOfPreviouslySavedBytesIsNotIgnored() started.
+✔ Test everyDiagramTypeRenders() passed after 18.879 seconds.
+◇ Test malformedSourcesAreSourceErrors() started.
+MERMAID_CORPUS malformed empty fails invalid("UnknownDiagramE ms=12 injected="undefined" message=UnknownDiagramError: No diagram type detected matching given configuration for text: 
+MERMAID_CORPUS malformed unknown-type fails invalid("UnknownDiagramE ms=16 injected="undefined" message=UnknownDiagramError: No diagram type detected matching given configuration for text: notADiagram   A --> B
+MERMAID_CORPUS malformed dangling-edge fails invalid("Error: Parse er ms=4 injected="undefined" message=Error: Parse error on line 3: graph LR  A --> ---------------^ Expecting 'AMP', 'COLON', 'PIPE', 'TESTSTR', 'DOWN', 'DEFAULT', 'NUM', 'COMMA', 'NODE_STRING', 'B
+MERMAID_CORPUS malformed unclosed-label fails invalid("Error: Parse er ms=3 injected="undefined" message=Error: Parse error on line 3: ...  A[unclosed --> B ---------------------^ Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', 'PIPE'
+MERMAID_CORPUS malformed sequence-incomplete fails invalid("Error: Parse er ms=3 injected="undefined" message=Error: Parse error on line 2: ...ceDiagram  Alice->> ----------------------^ Expecting '+', '-', '()', 'ACTOR', got 'NEWLINE'
+MERMAID_CORPUS malformed class-unclosed-body fails invalid("Error: Parse er ms=3 injected="undefined" message=Error: Parse error on line 3: ...lass A {    +int x ---------------------^ Expecting 'STRUCT_STOP', 'MEMBER', got 'EOF_IN_STRUCT'
+MERMAID_CORPUS malformed pie-bad-value fails invalid("Error: Parsing  ms=8 injected="undefined" message=Error: Parsing failed: Lexer error on line 2, column 9: unexpected character: ->n<- at offset: 12, skipped 12 characters. Parse error on line 2, column 21: Expe
+MERMAID_CORPUS malformed state-bad-arrow fails invalid("Error: Parse er ms=3 injected="undefined" message=Error: Parse error on line 2: stateDiagram-v2  A -> -> B -------------------^ Expecting 'SPACE', 'NL', 'DESCR', '-->', 'HIDE_EMPTY', 'scale', 'COMPOSIT_STATE', 
+✔ Test malformedSourcesAreSourceErrors() passed after 0.398 seconds.
+◇ Test adversarialSourcesStayContained() started.
+MERMAID_CORPUS adversarial edges-over-limit fails invalid("Error: Edge lim ms=24 injected="undefined" message=Error: Edge limit exceeded. 500 edges found, but the limit is 500.  Initialize mermaid with maxEdges set to a higher number to allow more edges. You cannot set 
+MERMAID_CORPUS adversarial text-over-limit renders size=284x102 ink=0.712 ms=14 injected="undefined"
+✔ Test externalRestoreOfPreviouslySavedBytesIsNotIgnored() passed after 0.553 seconds.
+◇ Test failedSaveDoesNotAdvancePersistedSnapshot() started.
+MERMAID_CORPUS adversarial init-raises-limits fails invalid("Error: Edge lim ms=42 injected="undefined" message=Error: Edge limit exceeded. 500 edges found, but the limit is 500.  Initialize mermaid with maxEdges set to a higher number to allow more edges. You cannot set 
+MERMAID_CORPUS adversarial label-html-onerror renders size=285x78 ink=0.034 ms=18 injected="undefined"
+MERMAID_CORPUS adversarial click-callback renders size=215x78 ink=0.041 ms=13 injected="undefined"
+MERMAID_CORPUS adversarial init-loose-html renders size=239x78 ink=0.052 ms=14 injected="undefined"
+MERMAID_CORPUS adversarial sequence-script-note renders size=688x252 ink=0.084 ms=24 injected="undefined"
+MERMAID_CORPUS adversarial remote-image-and-icon renders size=300x78 ink=0.035 ms=31 injected="undefined"
+CANCEL shared: staying Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 370.0))), behind Optional(Swift.Result<__C.CGSize, Swift.Error>.success((300.0, 78.0))), loads 0
+✔ Test runningRenderSharedWithAnotherCallerKeepsRunning() passed after 1.455 seconds.
+◇ Test runningRenderRejoinedBeforeAnotherJobKeepsRunning() started.
+MERMAID_CORPUS adversarial style-remote-url fails invalid("Error: Parse er ms=53 injected="undefined" message=Error: Parse error on line 3: ...B  style A fill:url(https://example.org ----------------------^ Expecting 'SEMI', 'NEWLINE', 'SPACE', 'EOF', 'COLON', 'STYLE', 
+MERMAID_CORPUS adversarial css-injection-classdef fails invalid("Error: Lexical  ms=13 injected="undefined" message=Error: Lexical error on line 3. Unrecognized text. ...classDef x fill:#f00}</style><script>win -----------------------^
+✔ Test failedSaveDoesNotAdvancePersistedSnapshot() passed after 0.284 seconds.
+◇ Test exportingCopyDoesNotChangeOriginalSaveBaseline() started.
+MERMAID_CORPUS adversarial nested-subgraphs-60 fails invalid("Rendered conten ms=102 injected="undefined" message=Rendered content exceeds the display limit.
+SCALE load=17ms parse=15357ms elements=7693 rendered=23 keystroke p50=0.11ms p95=0.14ms max=0.35ms
+SCALE_PHASES rebase p50=0.00 p95=0.00 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test largeDocumentRendersNearTheViewportAndStaysResponsive() passed after 19.747 seconds.
+◇ Test documentKeystrokeCostsIncludeSnapshotAndDirtyState() started.
+MERMAID_CORPUS adversarial long-label-10k fails invalid("Rendered conten ms=59 injected="undefined" message=Rendered content exceeds the display limit.
+MERMAID_CORPUS adversarial bidi-and-control renders size=308x78 ink=0.054 ms=15 injected="undefined"
+✔ Test exportingCopyDoesNotChangeOriginalSaveBaseline() passed after 0.286 seconds.
+◇ Test externalChangeWhileCleanReloads() started.
+✔ Test adversarialSourcesStayContained() passed after 0.849 seconds.
+✔ Suite MermaidCorpusTests passed after 20.127 seconds.
+✔ Test externalChangeWhileCleanReloads() passed after 0.276 seconds.
+◇ Test movedFileUpdatesEditorPathAndRecovery() started.
+DOCUMENT_SCALE position=head samples=30 p50=24.06ms p95=25.98ms max=26.05ms layout p50=0.18ms p95=0.23ms
+DOCUMENT_SCALE_PHASES position=head rebase p50=23.34 p95=25.10 | paragraph p50=0.08 p95=0.11 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test movedFileUpdatesEditorPathAndRecovery() passed after 1.159 seconds.
+◇ Test deletedFileKeepsTextAsUntitledDocument() started.
+DOCUMENT_SCALE position=middle samples=30 p50=11.37ms p95=11.59ms max=12.10ms layout p50=0.25ms p95=0.29ms
+DOCUMENT_SCALE_PHASES position=middle rebase p50=11.04 p95=11.28 | paragraph p50=0.10 p95=0.13 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+CANCEL rejoined: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 370.0))), other Optional(Swift.Result<__C.CGSize, Swift.Error>.success((300.0, 78.0))), loads 0
+✔ Test runningRenderRejoinedBeforeAnotherJobKeepsRunning() passed after 2.198 seconds.
+◇ Test briefRunningRenderFinishes() started.
+DOCUMENT_SCALE position=tail samples=30 p50=0.15ms p95=0.23ms max=0.31ms layout p50=0.17ms p95=0.32ms
+DOCUMENT_SCALE_PHASES position=tail rebase p50=0.01 p95=0.01 | paragraph p50=0.08 p95=0.13 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test documentKeystrokeCostsIncludeSnapshotAndDirtyState() passed after 2.094 seconds.
+➜ Test tenMegabyteDocumentKeystrokeCosts() skipped.
+◇ Test spaceKeystrokeCosts() started.
+CANCEL brief: loads 0, cached true
+✔ Test briefRunningRenderFinishes() passed after 0.148 seconds.
+◇ Test callbacksFromAReplacedPageAreIgnored() started.
+✔ Test windowedParsesDrawWhatAWholeParseDraws() passed after 4.875 seconds.
+◇ Test staleParseIsDroppedAcrossReplacementAndComposition() started.
+✔ Test staleParseIsDroppedAcrossReplacementAndComposition() passed after 0.027 seconds.
+◇ Test toggleTaskBeforeReparseUsesCurrentCoordinates() started.
+✔ Test toggleTaskBeforeReparseUsesCurrentCoordinates() passed after 0.022 seconds.
+◇ Test newlineContinuesTaskItems() started.
+LIFECYCLE stale termination callback: loads 1
+✔ Test callbacksFromAReplacedPageAreIgnored() passed after 0.135 seconds.
+◇ Test killedContentProcessEndsTheRenderAndRecovers() started.
+✔ Test newlineContinuesTaskItems() passed after 0.158 seconds.
+◇ Test newlineContinuesListItemsWithTheLocalLineEnding() started.
+✔ Test deletedFileKeepsTextAsUntitledDocument() passed after 1.131 seconds.
+◇ Test saveAsResolvesRelativeImagesFromTheNewLocation() started.
+✔ Test newlineContinuesListItemsWithTheLocalLineEnding() passed after 0.335 seconds.
+◇ Test orderedItemBracketsAreText() started.
+✔ Test saveAsResolvesRelativeImagesFromTheNewLocation() passed after 0.090 seconds.
+◇ Test forceQuitRecoveryReopensUnsavedEdits() started.
+✔ Test orderedItemBracketsAreText() passed after 0.038 seconds.
+◇ Test bracketsThenSpaceAfterListMarkerMakeATask() started.
+SPACE_SCALE bytes=1000090 check p50=0.0041ms p95=0.0056ms plain p50=12.090ms p95=13.397ms max=16.849ms shortcut p50=11.393ms p95=11.702ms max=11.805ms
+SPACE_SCALE_PHASES plain rebase p50=11.20 p95=11.89 | paragraph p50=0.10 p95=0.68 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test spaceKeystrokeCosts() passed after 1.949 seconds.
+➜ Test tenMegabyteSpaceKeystrokeCosts() skipped.
+◇ Test returnKeystrokeCosts() started.
+LIFECYCLE slow diagram alone: 1.548378916 seconds
+✔ Test forceQuitRecoveryReopensUnsavedEdits() passed after 1.314 seconds.
+◇ Test everyUnsavedDocumentOpenAtOnceIsRecovered() started.
+✔ Test bracketsThenSpaceAfterListMarkerMakeATask() passed after 1.736 seconds.
+◇ Test backspaceAfterEmptyFencedBlockRemovesTheFences() started.
+LIFECYCLE killed: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((688.0, 9.0))) after 0.677022833 seconds
+LIFECYCLE after kill: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((626.0, 78.0))) loads 2
+✔ Test killedContentProcessEndsTheRenderAndRecovers() passed after 2.493 seconds.
+◇ Test closingTheHostWindowMidRenderDoesNotStallOthers() started.
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=11.549ms p95=12.279ms max=13.454ms
+RETURN_SCALE_PHASES newline=lf rebase p50=11.17 p95=11.76 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test everyUnsavedDocumentOpenAtOnceIsRecovered() passed after 1.187 seconds.
+◇ Test closingADocumentRecordsItAsClosed() started.
+LIFECYCLE closed host: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+✔ Test backspaceAfterEmptyFencedBlockRemovesTheFences() passed after 0.834 seconds.
+◇ Test leftFromAfterAnEmptyBlockAtTheStartStaysOutsideTheFences() started.
+✔ Test leftFromAfterAnEmptyBlockAtTheStartStaysOutsideTheFences() passed after 0.028 seconds.
+◇ Test referenceImageChangeDropsArtifactAtUnchangedSpan() started.
+LIFECYCLE other window: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((633.0, 78.0)))
+✔ Test closingTheHostWindowMidRenderDoesNotStallOthers() passed after 0.727 seconds.
+◇ Test timedOutScriptReplacesThePage() started.
+✔ Test referenceImageChangeDropsArtifactAtUnchangedSpan() passed after 0.158 seconds.
+◇ Test renderFailuresFollowEdits() started.
+✔ Test renderFailuresFollowEdits() passed after 0.027 seconds.
+✔ Suite EditorTests passed after 25.360 seconds.
+LIFECYCLE timeout: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.timeout)) loads 1 -> 1
+✔ Test timedOutScriptReplacesThePage() passed after 0.459 seconds.
+◇ Test cancelledQueuedRequestsDoNotRun() started.
+✔ Test closingADocumentRecordsItAsClosed() passed after 0.695 seconds.
+◇ Test closeDuringTerminationKeepsTheQuitRecord() started.
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=11.561ms p95=12.357ms max=13.728ms
+RETURN_SCALE_PHASES newline=crlf rebase p50=11.10 p95=11.83 | paragraph p50=0.00 p95=0.00 | snapshot p50=0.00 p95=0.00 | applyParse p50=0.00 p95=0.00 | artifacts p50=0.00 p95=0.00
+✔ Test returnKeystrokeCosts() passed after 2.552 seconds.
+➜ Test tenMegabyteReturnKeystrokeCosts() skipped.
+◇ Test typingSettleTimes() started.
+LIFECYCLE cancelled queued: 10 of 10
+✔ Test cancelledQueuedRequestsDoNotRun() passed after 0.999 seconds.
+◇ Test cancellingEverySharingCallerDropsTheQueuedRender() started.
+✔ Test closeDuringTerminationKeepsTheQuitRecord() passed after 1.307 seconds.
+◇ Test closingWritesTheRecordBeforeItReturns() started.
+LIFECYCLE shared cancel: ["cancelled", "cancelled"] rendered 1 cached false
+✔ Test cancellingEverySharingCallerDropsTheQueuedRender() passed after 0.851 seconds.
+◇ Test alreadyCancelledCallerDropsTheQueuedRender() started.
+✔ Test closingWritesTheRecordBeforeItReturns() passed after 0.638 seconds.
+◇ Test recordsNameTheSessionThatWroteThem() started.
+✔ Test recordsNameTheSessionThatWroteThem() passed after 0.643 seconds.
+◇ Test caretMoveAfterEditKeepsRecoveredSource() started.
+LIFECYCLE already cancelled: failure(Swift.CancellationError()) cached false
+✔ Test alreadyCancelledCallerDropsTheQueuedRender() passed after 1.543 seconds.
+◇ Test requestAfterACancelledShareStillRenders() started.
+LIFECYCLE late joiner: Optional(Swift.Result<__C.CGSize, Swift.Error>.success((271.0, 78.0))) renders 2
+✔ Test requestAfterACancelledShareStillRenders() passed after 0.362 seconds.
+◇ Test manyConcurrentRequestsAllComplete() started.
+LIFECYCLE concurrent: Optional(Swift.Result<Swift.String, Swift.Error>.success("40 of 40"))
+✔ Test manyConcurrentRequestsAllComplete() passed after 0.180 seconds.
+◇ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() started.
+LIFECYCLE beyond in-flight limit: rendered 30 of 30, requests 30, errors 0
+LIFECYCLE refill after release: rendered 30 of 30, requests 30, max in flight 12
+✔ Test elementsBeyondTheInFlightLimitRenderWithoutScrolling() passed after 0.049 seconds.
+◇ Test minimizedWindowPostponesInsteadOfFailing() started.
+LIFECYCLE minimized: Optional(Swift.Result<__C.CGSize, Swift.Error>.failure(AirMarkRender.RenderFailure.suspended))
+✔ Test caretMoveAfterEditKeepsRecoveredSource() passed after 2.499 seconds.
+◇ Test rereadSourceWithoutEditorReachesRecovery() started.
+✔ Test rereadSourceWithoutEditorReachesRecovery() passed after 0.050 seconds.
+◇ Test recoveryRecordFollowsEditsAndClose() started.
+✔ Test minimizedWindowPostponesInsteadOfFailing() passed after 1.311 seconds.
+◇ Test failedElementIsNotRetriedByUnrelatedEdits() started.
+SETTLE_100KB bytes=100100 keys=15 interval=80ms delay=45ms staleness_limit=150ms settle p50=58ms max=58ms parses=[15, 15, 15] stale=[0, 0, 1]
+✔ Test recoveryRecordFollowsEditsAndClose() passed after 0.921 seconds.
+✔ Suite DocumentTests passed after 31.831 seconds.
+LIFECYCLE failed element requests: 0, errors 1
+✔ Test failedElementIsNotRetriedByUnrelatedEdits() passed after 1.183 seconds.
+✔ Suite RenderLifecycleTests passed after 32.207 seconds.
+SETTLE_1MB bytes=1000090 keys=15 interval=80ms delay=45ms staleness_limit=150ms settle p50=43ms max=88ms parses=[15, 15, 15] stale=[6, 5, 4]
+✔ Test typingSettleTimes() passed after 10.054 seconds.
+➜ Test tenMegabyteTypingSettleTime() skipped.
+◇ Test artifactStoreHistoryCosts() started.
+ARTIFACT_STORE measured=1000 resident=1000 seed=2.0ms edit_head p50=0.1153ms p95=0.1250ms max=0.1337ms edit_middle p50=0.0576ms p95=0.0579ms max=0.0597ms edit_tail p50=0.0009ms p95=0.0009ms max=0.0012ms store p50=0.0027ms p95=0.0039ms release p50=0.0000ms p95=0.0000ms max=0.0007ms samples=997
+ARTIFACT_STORE measured=10000 resident=6553 seed=20.2ms edit_head p50=0.9761ms p95=1.0199ms max=1.0716ms edit_middle p50=0.3910ms p95=0.4090ms max=0.4265ms edit_tail p50=0.0007ms p95=0.0008ms max=0.0010ms store p50=0.0113ms p95=0.0210ms release p50=0.0027ms p95=0.0029ms max=0.0113ms samples=2400
+ARTIFACT_STORE measured=50000 resident=6553 seed=111.7ms edit_head p50=3.3409ms p95=3.5558ms max=3.6097ms edit_middle p50=1.4808ms p95=1.5340ms max=1.5725ms edit_tail p50=0.0008ms p95=0.0008ms max=0.0012ms store p50=0.0476ms p95=0.0884ms release p50=0.0029ms p95=0.0030ms max=0.0088ms samples=2400
+✔ Test artifactStoreHistoryCosts() passed after 1.588 seconds.
+➜ Test renderFailureKeystrokeCosts() skipped.
+➜ Test artifactHistoryKeystrokeAndScrollCosts() skipped.
+✔ Suite ScaleTests passed after 37.986 seconds.
+✔ Test run with 100 tests in 15 suites passed after 37.986 seconds.
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite RecoveryStoreTests started.
+◇ Suite BlockReparseTests started.
+◇ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() started.
+◇ Test sourceCoordinates() started.
+◇ Test codeAndSnakeCaseDoNotTripTheInlineLimit() started.
+◇ Test markdownSemanticsAndSourceRanges() started.
+◇ Test setextUnderlineIsAMarkerWithAnyLineEnding() started.
+◇ Test tabsAfterQuoteMarkersAreNotUndercounted() started.
+◇ Suite PresentationStoreTests started.
+◇ Test launchRestoresTheSessionsWindowOrder() started.
+◇ Test inlineSpansOnIndentedContinuationLinesCoverTheirDelimiters() started.
+◇ Test mathDoesNotInterpretCodeOrCurrency() started.
+◇ Test launchComparesOnlyWhatTheLengthsLeaveOpen() started.
+◇ Test tablesAndTasks() started.
+◇ Test referenceChangeUpdatesDistantLink() started.
+◇ Test nestingEstimateIsNotBelowParsedContainerDepth() started.
+◇ Test deepNestingParsesInTheWorkerWithoutCrashing() started.
+◇ Test launchOpensOneWindowPerDocument() started.
+◇ Test launchRestoresOnlyTheLastSessionsDocuments() started.
+◇ Suite MathScannerTests started.
+◇ Test launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted() started.
+◇ Test sparseColumnsPreserveScalarBoundariesAndLineEndings() started.
+◇ Test launchRestoresEveryDocumentThatWasOpen() started.
+◇ Test terminationRecoveryCannotBeOverwrittenByPendingSave() started.
+◇ Test orderedItemsNeverBecomeTasks() started.
+◇ Test launchPlanPrefersRecoveryThenRecent() started.
+◇ Test randomEditsPreserveIndex() started.
+◇ Test launchSeparatesUnsavedWorkFromAnExternallyChangedFile() started.
+◇ Test nestingBeyondTheLimitIsPresentedAsPlainText() started.
+◇ Test inlineNestingEstimateIsNotBelowParsedDepth() started.
+◇ Test inlineNestingAndHiddenBlockNestingDoNotCrash() started.
+◇ Test launchRestoresEveryOpenDocumentWithoutALimit() started.
+◇ Test inlineNestingAcrossCRLFLineBreaksDoesNotCrash() started.
+◇ Test byteRoundTrip() started.
+◇ Test launchSkipsClosedDocumentsUnlessNothingWasOpen() started.
+◇ Test listAndFenceMarkers() started.
+◇ Test parsesRunOneAtATimeAndCancelledWaitersLeave() started.
+◇ Test recoveryRejectsOldWrites() started.
+◇ Test recordsKeepTheirStateAndUnsavedFlag() started.
+◇ Test recordWithInlineSourceStillLoads() started.
+◇ Test metadataReadsTheRecordsWithoutTheirSources() started.
+◇ Test interruptedSavesLeaveCompleteRecords() started.
+◇ Test newRevisionReplacesTheSource() started.
+◇ Test freshStoreWritesTheSourceForARepeatedRevision() started.
+◇ Test positionOnlySaveKeepsTheSourceWithoutRewritingIt() started.
+◇ Test changesStayInsideTheWindow() started.
+◇ Test referenceDefinitionsAndOpenFencesParseWhole() started.
+LAUNCH_IO clean session of 8: stats=8 files read=0 sources loaded=0
+◇ Test reparseEqualsWholeParseAfterRandomEdits() started.
+◇ Test blockSpansAreTheTopLevelBlocks() started.
+◇ Test removedStylesStayRemoved() started.
+◇ Test zeroLengthQueryReturnsContainingStyles() started.
+◇ Test editsMatchWholeArrayRebase() started.
+◇ Test parsedMarkersAreSortedAndDisjoint() started.
+◇ Test queryCostIsIndependentOfContainerLength() started.
+◇ Test markerPastStyleEndIsUpdated() started.
+◇ Test emptyFencedBlockMarkersDoNotOverlap() started.
+◇ Test emptyStoreAcceptsEditsAndQueries() started.
+✔ Test sourceCoordinates() passed after 0.002 seconds.
+✔ Test launchComparesOnlyWhatTheLengthsLeaveOpen() passed after 0.003 seconds.
+✔ Test launchRestoresTheSessionsWindowOrder() passed after 0.003 seconds.
+✔ Test launchOpensOneWindowPerDocument() passed after 0.003 seconds.
+✔ Test launchRestoresOnlyTheLastSessionsDocuments() passed after 0.003 seconds.
+◇ Test displayMathDoesNotCrossBlankLines() started.
+◇ Test matchesTheRescanningScanner() started.
+✔ Test setextUnderlineIsAMarkerWithAnyLineEnding() passed after 0.003 seconds.
+✔ Test launchRestoresEveryDocumentThatWasOpen() passed after 0.004 seconds.
+✔ Test mathDoesNotInterpretCodeOrCurrency() passed after 0.005 seconds.
+✔ Test markdownSemanticsAndSourceRanges() passed after 0.005 seconds.
+✔ Test launchUsesOnlyTheNewestRecordWrittenBeforeStatesExisted() passed after 0.006 seconds.
+✔ Test referenceChangeUpdatesDistantLink() passed after 0.007 seconds.
+✔ Test launchSeparatesUnsavedWorkFromAnExternallyChangedFile() passed after 0.006 seconds.
+✔ Test launchPlanPrefersRecoveryThenRecent() passed after 0.008 seconds.
+✔ Test launchRestoresEveryOpenDocumentWithoutALimit() passed after 0.008 seconds.
+✔ Test launchReadsNothingForDocumentsWhoseTextIsOnDisk() passed after 0.008 seconds.
+✔ Test tablesAndTasks() passed after 0.008 seconds.
+✔ Test orderedItemsNeverBecomeTasks() passed after 0.008 seconds.
+✔ Test byteRoundTrip() passed after 0.008 seconds.
+RECOVERY_STORE position-only save: files before ["B78BFC09-061D-4E68-BC4F-C8C5027BE448.json": 309, "B78BFC09-061D-4E68-BC4F-C8C5027BE448.984C68D0-47EF-4678-B051-70D6EA908381.source": 120000] after ["B78BFC09-061D-4E68-BC4F-C8C5027BE448.984C68D0-47EF-4678-B051-70D6EA908381.source": 120000, "B78BFC09-061D-4E68-BC4F-C8C5027BE448.json": 312]
+✔ Test launchSkipsClosedDocumentsUnlessNothingWasOpen() passed after 0.008 seconds.
+RECOVERY_STORE files after two ids: ["25B65C3F-CEE7-46F7-9024-D08C7D6EFFE0.916A6A71-1463-4DB1-A93A-762CC9C31C37.source", "25B65C3F-CEE7-46F7-9024-D08C7D6EFFE0.json", "DA5DA10A-6274-41DA-AA66-3CF5D1813CFE.D542FF7A-E08E-437B-9413-19B2E9879B90.source", "DA5DA10A-6274-41DA-AA66-3CF5D1813CFE.json"]
+✔ Test listAndFenceMarkers() passed after 0.014 seconds.
+RECOVERY_LAUNCH 4 records of 8000000 source bytes: metadata() 0.00025175 seconds, records() 0.01737225 seconds
+✔ Test sparseColumnsPreserveScalarBoundariesAndLineEndings() passed after 0.049 seconds.
+✔ Test recoveryRejectsOldWrites() passed after 0.049 seconds.
+✔ Test terminationRecoveryCannotBeOverwrittenByPendingSave() passed after 0.050 seconds.
+✔ Test codeAndSnakeCaseDoNotTripTheInlineLimit() passed after 0.050 seconds.
+✔ Test recordWithInlineSourceStillLoads() passed after 0.049 seconds.
+✔ Test freshStoreWritesTheSourceForARepeatedRevision() passed after 0.049 seconds.
+✔ Test interruptedSavesLeaveCompleteRecords() passed after 0.049 seconds.
+✔ Test positionOnlySaveKeepsTheSourceWithoutRewritingIt() passed after 0.049 seconds.
+✔ Test removedStylesStayRemoved() passed after 0.047 seconds.
+✔ Test zeroLengthQueryReturnsContainingStyles() passed after 0.047 seconds.
+✔ Test recordsKeepTheirStateAndUnsavedFlag() passed after 0.049 seconds.
+✔ Test newRevisionReplacesTheSource() passed after 0.049 seconds.
+✔ Test referenceDefinitionsAndOpenFencesParseWhole() passed after 0.048 seconds.
+✔ Test markerPastStyleEndIsUpdated() passed after 0.047 seconds.
+✔ Test emptyFencedBlockMarkersDoNotOverlap() passed after 0.047 seconds.
+✔ Test emptyStoreAcceptsEditsAndQueries() passed after 0.047 seconds.
+✔ Test displayMathDoesNotCrossBlankLines() passed after 0.047 seconds.
+✔ Test matchesTheRescanningScanner() passed after 0.052 seconds.
+✔ Test inlineNestingAcrossCRLFLineBreaksDoesNotCrash() passed after 0.055 seconds.
+✔ Test metadataReadsTheRecordsWithoutTheirSources() passed after 0.054 seconds.
+✔ Suite MathScannerTests passed after 0.055 seconds.
+✔ Suite RecoveryStoreTests passed after 0.055 seconds.
+✔ Test tabsAfterQuoteMarkersAreNotUndercounted() passed after 0.060 seconds.
+✔ Test changesStayInsideTheWindow() passed after 0.066 seconds.
+✔ Test nestingBeyondTheLimitIsPresentedAsPlainText() passed after 0.068 seconds.
+✔ Test inlineNestingAndHiddenBlockNestingDoNotCrash() passed after 0.069 seconds.
+✔ Test deepNestingParsesInTheWorkerWithoutCrashing() passed after 0.070 seconds.
+✔ Test randomEditsPreserveIndex() passed after 0.136 seconds.
+✔ Test blockSpansAreTheTopLevelBlocks() passed after 0.210 seconds.
+✔ Test parsedMarkersAreSortedAndDisjoint() passed after 0.515 seconds.
+✔ Test editsMatchWholeArrayRebase() passed after 1.406 seconds.
+✔ Test queryCostIsIndependentOfContainerLength() passed after 2.016 seconds.
+✔ Suite PresentationStoreTests passed after 2.019 seconds.
+✔ Test nestingEstimateIsNotBelowParsedContainerDepth() passed after 2.045 seconds.
+✔ Test inlineNestingEstimateIsNotBelowParsedDepth() passed after 2.903 seconds.
+✔ Test inlineSpansOnIndentedContinuationLinesCoverTheirDelimiters() passed after 3.581 seconds.
+PARSE_SERIAL peak threads 1, cancelled waits over 500ms 1, slowest 1.841678375 seconds
+✔ Test parsesRunOneAtATimeAndCancelledWaitersLeave() passed after 4.094 seconds.
+✔ Test reparseEqualsWholeParseAfterRandomEdits() passed after 12.101 seconds.
+✔ Suite BlockReparseTests passed after 12.103 seconds.
+✔ Test run with 55 tests in 4 suites passed after 12.103 seconds.

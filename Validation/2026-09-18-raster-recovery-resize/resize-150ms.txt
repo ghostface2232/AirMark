@@ -1,0 +1,36 @@
+Building for debugging...
+[2 / 11] AirMarkEditor
+[4 / 13] AirMarkEditor
+[8 / 18] AirMarkEditor
+[10 / 20] AirMarkEditor
+[14 / 19] AirMarkEditorTests-product
+[25 / 30] AirMarkEditorTests-product
+/Users/baemingwan/Documents/AI/airmark/Tests/AirMarkEditorTests/RenderCancellationTests.swift:102:22: [1;33mwarning: [1;39m'salt' mutated after capture by sendable closure[0;0m
+ [0;36m74 |[0;0m         print("CANCEL_MEASURE page mermaid first=\(Self.summary(fresh)) warm=\(Self.summary(warm))")
+ [0;36m75 |[0;0m 
+ [0;36m76 |[0;0m         var salt = 10_000
+    [0;36m|[0;0m             `- [1;39mnote: [1;39mvariable defined here[0;0m
+ [0;36m77 |[0;0m         for (label, slow) in [("mermaid-100", { Lifecycle.slowDiagram(100, salt: $0) }), ("mermaid-250", { Lifecycle.slowDiagram(250, salt: $0) }),
+ [0;36m78 |[0;0m                               ("mermaid-480", { Lifecycle.slowDiagram(480, salt: $0) }), ("mermaid-dense", { Self.denseDiagram(salt: $0) }), ("katex-12", { Self.slowFormula(12, salt: $0) }),
+    [0;36m:[0;0m
+ [0;36m99 |[0;0m                 caller.cancel()
+[0;36m100 |[0;0m                 start = clock.now
+[0;36m101 |[0;0m                 let outcome = await Lifecycle.within(20) { try await service.render(wanted(salt), environment: Self.environment, baseURL: nil, host: host) }
+    [0;36m|[0;0m                                                          |                                 `- [1;39mnote: [1;39mcapturing use[0;0m
+    [0;36m|[0;0m                                                          `- [1;39mnote: [1;39mvariable captured by sendable closure[0;0m
+[0;36m102 |[0;0m                 salt += 1
+    [0;36m|[0;0m                      `- [1;33mwarning: [1;39m'salt' mutated after capture by sendable closure[0;0m
+[0;36m103 |[0;0m                 next.append(Self.ms(start.duration(to: clock.now)))
+[0;36m104 |[0;0m                 guard case .success = outcome else { Issue.record("\(label) wanted render: \(String(describing: outcome))"); return }
+[27 / 30] AirMarkEditorTests-product
+[29 / 33] AirMarkEditorTests-product
+Build complete! (3.32 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite ResizeTests started.
+◇ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() started.
+RESIZE_COALESCE 21 steps -> 1 round after 0.154143 seconds, delay 0.15 seconds
+✔ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() passed after 0.307 seconds.
+✔ Suite ResizeTests passed after 0.307 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.307 seconds.
