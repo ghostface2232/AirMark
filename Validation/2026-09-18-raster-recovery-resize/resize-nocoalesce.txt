@@ -1,0 +1,48 @@
+Building for debugging...
+[2 / 11] AirMarkEditor
+[4 / 13] AirMarkEditor
+[7 / 17] AirMarkEditor
+[11 / 12] AirMarkEditorTests-product
+Build complete! (1.31 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite ResizeTests started.
+◇ Test draggingAWindowKeepsRenderedElementsInPlace() started.
+RESIZE drag steps=21 measured=(32.0, 20.0) drawn width 32.0 to 32.0 requests=21
+✘ Test draggingAWindowKeepsRenderedElementsInPlace() recorded an issue at ResizeTests.swift:66:9: Expectation failed: editor.renderRequestCount == requests
+↳ renders were started for widths the drag passed through
+↳ editor.renderRequestCount == requests → false
+↳   editor.renderRequestCount → 22
+↳   requests → 1
+✘ Test draggingAWindowKeepsRenderedElementsInPlace() recorded an issue at ResizeTests.swift:70:9: Expectation failed: editor.renderRequestCount == requests + 1
+↳ one round of renders after the drag, not one per step
+↳ editor.renderRequestCount == requests + 1 → false
+↳   editor.renderRequestCount → 22
+↳   requests + 1 → 2
+✘ Test draggingAWindowKeepsRenderedElementsInPlace() failed after 0.166 seconds with 2 issues.
+↳ /// Every step of a drag used to cancel the renders, drop every artifact and invalidate every
+↳ /// element, so the elements flipped between their rendered form and their source while the window
+↳ /// moved. They now keep their metrics and their pixels, scaled into the width available.
+◇ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() started.
+✘ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() recorded an issue at ResizeTests.swift:124:9: Expectation failed: editor.renderRequestCount == requests
+↳ 21 steps started renders instead of being coalesced
+↳ editor.renderRequestCount == requests → false
+↳   editor.renderRequestCount → 22
+↳   requests → 1
+RESIZE_COALESCE 21 steps -> 21 round after 0.000119916 seconds, delay 0.05 seconds
+✘ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() recorded an issue at ResizeTests.swift:128:9: Expectation failed: editor.renderRequestCount == requests + 1
+↳ one round for the whole burst
+↳ editor.renderRequestCount == requests + 1 → false
+↳   editor.renderRequestCount → 22
+↳   requests + 1 → 2
+✘ Test geometryThatReportsNoEndIsCoalescedIntoOneRound() failed after 0.052 seconds with 2 issues.
+↳ /// Geometry that reports no end of its own — a zoom, a full-screen transition, a divider — is
+↳ /// coalesced instead, and the wait is what makes a burst of it cost one round of renders. How long
+↳ /// that takes after the last change is the wait itself and nothing more.
+✘ Suite ResizeTests failed after 0.219 seconds with 4 issues.
+↳ /// Dragging a window edge changes the render environment on every step. The rendered elements keep
+↳ /// their place while it moves and are rendered again, once, after it settles.
+✘ Test run with 2 tests in 1 suite failed after 0.219 seconds with 4 issues.
+Note: Some test targets reported failures:
+  - AirMarkEditorTests (Swift Testing)

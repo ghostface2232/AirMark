@@ -70,11 +70,19 @@ import os
     private var text: NSString { textView.textStorage?.mutableString ?? NSMutableString() }
     private var renderEnvironment: RenderEnvironment?
     /// Pending adoption of a new environment. While it is armed the editor still measures and draws in
-    /// `renderEnvironment`, which is what keeps a window drag from replacing every rendered element with
-    /// its source and back at every step.
+    /// `renderEnvironment`, which is what keeps the geometry moving from replacing every rendered
+    /// element with its source and back at every step. Never armed during a drag: a drag says when it
+    /// ends.
     private var environmentTask: Task<Void, Never>?
-    /// How long the environment must hold still before renders start for it.
-    static let environmentSettleDelay = Duration.milliseconds(150)
+    /// How long geometry that is not a drag must hold still before renders start for it.
+    ///
+    /// A drag needs no such wait — `didEndLiveResize` says when it is over — and this is for the
+    /// changes that report no end: a zoom, a full-screen transition, a split-view divider, a scroller
+    /// appearing. Those arrive as one layout pass per displayed frame, so the wait has only to outlast
+    /// the gap between two frames; three at 60 Hz leaves room for a missed one. Adopting each pass
+    /// instead cancels and restarts every render on the page once per frame, which the resize tests
+    /// measure. A `var` so a test can pin it.
+    static var environmentSettleDelay = Duration.milliseconds(50)
     private var renderTokens: [SourceSpan: UUID] = [:]
     private var invalidating = false
     private var themeWasDark = false
@@ -164,6 +172,13 @@ import os
         observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeBackingPropertiesNotification, object: nil, queue: .main) { [weak self] notification in
             let window = notification.object as? NSWindow
             MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.scheduleRenders() } }
+        })
+        // The drag is over and the width it left behind is the one to render for. This is the whole of
+        // what the editor has to know about a drag: nothing waits, nothing polls, and the renders start
+        // at the moment the mouse comes up rather than some interval after it.
+        observations.append(NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: nil, queue: .main) { [weak self] notification in
+            let window = notification.object as? NSWindow
+            MainActor.assumeIsolated { if let self, window != nil, window === self.view.window { self.adoptSettledEnvironment() } }
         })
         scrollView.contentView.postsBoundsChangedNotifications = true
         observations.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
@@ -412,7 +427,10 @@ import os
                 // drawing in `settled` until it holds still: a render started at an intermediate width is
                 // thrown away by the next step, and dropping every element back to its source text at
                 // each step is what made a drag flash.
-                scheduleEnvironmentChange()
+                //
+                // A drag reports its own end, so during one there is nothing to wait for. Geometry that
+                // moves without a drag reports nothing, and is coalesced by a short wait instead.
+                if !view.inLiveResize { scheduleEnvironmentChange() }
                 releaseDistantPixels()
                 return
             }
@@ -494,23 +512,25 @@ import os
         if let previous, previous.matchesAppearance(of: next) { artifacts.holdGeometry() } else { artifacts.removeAll() }
         invalidatePresentation(spans: parsed.elements.map(\.span))
     }
-    /// Adopts the current environment once it has held still for `environmentSettleDelay`, and never
-    /// while the window is being dragged. Every change restarts the wait, so one drag costs one
-    /// environment change and one round of renders instead of one per step. A wait that finds the drag
-    /// still going re-arms itself, which is also how the end of a drag is noticed: nothing else has to
-    /// report it, and the first wait after the mouse is released adopts.
+    /// Adopts the current environment once geometry that reports no end of its own has held still for
+    /// `environmentSettleDelay`. Every change restarts the wait, so one transition costs one
+    /// environment change and one round of renders instead of one per frame. A drag that starts during
+    /// the wait drops it; `didEndLiveResize` adopts that one.
     private func scheduleEnvironmentChange() {
         environmentTask?.cancel()
         environmentTask = Task { [weak self] in
             try? await Task.sleep(for: Self.environmentSettleDelay)
-            guard !Task.isCancelled, let self else { return }
-            environmentTask = nil
-            guard isViewLoaded, view.window != nil else { return }
-            if view.inLiveResize { scheduleEnvironmentChange(); return }
-            guard renderEnvironment != environment else { return }
-            adoptEnvironment(environment)
-            scheduleRenders()
+            guard !Task.isCancelled, let self, !view.inLiveResize else { return }
+            adoptSettledEnvironment()
         }
+    }
+    /// Starts measuring and drawing in the environment there is now, and renders for it. The end of
+    /// every wait and every drag arrives here.
+    private func adoptSettledEnvironment() {
+        environmentTask?.cancel(); environmentTask = nil
+        guard isViewLoaded, view.window != nil, renderEnvironment != environment else { return }
+        adoptEnvironment(environment)
+        scheduleRenders()
     }
 
     /// Pixels near the viewport stay; farther ones go, then the farthest while over budget. Layout

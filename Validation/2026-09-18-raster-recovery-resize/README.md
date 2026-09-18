@@ -127,3 +127,59 @@ bytes; a BOM counts toward the length it is checked against; an empty record ope
 source is never loaded to find that out.
 
 Full suite: 100 + 55 passing.
+
+## 3. A drag says when it is over
+
+### Problem
+
+While the geometry moved, the editor armed a 150 ms wait; when that wait woke and found
+`view.inLiveResize` still true it armed another. A drag was therefore a poll, and the end of a drag
+was noticed by the first wait to wake after the mouse came up — up to 150 ms late, and later still if
+the wake landed just before the release. The 150 ms had no stated basis.
+
+### Change
+
+A drag reports its own end, so nothing waits for one:
+
+- While `view.inLiveResize`, nothing is armed at all. The elements keep their metrics and their
+  pixels, scaled into the width there is now, exactly as before.
+- `NSWindow.didEndLiveResizeNotification` adopts the width the drag left behind and renders once.
+- Geometry that reports no end — a zoom, a full-screen transition, a divider, a scroller appearing —
+  is still coalesced, because it arrives as one layout pass per displayed frame. The wait has only to
+  outlast the gap between two frames, so it is **50 ms**, about three frames at 60 Hz with room for a
+  missed one, instead of 150 ms with no basis. A drag starting during a wait drops it.
+
+`scheduleEnvironmentChange` and the end-of-drag notification both end in one `adoptSettledEnvironment`.
+
+PR #1's work is untouched: the diff is the environment branch of `scheduleRenders`, one observer and
+`scheduleEnvironmentChange`. No line of the parse pacing, the edit log, the windowed install, the
+`SpanList` render errors or `ArtifactStore` is in it.
+
+### Result
+
+| | before | after |
+|---|---|---|
+| end of a drag → renders start | up to 150 ms, by a poll that happened to wake | **0.3 ms**, on the event (`RESIZE_END`) |
+| 21 non-drag geometry steps | 1 round, 154 ms after the last (`resize-150ms.txt`) | 1 round, 57 ms after the last |
+| the same with coalescing removed | — | **21 rounds** (`resize-nocoalesce.txt`) |
+
+`endOfADragAdoptsWithoutWaiting` pins the coalescing wait at 30 seconds and posts the end-of-drag
+notification: the renders start 0.3 ms later, so nothing but the event can have started them.
+
+`geometryThatReportsNoEndIsCoalescedIntoOneRound` is the measurement that keeps the wait. Removing it
+and adopting every layout pass turns 21 steps into 21 rounds of renders, each cancelling the one
+before, and fails `draggingAWindowKeepsRenderedElementsInPlace` as well. The wait earns its place; the
+150 ms did not.
+
+In a full parallel suite run the same burst settles in 132 ms rather than 57 ms — the 50 ms sleep plus
+what the scheduler adds under load. The assertion allows 200 ms.
+
+Full suite: 102 + 55 passing. The four non-typing UI tests pass in Release.
+
+### Not verified
+
+`view.inLiveResize == true` is not exercised by a unit test: AppKit offers no public way to begin a
+live resize, so the tests drive geometry the way a non-drag change arrives and post the end-of-drag
+notification directly. What that leaves untested is the one line that skips arming the wait during a
+drag; what it does test is that the end of a drag alone starts the renders, which is the behaviour the
+poll existed to approximate. The two typing UI tests were not run.

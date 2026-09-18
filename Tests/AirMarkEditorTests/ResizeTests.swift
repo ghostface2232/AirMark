@@ -75,6 +75,60 @@ import AirMarkCore
         #expect(Self.attachment(editor, at: span) != nil)
     }
 
+    /// The end of a drag is what starts the renders, not a wait that happens to notice it. With the
+    /// coalescing wait pinned far longer than the test could sit through, `didEndLiveResize` alone
+    /// adopts the width the drag left behind and renders once for it.
+    @Test func endOfADragAdoptsWithoutWaiting() async throws {
+        let (editor, window) = try await Self.make("Before\n\n![Two color swatches](swatch.png)\n\nAfter\n")
+        let delay = EditorController.environmentSettleDelay
+        defer { EditorController.environmentSettleDelay = delay; window.orderOut(nil) }
+        EditorController.environmentSettleDelay = .seconds(30)
+        try #require(editor.renderedElementCount == 1)
+        let requests = editor.renderRequestCount
+
+        for width in Self.dragWidths {
+            editor.view.frame = NSRect(x: 0, y: 0, width: width, height: 600)
+            editor.view.layoutSubtreeIfNeeded()
+        }
+        #expect(editor.renderRequestCount == requests, "a render was started for a width the drag passed through")
+        #expect(editor.measuredElementCount == 1, "the drag dropped the element's metrics")
+
+        let clock = ContinuousClock()
+        let ended = clock.now
+        NotificationCenter.default.post(name: NSWindow.didEndLiveResizeNotification, object: window)
+        for _ in 0..<250 where editor.renderRequestCount == requests { try await Task.sleep(for: .milliseconds(2)) }
+        let latency = ended.duration(to: clock.now)
+        print("RESIZE_END renders started \(latency) after the drag ended, settle delay pinned at 30s")
+        #expect(editor.renderRequestCount == requests + 1, "one round of renders at the width the drag ended on")
+        #expect(latency < .milliseconds(250), "the renders waited for something other than the end of the drag")
+        for _ in 0..<250 where editor.heldGeometryCount > 0 { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(editor.heldGeometryCount == 0)
+        #expect(editor.renderedElementCount == 1)
+        #expect(Self.attachment(editor, at: try #require(editor.parsed.elements.first?.span)) != nil)
+    }
+
+    /// Geometry that reports no end of its own — a zoom, a full-screen transition, a divider — is
+    /// coalesced instead, and the wait is what makes a burst of it cost one round of renders. How long
+    /// that takes after the last change is the wait itself and nothing more.
+    @Test func geometryThatReportsNoEndIsCoalescedIntoOneRound() async throws {
+        let (editor, window) = try await Self.make("Before\n\n![Two color swatches](swatch.png)\n\nAfter\n")
+        defer { window.orderOut(nil) }
+        try #require(editor.renderedElementCount == 1)
+        let requests = editor.renderRequestCount
+        let clock = ContinuousClock()
+        for width in Self.dragWidths {
+            editor.view.frame = NSRect(x: 0, y: 0, width: width, height: 600)
+            editor.view.layoutSubtreeIfNeeded()
+        }
+        let last = clock.now
+        #expect(editor.renderRequestCount == requests, "\(Self.dragWidths.count) steps started renders instead of being coalesced")
+        for _ in 0..<500 where editor.renderRequestCount == requests { try await Task.sleep(for: .milliseconds(2)) }
+        let settled = last.duration(to: clock.now)
+        print("RESIZE_COALESCE \(Self.dragWidths.count) steps -> \(editor.renderRequestCount - requests) round after \(settled), delay \(EditorController.environmentSettleDelay)")
+        #expect(editor.renderRequestCount == requests + 1, "one round for the whole burst")
+        #expect(settled < .milliseconds(200), "settling took \(settled)")
+    }
+
     /// A changed font size or appearance paints something else, so there the measurements go, as before.
     @Test func changingTheFontSizeRemeasuresFromScratch() async throws {
         let (editor, window) = try await Self.make("Before\n\n![Two color swatches](swatch.png)\n\nAfter\n")
