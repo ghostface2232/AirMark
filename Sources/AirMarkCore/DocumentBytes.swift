@@ -133,7 +133,10 @@ public actor RecoveryStore {
         for url in urls {
             switch url.pathExtension {
             case "json": jsons.append(url)
-            case "source": sizes[url.lastPathComponent] = (try? url.resourceValues(forKeys: Set(keys)))?.fileSize ?? 0
+            // A size that cannot be read is left out rather than recorded as zero: `loadMetadata` then
+            // goes and finds it, where zero would have made a draft look empty and dropped its text.
+            case "source":
+                if let size = (try? url.resourceValues(forKeys: Set(keys)))?.fileSize { sizes[url.lastPathComponent] = size }
             default: break
             }
         }
@@ -160,11 +163,17 @@ public actor RecoveryStore {
             data: { try? Data(contentsOf: URL(fileURLWithPath: $0)) },
             source: { [self] in source(of: $0) }))
     }
-    /// Synchronous, and `nonisolated` because the one caller cannot await: closing a document whose
-    /// changes are being discarded has to have the record gone before it returns, for the same reason
-    /// the closed record has to be written before it.
-    public nonisolated func removeImmediately(_ id: UUID) throws {
-        try writer.remove(id, from: directory)
+    /// Throws away everything recorded for `id`, and records `replacement` in its place when there is
+    /// one — one writer operation, so there is no moment where the discarded source is still on disk
+    /// under a record that claims to hold something else, and no way for a concurrent save to land in
+    /// between. Synchronous and `nonisolated` because the caller cannot await: a document closing on
+    /// discarded changes has to have them gone before `close()` returns.
+    ///
+    /// The replacement is written fresh rather than over what was there. The writer keeps the source it
+    /// last wrote for a revision and would otherwise reuse it, which for a discard is exactly the file
+    /// being thrown away.
+    public nonisolated func discardImmediately(_ id: UUID, replacingWith replacement: RecoveryRecord? = nil) throws {
+        try writer.discard(id, replacingWith: replacement, in: directory)
     }
 }
 
@@ -177,7 +186,9 @@ public actor RecoveryStore {
 /// large document does not write the document again. A new source goes to a new file first, then the
 /// JSON naming it, then the previous source files are removed: a crash at any point leaves a JSON file
 /// naming a complete source. Records from before this layout carry the source inline and still load.
-private final class RecoveryWriter: @unchecked Sendable {
+/// Internal rather than private so the tests can reach `loadMetadata`, whose fallbacks decide whether
+/// a record with text is read as an empty one.
+final class RecoveryWriter: @unchecked Sendable {
     private struct Stored: Codable {
         var id: UUID
         var filePath: String?
@@ -205,44 +216,66 @@ private final class RecoveryWriter: @unchecked Sendable {
     private var latest: [UUID: (revision: UInt64, date: Date, sourceFile: String)] = [:]
     func save(_ record: RecoveryRecord, to directory: URL) throws {
         try lock.withLock {
-            let saved = latest[record.id]
-            if let saved {
+            if let saved = latest[record.id] {
                 guard record.revision > saved.revision ||
                         (record.revision == saved.revision && record.date >= saved.date) else { return }
             }
-            let files = FileManager.default
-            try files.createDirectory(at: directory, withIntermediateDirectories: true)
-            let sourceFile: String
-            var wroteSource = false
-            if let saved, saved.revision == record.revision, files.fileExists(atPath: directory.appendingPathComponent(saved.sourceFile).path) {
-                sourceFile = saved.sourceFile
-            } else {
-                sourceFile = "\(record.id.uuidString).\(UUID().uuidString).source"
-                try Data(record.source.utf8).write(to: directory.appendingPathComponent(sourceFile), options: .atomic)
-                wroteSource = true
-            }
-            let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
-                                revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date,
-                                state: record.state, hasUnsavedChanges: record.hasUnsavedChanges,
-                                sessionID: record.sessionID, order: record.order)
-            do {
-                try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
-            } catch {
-                if wroteSource { try? files.removeItem(at: directory.appendingPathComponent(sourceFile)) }
-                throw error
-            }
-            latest[record.id] = (record.revision, record.date, sourceFile)
-            // Sources no record names any more, including one left by a save that stopped before its JSON.
-            if wroteSource { removeSources(of: record.id, in: directory, keeping: sourceFile) }
+            try write(record, to: directory)
         }
     }
-    func remove(_ id: UUID, from directory: URL) throws {
-        try lock.withLock {
-            let url = directory.appendingPathComponent(id.uuidString + ".json")
-            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
-            removeSources(of: id, in: directory, keeping: nil)
-            latest.removeValue(forKey: id)
+    /// Writes the record. Caller holds the lock and has already decided this record is the newer one.
+    private func write(_ record: RecoveryRecord, to directory: URL) throws {
+        let saved = latest[record.id]
+        let files = FileManager.default
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let sourceFile: String
+        var wroteSource = false
+        if let saved, saved.revision == record.revision, files.fileExists(atPath: directory.appendingPathComponent(saved.sourceFile).path) {
+            sourceFile = saved.sourceFile
+        } else {
+            sourceFile = "\(record.id.uuidString).\(UUID().uuidString).source"
+            try Data(record.source.utf8).write(to: directory.appendingPathComponent(sourceFile), options: .atomic)
+            wroteSource = true
         }
+        let stored = Stored(id: record.id, filePath: record.filePath, source: nil, sourceFile: sourceFile, hasBOM: record.hasBOM,
+                            revision: record.revision, selection: record.selection, scrollY: record.scrollY, date: record.date,
+                            state: record.state, hasUnsavedChanges: record.hasUnsavedChanges,
+                            sessionID: record.sessionID, order: record.order)
+        do {
+            try JSONEncoder().encode(stored).write(to: directory.appendingPathComponent(record.id.uuidString + ".json"), options: .atomic)
+        } catch {
+            if wroteSource { try? files.removeItem(at: directory.appendingPathComponent(sourceFile)) }
+            throw error
+        }
+        latest[record.id] = (record.revision, record.date, sourceFile)
+        // Sources no record names any more, including one left by a save that stopped before its JSON.
+        if wroteSource { removeSources(of: record.id, in: directory, keeping: sourceFile) }
+    }
+    func remove(_ id: UUID, from directory: URL) throws {
+        try lock.withLock { try drop(id, in: directory) }
+    }
+    /// Throws away everything recorded for `id` and, when `replacement` is given, records that instead —
+    /// one operation under one lock, so nothing can read or write a half-discarded record in between.
+    ///
+    /// The order is the opposite of `save`'s, because the two want opposite things from a crash. A save
+    /// writes the source before the JSON that names it, so an interrupted save leaves the record it had.
+    /// A discard removes the JSON first, because the JSON is the only thing that makes a source
+    /// reachable — `records()` and `metadata()` enumerate JSON files — so an interrupted discard leaves
+    /// nothing of what was discarded. The worst it can do is lose the replacement, and a document that
+    /// is not restored is the right way to fail at throwing a document away.
+    func discard(_ id: UUID, replacingWith replacement: RecoveryRecord?, in directory: URL) throws {
+        try lock.withLock {
+            try drop(id, in: directory)
+            guard let replacement else { return }
+            try write(replacement, to: directory)
+        }
+    }
+    /// The JSON first, then the sources it named. Caller holds the lock.
+    private func drop(_ id: UUID, in directory: URL) throws {
+        let url = directory.appendingPathComponent(id.uuidString + ".json")
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        removeSources(of: id, in: directory, keeping: nil)
+        latest.removeValue(forKey: id)
     }
     private func removeSources(of id: UUID, in directory: URL, keeping kept: String?) {
         let prefix = id.uuidString + "."
@@ -261,10 +294,15 @@ private final class RecoveryWriter: @unchecked Sendable {
         if let inline = stored.source {
             sourceBytes = inline.utf8.count
         } else if let name = stored.sourceFile, !name.contains("/") {
-            if let size = sourceSizes[name] {
+            // The listing, then a stat of the file itself, then the file. Only a source that cannot be
+            // read at all drops the record, which is what `records()` does with one. Every step before
+            // that is an answer about the length, and calling an unmeasurable source empty would lose
+            // a draft: an empty record opens no window, and nothing else holds a draft's text.
+            let source = directory.appendingPathComponent(name)
+            if let size = sourceSizes[name] ?? (try? source.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
                 sourceBytes = size
-            } else if let size = (try? directory.appendingPathComponent(name).resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
-                sourceBytes = size
+            } else if let bytes = try? Data(contentsOf: source) {
+                sourceBytes = bytes.count
             } else {
                 return nil
             }

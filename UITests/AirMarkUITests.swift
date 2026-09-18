@@ -329,12 +329,12 @@ import Carbon
         }
         let last = UUID(), previous = UUID()
         // Two documents open when the last session stopped, and one left by the session before it.
-        let front = try write("Front.md", "FRONT DOCUMENT\n")
+        let front_ = try write("Front.md", "FRONT DOCUMENT\n")
         let back = try write("Back.md", "BACK DOCUMENT\n")
         let stale = try write("Stale.md", "STALE DOCUMENT\n")
         try seedRecord(in: recovery, file: stale, source: "STALE DOCUMENT\n", session: previous, order: 0, age: 7200)
         try seedRecord(in: recovery, file: back, source: "BACK DOCUMENT\n", session: last, order: 1, age: 20)
-        try seedRecord(in: recovery, file: front, source: "FRONT DOCUMENT\n", session: last, order: 0, age: 10)
+        try seedRecord(in: recovery, file: front_, source: "FRONT DOCUMENT\n", session: last, order: 0, age: 10)
 
         let app = XCUIApplication()
         app.launchArguments = []
@@ -352,7 +352,22 @@ import Carbon
         XCTAssertTrue(editors.contains { $0.contains("FRONT DOCUMENT") }, "got \(editors)")
         XCTAssertTrue(editors.contains { $0.contains("BACK DOCUMENT") }, "got \(editors)")
         XCTAssertFalse(editors.contains { $0.contains("STALE DOCUMENT") }, "a document from an older session came back: \(editors)")
-        print("RELAUNCH_SESSION windows=\(editors.count) first-lines=\(editors.map { $0.split(separator: "\n").first.map(String.init) ?? "" })")
+
+        // Which document is actually in front, not just how many came back. The session recorded
+        // Front.md at order 0, and the opens finish in whatever order they finish in, so this is the
+        // part that depends on the stacking being re-applied rather than inherited from a completion.
+        //
+        // NOT YET RUN. This assertion was added after UI tests stopped being able to activate the app on
+        // the development machine — reproduced with the change it covers reverted, so it is the machine
+        // and not the code, but it does mean nobody has watched this assertion pass or fail. Run
+        // `Scripts/test-ui.sh` on a machine that can, before trusting it.
+        let titles = app.windows.allElementsBoundByIndex.map(\.title)
+        print("RELAUNCH_SESSION window titles, front to back: \(titles)")
+        XCTAssertTrue(titles.first?.contains("Front") == true,
+                      "the frontmost window is not the document the session had in front: \(titles)")
+        // The files are untouched by a restore.
+        XCTAssertEqual(try String(contentsOf: front_, encoding: .utf8), "FRONT DOCUMENT\n")
+        XCTAssertEqual(try String(contentsOf: back, encoding: .utf8), "BACK DOCUMENT\n")
         app.terminate()
     }
 

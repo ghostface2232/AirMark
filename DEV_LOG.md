@@ -240,3 +240,32 @@ in Release, 11 of 11, including both typing tests.
   cause was found — an autosave-in-place between the append and the assertion, which clears the dirty
   flag, caught by overriding `updateChangeCount(withToken:for:)` — and the assertion moved to before the
   first await, where no autosave can intervene. 640 append-and-save cycles since, with no failure.
+
+## 2026-09-18 — Three fixes from review
+
+`Validation/2026-09-18-review-fixes/`. Debug and Release, 109 tests in 16 suites and 60 in 4 suites.
+
+- **An unreadable source size is not zero.** `metadata()` wrote `?? 0` when the listing could not size a
+  source, and a zero-byte record is an empty one — no window, and nothing else holds a draft's text, so
+  the draft was silently lost. An unknown size is now left out and the loader falls back: listing, stat,
+  then the file. Only a source that cannot be read at all still drops the record. The stat failure is
+  not injectable, so the tests cover the fallback and say so; this is a defensive fix.
+- **Window order applied, not inherited.** The launch asked the last plan to come to the front and left
+  the rest to whatever order the asynchronous opens completed in, though the session had recorded which
+  window was in front. The opens still run together, each reporting into a main-actor collector, and
+  when the last lands the windows are ordered back to front and the last made key. The UI assertion for
+  this **has not been run**: UI tests on this machine stopped being able to activate the app part way
+  through, which reproduces with `main.swift` reverted and does not stop the built app launching from
+  the command line. It is marked NOT YET RUN in the test.
+- **Discard is one writer operation.** `discardRecovery` removed the record, ignored the result, then
+  saved a replacement at the same revision — and the writer reuses the source it last wrote for a
+  revision, so a failed remove left the discarded text on disk under a record claiming the file's.
+  `discardImmediately(_:replacingWith:)` drops the record, drops its sources and writes the replacement
+  fresh under one lock. The JSON goes first, the opposite of `save`'s order and for the opposite reason:
+  it is the only thing that makes a source reachable, so an interrupted discard leaves nothing of what
+  was discarded. Three tests; the two that matter fail on the old two-step path with the discarded text
+  surviving.
+- **Also.** `recordsNameTheSessionThatWroteThem` resolved a launch over every record in a recovery
+  directory shared with the suites running alongside, so a neighbour's record could decide it. It failed
+  that way once here and now resolves over its own two records.
+

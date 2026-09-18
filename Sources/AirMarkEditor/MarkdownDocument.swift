@@ -235,15 +235,20 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// them would hand back at the next launch exactly what was just thrown away.
     ///
     /// An untitled draft was never anywhere but in its record, so the record goes with it. A document
-    /// with a file keeps a record of the file — the next launch opens what is on disk, at the position
-    /// it was left at, and the discarded text is not left sitting in the recovery directory. The record
-    /// is removed before it is written again because the writer keeps the source it last wrote for a
-    /// revision, and this document's revision is the discarded text's.
+    /// with a file is replaced by a record of the file — the next launch opens what is on disk, at the
+    /// position it was left at.
+    ///
+    /// One store operation, not a remove and then a write: a failed remove followed by a write would
+    /// have left the discarded source on disk under a record claiming to hold the file's text, because
+    /// the writer reuses the source it last wrote for a revision. `discardImmediately` drops the record
+    /// and writes the replacement fresh under one lock, and if it fails part way it fails towards
+    /// having thrown the document away rather than towards bringing it back.
     private func discardRecovery(in store: RecoveryStore) {
-        try? store.removeImmediately(identity)
-        guard fileURL != nil else { return }
-        let onDisk = snapshot.persistedData().flatMap { try? DocumentBytes(data: $0) } ?? DocumentBytes()
-        let (_, version) = snapshot.versioned()
-        try? store.saveImmediately(record(state: .closed, bytes: onDisk, revision: version, hasUnsavedChanges: false))
+        var replacement: RecoveryRecord?
+        if fileURL != nil {
+            let onDisk = snapshot.persistedData().flatMap { try? DocumentBytes(data: $0) } ?? DocumentBytes()
+            replacement = record(state: .closed, bytes: onDisk, revision: snapshot.versioned().version, hasUnsavedChanges: false)
+        }
+        try? store.discardImmediately(identity, replacingWith: replacement)
     }
 }

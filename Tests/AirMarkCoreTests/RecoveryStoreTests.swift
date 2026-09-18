@@ -141,6 +141,129 @@ import Testing
         #expect(Set(plans.compactMap(\.recordID)) == Set(written.map(\.id)))
     }
 
+    /// A source whose length the directory listing did not hand over is measured, not assumed. The
+    /// listing used to record an unreadable size as zero, and a record of zero bytes is an empty one:
+    /// `LaunchPlan` opens no window for it, and nothing else holds a draft's text, so the draft was
+    /// gone. The fix is that an unknown size is left out of the listing instead, and the loader then
+    /// stats the file and reads it rather than giving up.
+    ///
+    /// The stat failure itself cannot be injected — `contentsOfDirectory` caches the value it was asked
+    /// for, so it does not fail for a file that is there — so this covers the fallback the fix routes
+    /// to and not the failure that reaches it. It is a defensive fix, and the test says so rather than
+    /// implying a reproduction.
+    @Test func aSourceLengthTheListingDidNotGiveIsFoundNotAssumed() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        let draft = Self.record(UUID(), "DRAFT THAT MUST NOT BE LOST", revision: 1)
+        let empty = Self.record(UUID(), "", revision: 1)
+        for record in [draft, empty] { try await store.save(record) }
+        let json = { (id: UUID) in directory.appendingPathComponent(id.uuidString + ".json") }
+
+        // Asked for a length the listing does not have.
+        let found = try #require(RecoveryWriter.loadMetadata(json(draft.id), in: directory, sourceSizes: [:]))
+        #expect(found.sourceBytes == draft.source.utf8.count, "the length was assumed, not found")
+        #expect(found.id == draft.id, "the record was dropped for want of a length")
+        // An empty source is still empty: nothing here may turn zero into something else.
+        #expect(RecoveryWriter.loadMetadata(json(empty.id), in: directory, sourceSizes: [:])?.sourceBytes == 0)
+        // A source that is really gone still drops the record, as `records()` drops it.
+        try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix(draft.id.uuidString) && $0.hasSuffix(".source") }
+            .forEach { try FileManager.default.removeItem(at: directory.appendingPathComponent($0)) }
+        #expect(RecoveryWriter.loadMetadata(json(draft.id), in: directory, sourceSizes: [:]) == nil)
+    }
+
+    /// The whole path, with the draft offered back and the empty record opening nothing.
+    @Test func aNonEmptyRecordIsNeverReadAsEmpty() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        let draft = Self.record(UUID(), "DRAFT THAT MUST NOT BE LOST", revision: 1)
+        let empty = Self.record(UUID(), "", revision: 1)
+        for record in [draft, empty] { try await store.save(record) }
+        let read = await store.metadata()
+        #expect(read.first { $0.id == draft.id }?.sourceBytes == draft.source.utf8.count)
+        #expect(read.first { $0.id == empty.id }?.sourceBytes == 0)
+        let plans = await store.launchPlans(recentPaths: [])
+        #expect(plans.contains { $0.recordID == draft.id }, "the draft was not offered back: \(plans)")
+        #expect(!plans.contains { $0.recordID == empty.id }, "an empty record opened a window")
+    }
+
+    /// Discarding is one operation: the record and its source go, and the replacement is written fresh.
+    /// A remove followed by a save was not the same thing — the writer reuses the source it last wrote
+    /// for a revision, so a remove that failed left the discarded text on disk under a record claiming
+    /// to hold the file's, which a launch would then hand back.
+    @Test func discardingReplacesTheRecordInOneOperation() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        let id = UUID()
+        var dirty = Self.record(id, "DISCARDED TEXT", revision: 7, path: "/notes/a.md")
+        dirty.hasUnsavedChanges = true
+        try await store.save(dirty)
+        #expect(Self.files(directory).count == 2)
+
+        // Replaced at the same revision, which is the case the old two-step path got wrong.
+        var clean = Self.record(id, "on disk\n", revision: 7, path: "/notes/a.md")
+        clean.state = .closed; clean.hasUnsavedChanges = false
+        clean.date = dirty.date.addingTimeInterval(1)
+        try store.discardImmediately(id, replacingWith: clean)
+
+        let read = try #require(await RecoveryStore(directory: directory).records().first { $0.id == id })
+        #expect(read.source == "on disk\n", "the record still names the discarded text: \(read.source.debugDescription)")
+        #expect(!read.hasUnsavedChanges)
+        for (name, _) in Self.files(directory) where name.hasSuffix(".source") {
+            let text = (try? String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)) ?? ""
+            #expect(text != "DISCARDED TEXT", "the discarded source is still in \(name)")
+        }
+        #expect(Self.files(directory).count == 2, "a source was left behind: \(Self.files(directory).keys.sorted())")
+    }
+
+    /// An interrupted discard must fail towards having thrown the document away. The JSON goes first,
+    /// because it is the only thing that makes a source reachable, and the sources go before anything
+    /// new is written — so at no point after the discard begins is the discarded text reachable, and
+    /// losing the replacement is the worst a failure can do.
+    ///
+    /// A crash cannot be injected into the middle of a locked file operation from a test, so what is
+    /// checked is the consequence of that order: take the replacement away, as a failed write would
+    /// have left it, and there is nothing of the discarded document left to find.
+    @Test func anInterruptedDiscardLeavesNothingToRestore() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        let id = UUID()
+        var dirty = Self.record(id, "DISCARDED TEXT", revision: 3, path: "/notes/a.md")
+        dirty.hasUnsavedChanges = true
+        try await store.save(dirty)
+        #expect(await store.records().contains { $0.source == "DISCARDED TEXT" })
+
+        var clean = Self.record(id, "on disk\n", revision: 3, path: "/notes/a.md")
+        clean.state = .closed; clean.hasUnsavedChanges = false
+        try store.discardImmediately(id, replacingWith: clean)
+
+        // As if the replacement had never been written.
+        try FileManager.default.removeItem(at: directory.appendingPathComponent(id.uuidString + ".json"))
+        let plans = await RecoveryStore(directory: directory).launchPlans(recentPaths: [])
+        #expect(!plans.contains { $0.recordID == id }, "the discarded document is still offered: \(plans)")
+        #expect(await RecoveryStore(directory: directory).records().isEmpty)
+        for (name, _) in Self.files(directory) {
+            let text = (try? String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)) ?? ""
+            #expect(!text.contains("DISCARDED TEXT"), "the discarded source survives in \(name)")
+        }
+    }
+
+    /// A draft is discarded outright, with no replacement, and leaves nothing at all behind.
+    @Test func discardingADraftLeavesTheDirectoryEmpty() async throws {
+        let directory = Self.directory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory)
+        let id = UUID()
+        try await store.save(Self.record(id, "DISCARDED DRAFT", revision: 1))
+        try store.discardImmediately(id)
+        #expect(Self.files(directory).isEmpty, "left behind: \(Self.files(directory).keys.sorted())")
+        #expect(await store.records().isEmpty)
+    }
+
     @Test func recordsKeepTheirStateAndUnsavedFlag() async throws {
         let directory = Self.directory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -483,7 +483,12 @@ import AirMarkCore
         try await store.save(stale)
         let records = await store.records()
         #expect(records.contains { $0.id == stale.id })
-        let plans = resolve(records: records, recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        // This test's two records and no others. The recovery directory is shared with whatever suites
+        // are running alongside, because `MarkdownDocument.recoveryStore` is a static they all set, and
+        // a record of theirs does not merely add a plan — it can decide the launch instead.
+        let ours = records.filter { $0.id == mine.id || $0.id == stale.id }
+        #expect(ours.count == 2, "one of this test's own records is missing: \(ours.map(\.id))")
+        let plans = resolve(records: ours, recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         // By identity, not by value: the document keeps recording itself, so the record on disk may be
         // a later one than `mine` by the time this reads it.
         #expect(plans.count == 1, "only this session's document, got \(plans)")
