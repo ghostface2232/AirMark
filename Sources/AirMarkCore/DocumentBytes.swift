@@ -158,6 +158,12 @@ public actor RecoveryStore {
             source: { [self] in source(of: $0) }))
     }
     public func remove(_ id: UUID) throws {
+        try removeImmediately(id)
+    }
+    /// Synchronous removal, for the paths that cannot await. Closing a document whose changes are being
+    /// discarded is one: the record has to be gone before the close returns, for the same reason the
+    /// closed record has to be written before it.
+    public nonisolated func removeImmediately(_ id: UUID) throws {
         try writer.remove(id, from: directory)
     }
 }

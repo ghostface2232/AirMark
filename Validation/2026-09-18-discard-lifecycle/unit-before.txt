@@ -1,0 +1,84 @@
+Building for debugging...
+[1 / 1]
+[2 / 12] AirMarkEditor
+[4 / 14] AirMarkEditor
+[9 / 17] AirMarkEditor
+[11 / 12] AirMarkEditorTests-product
+Build complete! (1.05 sec)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DocumentTests started.
+◇ Test discardingAnUntitledDraftRemovesItsRecovery() started.
+✘ Test discardingAnUntitledDraftRemovesItsRecovery() recorded an issue at DocumentTests.swift:379:9: Expectation failed: await store.records().first { $0.id == identity } == nil
+↳ the discarded draft is still recorded
+↳ await store.records().first { $0.id == identity } == nil → <not evaluated>
+✘ Test discardingAnUntitledDraftRemovesItsRecovery() recorded an issue at DocumentTests.swift:381:9: Expectation failed: names.isEmpty
+↳ the discarded text is still in the recovery directory: ["B9BBCE43-FE47-4E54-9A88-B7418D0997F7.json", "B9BBCE43-FE47-4E54-9A88-B7418D0997F7.014568D9-CF42-462E-9362-7ACB5DE214B2.source"]
+↳ names.isEmpty → false
+↳   names → ["B9BBCE43-FE47-4E54-9A88-B7418D0997F7.json", "B9BBCE43-FE47-4E54-9A88-B7418D0997F7.014568D9-CF42-462E-9362-7ACB5DE214B2.source"]
+↳   isEmpty → false
+✘ Test discardingAnUntitledDraftRemovesItsRecovery() recorded an issue at DocumentTests.swift:383:9: Expectation failed: plans == [.newDocument]
+↳ the discarded draft came back: [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: B9BBCE43-FE47-4E54-9A88-B7418D0997F7, filePath: nil, source: "DISCARD ME", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 10, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:13 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(D49FA736-0783-4C47-B40D-4A4EC49173C9), order: nil))]
+↳ plans == [.newDocument] → false
+↳   plans → [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: B9BBCE43-FE47-4E54-9A88-B7418D0997F7, filePath: nil, source: "DISCARD ME", hasBOM: false, revision: 1, selection: AirMarkCore.SourceSpan(location: 10, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:13 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(D49FA736-0783-4C47-B40D-4A4EC49173C9), order: nil))]
+↳   [.newDocument] → [AirMarkCore.LaunchPlan.newDocument]
+✘ Test discardingAnUntitledDraftRemovesItsRecovery() failed after 0.762 seconds with 3 issues.
+↳ /// Closing a document whose changes are being discarded must not leave them behind. An untitled
+↳ /// draft's text was never anywhere but in its record, so the record goes with it; the next launch
+↳ /// has nothing of it to offer back.
+◇ Test discardingEditsToASavedFileLeavesTheFileToOpen() started.
+✘ Test discardingEditsToASavedFileLeavesTheFileToOpen() recorded an issue at DocumentTests.swift:400:9: Expectation failed: !record.hasUnsavedChanges
+↳ the discarded edits are still recorded as unsaved work
+↳ !record.hasUnsavedChanges → true
+↳   record.hasUnsavedChanges → false
+↳     record → RecoveryRecord(id: A0E08DC7-F06B-4C14-9350-EBC2F8CE667E, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"), source: "original\nEDITED", hasBOM: false, revision: 2, selection: AirMarkCore.SourceSpan(location: 15, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:14 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD), order: nil)
+↳       id → A0E08DC7-F06B-4C14-9350-EBC2F8CE667E
+↳       filePath → "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"
+↳         some → "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"
+↳       source → "original
+        EDITED"
+↳       hasBOM → false
+↳       revision → 2
+↳       selection → SourceSpan(location: 15, length: 0)
+↳         location → 15
+↳         length → 0
+↳       scrollY → -32.0
+↳       date → 2026-09-18 02:15:14 +0000
+↳         timeIntervalSinceReferenceDate → 811390514.167804
+↳       state → .closed
+↳       hasUnsavedChanges → true
+↳       sessionID → 9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD
+↳         some → 9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD
+↳       order → nil
+↳     hasUnsavedChanges → true
+✘ Test discardingEditsToASavedFileLeavesTheFileToOpen() recorded an issue at DocumentTests.swift:401:9: Expectation failed: record.source == "original\n"
+↳ the record still holds the discarded text: "original\nEDITED"
+↳ record.source == "original\n" → false
+↳   record.source → "original
+    EDITED"
+↳   "original\n" → "original
+    "
+✘ Test discardingEditsToASavedFileLeavesTheFileToOpen() recorded an issue at DocumentTests.swift:408:13: Expectation failed: !text.contains("EDITED")
+↳ the discarded text is still on disk in A0E08DC7-F06B-4C14-9350-EBC2F8CE667E.B47E7DED-2037-4C27-92D4-E6A71BBCC0F2.source
+↳ !text.contains("EDITED") → true
+↳   text.contains("EDITED") → false
+↳     text → "original
+      EDITED"
+✘ Test discardingEditsToASavedFileLeavesTheFileToOpen() recorded an issue at DocumentTests.swift:413:9: Expectation failed: plans == [.openFile(path: url.path, record: record.metadata)]
+↳ got [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: A0E08DC7-F06B-4C14-9350-EBC2F8CE667E, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"), source: "original\nEDITED", hasBOM: false, revision: 2, selection: AirMarkCore.SourceSpan(location: 15, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:14 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD), order: nil))]
+↳ plans == [.openFile(path: url.path, record: record.metadata)] → false
+↳   plans → [AirMarkCore.LaunchPlan.recoverDraft(AirMarkCore.RecoveryRecord(id: A0E08DC7-F06B-4C14-9350-EBC2F8CE667E, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"), source: "original\nEDITED", hasBOM: false, revision: 2, selection: AirMarkCore.SourceSpan(location: 15, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:14 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD), order: nil))]
+↳   [.openFile(path: url.path, record: record.metadata)] → [AirMarkCore.LaunchPlan.openFile(path: "/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md", record: Optional(AirMarkCore.RecoveryMetadata(id: A0E08DC7-F06B-4C14-9350-EBC2F8CE667E, filePath: Optional("/var/folders/bw/tgtn0trs5t5dnff3y63143x00000gn/T/AirMarkDocumentTests-DD418D36-EEFC-4723-B423-3DAC6F2AC04F/Note.md"), hasBOM: false, revision: 2, selection: AirMarkCore.SourceSpan(location: 15, length: 0), scrollY: -32.0, date: 2026-09-18 02:15:14 +0000, state: AirMarkCore.RecoveryState.closed, hasUnsavedChanges: true, sessionID: Optional(9E792F0D-A735-4BAD-BB0E-E3C6BF1742BD), order: nil, sourceBytes: 15)))]
+✘ Test discardingEditsToASavedFileLeavesTheFileToOpen() failed after 0.706 seconds with 4 issues.
+↳ /// A document with a file keeps a record of the file. The next launch opens what is on disk, at the
+↳ /// position it was left at, and the discarded text is not left in the recovery directory.
+◇ Test cancellingACloseKeepsTheRecovery() started.
+✔ Test cancellingACloseKeepsTheRecovery() passed after 0.685 seconds.
+✘ Suite DocumentTests failed after 2.154 seconds with 7 issues.
+↳ /// Saving, external-change detection and recovery without XCUIAutomation.
+↳ /// Other suites run in parallel and their documents also write to `MarkdownDocument.recoveryStore`,
+↳ /// so recovery assertions select this test's record by document identity.
+✘ Test run with 3 tests in 1 suite failed after 2.154 seconds with 7 issues.
+Note: Some test targets reported failures:
+  - AirMarkEditorTests (Swift Testing)

@@ -197,11 +197,14 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// the session's stacking survives the quit; a document with no window in the order has none.
     public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
-        return RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: version,
-                              selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
-                              state: state, hasUnsavedChanges: isDocumentEdited,
-                              sessionID: Self.recoveryStore?.sessionID,
-                              order: NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
+        return record(state: state, bytes: bytes, revision: version, hasUnsavedChanges: isDocumentEdited)
+    }
+    private func record(state: RecoveryState, bytes: DocumentBytes, revision: UInt64, hasUnsavedChanges: Bool) -> RecoveryRecord {
+        RecoveryRecord(id: identity, filePath: fileURL?.path, source: bytes.source, hasBOM: bytes.hasBOM, revision: revision,
+                       selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
+                       state: state, hasUnsavedChanges: hasUnsavedChanges,
+                       sessionID: Self.recoveryStore?.sessionID,
+                       order: NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()
@@ -228,8 +231,24 @@ public final class DocumentSnapshot: @unchecked Sendable {
         if !Self.isTerminating, let store = Self.recoveryStore {
             // Nothing can be reported: the window is going away. The next launch reopening a closed
             // document is the cost of a failed write here, which is what it was before.
-            try? store.saveImmediately(record(state: .closed))
+            if isDocumentEdited { discardRecovery(in: store) } else { try? store.saveImmediately(record(state: .closed)) }
         }
         super.close()
+    }
+    /// The document is closing with changes still on it, so they are not being kept: the user chose
+    /// Delete in the close panel of an unsaved draft, or Don't Save where that is offered. Recording
+    /// them would hand back at the next launch exactly what was just thrown away.
+    ///
+    /// An untitled draft was never anywhere but in its record, so the record goes with it. A document
+    /// with a file keeps a record of the file — the next launch opens what is on disk, at the position
+    /// it was left at, and the discarded text is not left sitting in the recovery directory. The record
+    /// is removed before it is written again because the writer keeps the source it last wrote for a
+    /// revision, and this document's revision is the discarded text's.
+    private func discardRecovery(in store: RecoveryStore) {
+        try? store.removeImmediately(identity)
+        guard fileURL != nil else { return }
+        let onDisk = snapshot.persistedData().flatMap { try? DocumentBytes(data: $0) } ?? DocumentBytes()
+        let (_, version) = snapshot.versioned()
+        try? store.saveImmediately(record(state: .closed, bytes: onDisk, revision: version, hasUnsavedChanges: false))
     }
 }

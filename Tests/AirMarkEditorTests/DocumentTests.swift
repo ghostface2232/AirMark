@@ -290,7 +290,7 @@ import AirMarkCore
         #expect(record.state == .closed)
         #expect(!record.hasUnsavedChanges, "the text was on disk when it was closed")
         let plans = resolve(records: [record], recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
-        #expect(plans == [.openFile(path: url.path, record: record.metadata)], "the last document still reopens when nothing was left open")
+        #expect(plans.filter { $0.recordID == document.identity } == [.openFile(path: url.path, record: record.metadata)], "got \(plans)")
     }
 
     /// The quit writes `.quit` for every open document and AppKit then closes them. `isTerminating` is
@@ -354,6 +354,116 @@ import AirMarkCore
                                        disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
         #expect(!plans.contains { $0.recordID == identity }, "the closed document came back: \(plans)")
         #expect(plans.contains { $0.recordID == left.id }, "the document left open did not: \(plans)")
+    }
+
+    /// Closing a document whose changes are being discarded must not leave them behind. An untitled
+    /// draft's text was never anywhere but in its record, so the record goes with it; the next launch
+    /// has nothing of it to offer back.
+    @Test func discardingAnUntitledDraftRemovesItsRecovery() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkDiscard-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory.appendingPathComponent("Recovery"))
+        MarkdownDocument.recoveryStore = store
+        let document = MarkdownDocument()
+        document.makeWindowControllers()
+        document.editor?.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        let identity = document.identity
+        append(document, "DISCARD ME")
+        #expect(document.isDocumentEdited)
+        _ = try #require(try await recoveryRecord(document) { $0.source == "DISCARD ME" })
+
+        // What the close panel's Delete leads to: the document closes with its changes still on it.
+        #expect(document.isDocumentEdited, "the close has to be the discarding kind for this to test it")
+        document.close()
+        #expect(await store.records().first { $0.id == identity } == nil, "the discarded draft is still recorded")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("Recovery").path)) ?? []
+        // By identity throughout: other suites run in parallel and their documents write through
+        // the same `MarkdownDocument.recoveryStore`, so the directory is not this test's alone.
+        #expect(!names.contains { $0.hasPrefix(identity.uuidString) }, "the discarded text is still in the recovery directory: \(names)")
+    }
+
+    /// A document with a file keeps a record of the file. The next launch opens what is on disk, at the
+    /// position it was left at, and the discarded text is not left in the recovery directory.
+    @Test func discardingEditsToASavedFileLeavesTheFileToOpen() async throws {
+        let (document, url, directory) = try makeDocument(Data("original\n".utf8))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try #require(MarkdownDocument.recoveryStore)
+        let identity = document.identity
+        append(document, "EDITED")
+        #expect(document.isDocumentEdited)
+        _ = try #require(try await recoveryRecord(document) { $0.source.contains("EDITED") })
+
+        document.close()
+        let record = try #require(await store.records().first { $0.id == identity })
+        #expect(record.state == .closed)
+        #expect(!record.hasUnsavedChanges, "the discarded edits are still recorded as unsaved work")
+        #expect(record.source == "original\n", "the record still holds the discarded text: \(record.source.debugDescription)")
+        #expect(record.filePath == url.path)
+        // Nothing in the recovery directory holds what was thrown away.
+        let recoveryDirectory = directory.appendingPathComponent("Recovery")
+        let sources = ((try? FileManager.default.contentsOfDirectory(atPath: recoveryDirectory.path)) ?? []).filter { $0.hasSuffix(".source") }
+        for name in sources {
+            let text = (try? String(contentsOf: recoveryDirectory.appendingPathComponent(name), encoding: .utf8)) ?? ""
+            #expect(!text.contains("EDITED"), "the discarded text is still on disk in \(name)")
+        }
+        // The file on disk is what the next launch opens.
+        #expect(try Data(contentsOf: url) == Data("original\n".utf8))
+        // Resolved from this document's own record. The recovery directory is shared with whatever
+        // other suites are running, and a record of theirs would decide the launch instead of this one.
+        let plans = resolve(records: [record], recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: record.metadata)], "got \(plans)")
+    }
+
+    /// The third button of a draft's close panel. Save gives the draft a file and the changes are kept,
+    /// so the record is clean, names the file, and the next launch opens it rather than a draft. The
+    /// panel itself is the system's, and out of process for a sandboxed app, so what it leads to is
+    /// asserted here rather than through the UI.
+    @Test func savingADraftOnCloseLeavesItsFileToOpen() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AirMarkSaveDraft-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecoveryStore(directory: directory.appendingPathComponent("Recovery"))
+        MarkdownDocument.recoveryStore = store
+        let document = MarkdownDocument()
+        document.makeWindowControllers()
+        document.editor?.view.frame = NSRect(x: 0, y: 0, width: 880, height: 760)
+        append(document, "SAVE ME")
+        #expect(document.isDocumentEdited)
+        // The undo group has to close before the save, or its change count lands after it and the
+        // document is dirty again — the same ordering `repeatedSavesPreserveBytesWithoutFalseConflicts`
+        // depends on.
+        try await settle()
+        let url = directory.appendingPathComponent("Saved.md")
+        try await document.save(to: url, ofType: Self.type, for: .saveAsOperation)
+        try await waitUntilClean(document)
+        #expect(!document.isDocumentEdited, "Save left the document with changes on it")
+
+        document.close()
+        let record = try #require(await store.records().first { $0.id == document.identity })
+        #expect(record.state == .closed)
+        #expect(!record.hasUnsavedChanges)
+        #expect(record.filePath == url.path)
+        #expect(record.source == "SAVE ME")
+        #expect(try Data(contentsOf: url) == Data("SAVE ME".utf8))
+        // Resolved from this document's own record. The recovery directory is shared with whatever
+        // other suites are running, and a record of theirs would decide the launch instead of this one.
+        let plans = resolve(records: [record], recent: [], disk: { try? Data(contentsOf: URL(fileURLWithPath: $0)) })
+        #expect(plans == [.openFile(path: url.path, record: record.metadata)], "got \(plans)")
+    }
+
+    /// Cancel never closes the document, so nothing here runs and the recovery record stands.
+    @Test func cancellingACloseKeepsTheRecovery() async throws {
+        let (document, _, directory) = try makeDocument(Data("original\n".utf8))
+        defer { document.close(); try? FileManager.default.removeItem(at: directory) }
+        let store = try #require(MarkdownDocument.recoveryStore)
+        append(document, "KEEP ME")
+        let edited = try #require(try await recoveryRecord(document) { $0.source.contains("KEEP ME") })
+        #expect(edited.hasUnsavedChanges)
+        // A cancelled close is a close that does not happen: `close()` is never called.
+        let after = try #require(await store.records().first { $0.id == document.identity })
+        #expect(after.source.contains("KEEP ME"), "the unsaved work was dropped without the document closing")
+        #expect(after.state == .open)
     }
 
     /// Every record a run writes names that run, so a launch restores the documents the last session

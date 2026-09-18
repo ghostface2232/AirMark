@@ -1,0 +1,4 @@
+PROBE value after typing: Optional("original\nEDITED")
+PROBE sheets=0 dialogs=0 windows=0 running=4
+PROBE file on disk after Cmd-W: "original\nEDITED"
+PROBE recovery dir: ["8C744482-7037-4649-A656-18CD843540BD.524ED8C4-8F2E-4676-9B8C-41E1B2BE4732.source", "8C744482-7037-4649-A656-18CD843540BD.json"]

@@ -331,3 +331,41 @@ Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw 
   reasoning behind the 50 ms is argued from the display refresh rate, not measured. The two UI tests
   that type were not run.
 
+## 2026-09-18 — Discarding changes, and what a launch offers back
+
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw output:
+`Validation/2026-09-18-discard-lifecycle/`.
+
+- **What the close panel is, measured first.** The work was asked for as `Close → Don't Save`. AirMark
+  does not offer that for a document with a file: `autosavesInPlace` is true, so Cmd-W on an edited
+  opened file shows no panel at all and writes the edit — probed, not read off the source. An unsaved
+  draft does ask, because `autosavesDrafts` is false, and macOS labels its discard button **Delete**.
+  That is the path the report was about.
+- **The bug.** Clicking Delete left a `.closed` record holding the discarded text with
+  `hasUnsavedChanges` still set. A launch with nothing else to open falls back to the most recently put
+  away document, finds a record with no file path and text in it, and offers it as a "Recovered"
+  window — exactly what the user had just deleted.
+- **The fix.** `close()` asks whether the changes are being kept. A document still edited as it closes
+  is one whose changes are being thrown away, and its recovery is invalidated before `close()` returns,
+  through the synchronous writer the quit path uses. An unsaved draft's record is removed outright: its
+  text was never anywhere else. A document with a file keeps a `.closed` record of the file — clean,
+  and holding the bytes on disk — so the next launch opens the file at the position it was left at and
+  nothing discarded stays in the recovery directory. The record is removed before being written again
+  because the writer keeps the source it last wrote for a revision, and this revision is the discarded
+  text's. `RecoveryStore.removeImmediately` is `remove` without the actor hop, for the reason
+  `saveImmediately` exists. Cancel needs no code: a cancelled close is a close that does not happen.
+- **Validated.** Unit: the two discard tests fail on the old `close()` with 7 assertions between them
+  and pass after; `cancellingACloseKeepsTheRecovery` passes either way by design. Five consecutive full
+  runs, 106 tests in 15 suites and 55 in 4 suites. UI, end to end through a relaunch:
+  `testDiscardedDraftIsNotRestoredAfterRelaunch` fails on the old code with "the discarded draft came
+  back: DISCARD ME" and passes after; `testCancelledCloseKeepsTheDraftAfterRelaunch` and
+  `testEditingASavedFileIsKeptOnCloseAndRelaunch` pass. All seven UI tests pass in Release.
+- **Not covered.** `Close → Don't Save` on a saved file is not tested because it cannot be reached —
+  the handling exists and is unit-tested against a programmatic close, but no UI test can open that
+  panel, and making it reachable would mean turning `autosavesInPlace` off, which nobody asked for. The
+  panel's Save button is not driven from the UI either: the app is sandboxed, so that save panel is the
+  system's powerbox rather than AirMark, and what Save leads to is asserted at the document level. The
+  recovery directory is shared with the suites running alongside, since `MarkdownDocument.recoveryStore`
+  is a static they all set, so the new tests resolve a launch from the document's own record — a
+  foreign record does not merely add a plan, it can decide the launch instead.
+

@@ -1,0 +1,7 @@
+Test Case '-[AirMarkUITests.AirMarkUITests testCancelledCloseKeepsTheDraftAfterRelaunch]' passed (15.217 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch]' passed (13.398 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testEditingASavedFileIsKeptOnCloseAndRelaunch]' passed (7.886 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testInlineMathFixtureScreenshot]' passed (7.164 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testQuitRecordsAnOpenDocumentAsQuitNotClosed]' passed (2.069 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseDarkAppearanceScreenshot]' passed (10.686 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testShowcaseRendersSpecialContent]' passed (15.247 seconds).

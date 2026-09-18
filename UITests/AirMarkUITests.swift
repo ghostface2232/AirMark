@@ -164,6 +164,135 @@ import Carbon
         XCTAssertNotNil(stored["sessionID"] as? String, "the record does not name the run that wrote it")
     }
 
+    /// The close panel of an unsaved draft, and what each of its three buttons leaves for the next
+    /// launch. Needs an idle machine: these type into the app.
+    ///
+    /// The panel appears for a draft because `autosavesDrafts` is false. macOS labels its discard
+    /// button **Delete**, not Don't Save, which is the wording for a document that has a file.
+    private func draftCloseScenario(_ output: URL, type text: String) -> (XCUIApplication, XCUIElement) {
+        let app = XCUIApplication()
+        app.launchArguments = ["--blank"]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        useASCIIInputSource()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click(); editor.typeText(text)
+        XCTAssertEqual(editor.value as? String, text)
+        app.typeKey("w", modifierFlags: .command)
+        return (app, editor)
+    }
+    /// Relaunches into the same recovery directory, with no file and no `--blank`, so the launch
+    /// decides from the recovery records alone.
+    private func relaunch(_ app: XCUIApplication, _ output: URL) -> XCUIElement {
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15), "the app did not quit")
+        app.launchArguments = []
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 15))
+        return editor
+    }
+    private func temporaryOutput(_ name: String) throws -> URL {
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(name + "-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        return output
+    }
+
+    /// Delete throws the draft away, so the next launch must not offer it back. The record used to be
+    /// written as closed with the discarded text still in it, and a launch with nothing else to open
+    /// revived it as a "Recovered" window.
+    func testDiscardedDraftIsNotRestoredAfterRelaunch() throws {
+        let output = try temporaryOutput("AirMarkDiscard")
+        let (app, _) = draftCloseScenario(output, type: "DISCARD ME")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "closing an edited draft did not ask")
+        XCTAssertTrue(sheet.buttons["Delete"].exists, "buttons: \(sheet.buttons.allElementsBoundByIndex.map { $0.title })")
+        sheet.buttons["Delete"].click()
+        let recovery = output.appendingPathComponent("Recovery")
+        var records: [String] = []
+        for _ in 0..<40 {
+            records = ((try? FileManager.default.contentsOfDirectory(atPath: recovery.path)) ?? []).filter { $0.hasSuffix(".json") }
+            if records.isEmpty { break }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        XCTAssertTrue(records.isEmpty, "the discarded draft is still recorded: \(records)")
+        app.typeKey("q", modifierFlags: .command)
+
+        let editor = relaunch(app, output)
+        let restored = (editor.value as? String) ?? ""
+        XCTAssertFalse(restored.contains("DISCARD ME"), "the discarded draft came back: \(restored.debugDescription)")
+        for window in app.windows.allElementsBoundByIndex {
+            XCTAssertFalse(window.title.contains("Recovered"), "a recovered window for a discarded draft: \(window.title)")
+        }
+        app.terminate()
+    }
+
+    /// Cancel is not a close. The draft stays open and its recovery stands, so quitting and coming back
+    /// brings it with it.
+    func testCancelledCloseKeepsTheDraftAfterRelaunch() throws {
+        let output = try temporaryOutput("AirMarkCancel")
+        let (app, editor) = draftCloseScenario(output, type: "KEEP ME")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+        sheet.buttons["Cancel"].click()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5), "Cancel closed the window")
+        XCTAssertEqual(editor.value as? String, "KEEP ME", "Cancel lost the draft's text")
+        // The record still holds the draft: Cancel is not a close, so nothing discarded it.
+        let recovery = output.appendingPathComponent("Recovery")
+        var kept = false
+        for _ in 0..<40 where !kept {
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: recovery.path)) ?? []
+            kept = names.filter { $0.hasSuffix(".source") }.contains {
+                ((try? String(contentsOf: recovery.appendingPathComponent($0), encoding: .utf8)) ?? "").contains("KEEP ME")
+            }
+            if !kept { Thread.sleep(forTimeInterval: 0.25) }
+        }
+        XCTAssertTrue(kept, "Cancel dropped the draft's recovery")
+        // Force quit rather than Cmd-Q: a clean quit asks about the unsaved draft all over again, and
+        // an unsaved draft surviving a stop that never asked is the whole point of recovery.
+        app.terminate()
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "KEEP ME", "the draft kept by Cancel was not restored")
+        app.terminate()
+    }
+
+    // The close panel's third button, Save, is not driven from here. The app is sandboxed, so the save
+    // panel it opens for an untitled draft belongs to the system's powerbox and not to this app, and
+    // automating it is fragile in a way that would say more about the panel than about AirMark. What
+    // Save leads to — the draft gets a file, its record is clean and names it, and the next launch
+    // opens the file — is covered at the document level by
+    // `DocumentTests.savingADraftOnCloseLeavesItsFileToOpen`.
+
+    /// A document with a file is never asked about: `autosavesInPlace` writes the edit and closes. This
+    /// pins that, because it is why the panel above says Delete and why there is no Don't Save to test
+    /// for a saved file — the edit is kept, and the next launch opens the file holding it.
+    func testEditingASavedFileIsKeptOnCloseAndRelaunch() throws {
+        let output = try temporaryOutput("AirMarkSavedFile")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("original\n".utf8).write(to: file)
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
+        app.launch()
+        useASCIIInputSource()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        app.typeKey(.downArrow, modifierFlags: .command)
+        editor.typeText("EDITED")
+        app.typeKey("w", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(app.sheets.count, 0, "a saved file was asked about; autosavesInPlace should have kept it")
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "original\nEDITED", "the close did not keep the edit")
+        app.typeKey("q", modifierFlags: .command)
+
+        let restored = relaunch(app, output)
+        XCTAssertEqual(restored.value as? String, "original\nEDITED", "the file's content did not come back")
+        app.terminate()
+    }
+
     /// Typing, keyboard-only formatting, undo, and Replace All through the find bar. Needs an idle machine: keys go to the app.
     func testTypingUndoAndReplaceAll() {
         let app = XCUIApplication()
