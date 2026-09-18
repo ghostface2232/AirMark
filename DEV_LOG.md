@@ -308,3 +308,17 @@ after the review fixes below; the UI state after them is in that entry.
   runner is ad-hoc signed, so any change to the UI tests drops its Accessibility grant: remove the entry
   and add the new build, then run with `test-without-building`. Toggling the old entry is not enough.
 
+## 2026-09-18 — Keystroke cost, re-measured
+
+`Validation/2026-09-18-keystroke-cost/`, Release, commit `f8f1112`, three independent runs.
+
+- **The per-keystroke target is met.** The last recorded 1MB editor-only cost was p95 9.05 ms against a
+  target of 4 ms (2026-09-16 above). Measured again with the same tests: p95 **0.44–0.48 ms**, max
+  2.06–2.44 ms. At 10MB with the document's snapshot and dirty state included, head p50 is 4.12–4.35 ms
+  against a target of 8 ms; middle 2.2–2.9 ms, tail 0.12 ms. The worst single keystroke in any run is a
+  space at 10MB, 7.32 ms — inside a 120 Hz frame, not by much.
+- **Not attributed.** No commit between the two measurements was measured, so which change did this is
+  not known; PR #1's rebase and presentation work is the likely one.
+- **Not end to end.** These stop when `performEdit` returns. Input-to-screen latency and the time for
+  formatting to catch up after typing are different measurements and were not taken here.
+

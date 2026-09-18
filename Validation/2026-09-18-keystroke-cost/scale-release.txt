@@ -1,0 +1,40 @@
+=== 1MB run 1 ===
+SCALE load=53ms parse=333ms elements=7693 rendered=23 keystroke p50=0.29ms p95=0.44ms max=2.08ms
+DOCUMENT_SCALE position=head samples=30 p50=0.78ms p95=1.10ms max=2.60ms layout p50=0.08ms p95=0.13ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.45ms p95=0.57ms max=0.61ms layout p50=0.20ms p95=0.22ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.12ms p95=0.16ms max=0.23ms layout p50=0.17ms p95=0.20ms
+=== 1MB run 2 ===
+SCALE load=56ms parse=236ms elements=7693 rendered=23 keystroke p50=0.27ms p95=0.45ms max=2.06ms
+DOCUMENT_SCALE position=head samples=30 p50=0.79ms p95=0.97ms max=2.58ms layout p50=0.08ms p95=0.12ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.44ms p95=0.61ms max=0.62ms layout p50=0.19ms p95=0.24ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.16ms p95=0.23ms max=0.32ms layout p50=0.22ms p95=0.31ms
+=== 1MB run 3 ===
+SCALE load=54ms parse=237ms elements=7693 rendered=23 keystroke p50=0.26ms p95=0.48ms max=2.44ms
+DOCUMENT_SCALE position=head samples=30 p50=0.80ms p95=0.99ms max=2.60ms layout p50=0.08ms p95=0.10ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.46ms p95=0.58ms max=0.68ms layout p50=0.20ms p95=0.24ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.12ms p95=0.16ms max=0.22ms layout p50=0.17ms p95=0.19ms
+=== 1MB space/return ===
+SPACE_SCALE bytes=1000090 check p50=0.0015ms p95=0.0030ms plain p50=0.936ms p95=1.425ms max=4.799ms shortcut p50=0.450ms p95=0.619ms max=0.636ms
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.431ms p95=0.595ms max=1.721ms
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.417ms p95=0.512ms max=1.653ms
+=== 10MB (scale10b) ===
+DOCUMENT_SCALE_10MB position=head samples=30 p50=4.32ms p95=4.69ms max=6.86ms layout p50=0.09ms p95=0.12ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=2.94ms p95=3.53ms max=4.30ms layout p50=0.20ms p95=0.28ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.16ms max=0.72ms layout p50=0.16ms p95=0.19ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0015ms p95=0.0032ms plain p50=2.694ms p95=3.093ms max=6.834ms shortcut p50=2.180ms p95=2.324ms max=2.410ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=2.188ms p95=2.253ms max=4.079ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=2.291ms p95=2.519ms max=4.047ms
+=== 10MB (scale10-2) ===
+DOCUMENT_SCALE_10MB position=head samples=30 p50=4.12ms p95=4.40ms max=6.63ms layout p50=0.10ms p95=0.15ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=2.22ms p95=2.34ms max=2.90ms layout p50=0.19ms p95=0.25ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.14ms max=0.70ms layout p50=0.16ms p95=0.18ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0016ms p95=0.0031ms plain p50=2.579ms p95=3.106ms max=6.870ms shortcut p50=2.065ms p95=2.250ms max=2.266ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=2.075ms p95=2.233ms max=3.980ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=2.067ms p95=2.290ms max=3.748ms
+=== 10MB (scale10-3) ===
+DOCUMENT_SCALE_10MB position=head samples=30 p50=4.35ms p95=4.78ms max=6.80ms layout p50=0.11ms p95=0.17ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=2.26ms p95=2.60ms max=2.77ms layout p50=0.20ms p95=0.30ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.19ms max=0.74ms layout p50=0.16ms p95=0.31ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0015ms p95=0.0032ms plain p50=2.580ms p95=3.190ms max=7.321ms shortcut p50=2.077ms p95=2.245ms max=2.286ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=2.047ms p95=2.318ms max=3.893ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=2.051ms p95=2.276ms max=3.949ms
