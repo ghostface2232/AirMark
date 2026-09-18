@@ -268,3 +268,56 @@ and `ArtifactStore`, changed by both, were read back rather than trusted to the 
   user sees is taken from AppKit, not measured. The two UI tests that type were not run. One
   full-suite run in five saw `repeatedSavesPreserveBytesWithoutFalseConflicts` miss its 250 ms wait for
   an undo-group notification under load; it touches nothing changed here.
+
+## 2026-09-18 — Table raster, recovery launch I/O, live resize
+
+Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw output:
+`Validation/2026-09-18-raster-recovery-resize/`.
+
+- **One table raster policy, named by the key.** `drawTable` read the host window's screen color space
+  and the process writing direction, and the cache key carried neither, so two windows at one scale on
+  differently profiled screens shared an entry and the first render decided the bytes for both. That a
+  bitmap carries its color space is true of drawing and beside the point for a key.
+  `TableRenderer.raster(for:)` is now the only place the policy lives and `key` hashes what it reads:
+  the requesting window's scale, a fixed sRGB, and the alignment. Fixing sRGB is safe because a table
+  draws neutral grays over alpha, and a gray has the same coordinates in sRGB and Display P3 — measured
+  byte for byte identical, and asserted, so a table that later draws a saturated color fails the test
+  rather than quietly making the fixed raster wrong. `tableCacheKeyCoversTheRasterAndNothingElse`
+  covers 1×/2× and two hosts at one scale; dropping the scale from the key, the same fault the color
+  space had, fails it on 4 assertions including a 1× window handed the 2× bitmap.
+- **A launch reads the records, not every document.** `records()` loaded every source in full — 32 MB
+  for four 8 MB documents — and `resolve` then ran on the main actor, reading each document's whole
+  file, re-encoding the record's source and comparing them. Most of those comparisons decided nothing:
+  a record written while the text was on disk is not the only copy of anything, and both answers open
+  the file at the recorded position. The `<id>.json` plus `<id>.<token>.source` layout is untouched.
+  `RecoveryMetadata` is a record without its source, carrying the length the source has on disk;
+  `metadata()` takes that from the directory listing it already makes. `resolve` takes metadata and a
+  `LaunchStorage` of `size`, `data` and `source`, which cost three different amounts, and
+  `launchPlans(recentPaths:)` resolves inside the store, which is an actor and not the main actor.
+  Measured: `metadata()` 0.23 ms against `records()` 14.0 ms; a session of eight saved documents reads
+  8 stats, 0 files and 0 sources, against 8 stats, 8 files and 16 sources. All five outcomes of the old
+  branch are preserved and the existing launch tests assert them unchanged.
+- **A drag says when it is over.** The editor armed a 150 ms wait while the geometry moved and re-armed
+  it whenever it woke to find the drag still going, so a drag was a poll and its end was noticed up to
+  150 ms late. Nothing is armed during a drag now; `didEndLiveResize` adopts the width it left behind
+  and renders once, 0.3 ms after the event. Geometry that reports no end is still coalesced, and the
+  measurement is what keeps that: adopting every layout pass turns a 21-step burst into 21 rounds of
+  renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms — about
+  three frames at 60 Hz — and a burst settles 57 ms after its last step instead of 154 ms.
+- **A flaky test made honest.** `repeatedSavesPreserveBytesWithoutFalseConflicts` failed its first
+  dirty-document assertion in two of eight full-suite runs on a loaded machine. The wait before it is
+  for the text view to close its undo group; it now keeps the 250 ms and waits up to a second more for
+  the state, never returning sooner than before. Waiting only for `isDocumentEdited` is not the same
+  thing and was tried first: the edit sets that flag immediately, the save then ran before the group
+  closed, and the group closing after it marked the document dirty again.
+- **Validated.** `swift test --disable-sandbox`: 102 tests in 15 suites and 55 in 4 suites pass,
+  against 99 + 52 at the start of the day. Each change's new tests were run against the pre-change
+  logic and fail there. The four UI tests that synthesize no typing pass in Release.
+- **Not verified.** `view.inLiveResize == true` is not exercised: AppKit offers no public way to begin
+  a live resize, so the tests drive non-drag geometry and post the end-of-drag notification with the
+  coalescing wait pinned at 30 s, which leaves the one line that skips arming during a drag uncovered.
+  An AppKit-animated `setFrame(display:animate:)` was tried as a way to measure a real non-drag
+  transition and deadlocked the test process against the main-actor renders, so the frame-gap
+  reasoning behind the 50 ms is argued from the display refresh rate, not measured. The two UI tests
+  that type were not run.
+
