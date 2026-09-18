@@ -304,12 +304,17 @@ Host: Mac17,3, arm64, macOS 27.0 (26A428), Xcode 27.0 (27A266a), Swift 6.4. Raw 
   measurement is what keeps that: adopting every layout pass turns a 21-step burst into 21 rounds of
   renders. The wait only has to outlast the gap between two displayed frames, so it is 50 ms — about
   three frames at 60 Hz — and a burst settles 57 ms after its last step instead of 154 ms.
-- **A flaky test made honest.** `repeatedSavesPreserveBytesWithoutFalseConflicts` failed its first
-  dirty-document assertion in two of eight full-suite runs on a loaded machine. The wait before it is
-  for the text view to close its undo group; it now keeps the 250 ms and waits up to a second more for
-  the state, never returning sooner than before. Waiting only for `isDocumentEdited` is not the same
-  thing and was tried first: the edit sets that flag immediately, the save then ran before the group
-  closed, and the group closing after it marked the document dirty again.
+- **A flaky test reduced, not fixed.** `repeatedSavesPreserveBytesWithoutFalseConflicts` has failed its
+  dirty-document assertion three times in about twenty full-suite runs on a loaded machine, and did so
+  before anything in this session was written. The wait before it is for the text view to close its
+  undo group; it now keeps the 250 ms and waits up to a second more for the state, never returning
+  sooner than before. That lowered the rate and did not remove it. Waiting only for `isDocumentEdited`
+  is not the same thing and was tried first: the edit sets that flag immediately, the save then ran
+  before the group closed, and the group closing after it marked the document dirty again. It does not
+  reproduce on demand — six `--filter DocumentTests` runs and five full-suite runs under six spinning
+  CPU hogs all passed — so a print that fires only when the assertion is about to fail was left in
+  place, naming the pass and whether the edit reached the editor and the snapshot. **This is a known
+  intermittent failure, not a fixed one.**
 - **Validated.** `swift test --disable-sandbox`: 102 tests in 15 suites and 55 in 4 suites pass,
   against 99 + 52 at the start of the day. Each change's new tests were run against the pre-change
   logic and fail there. The four UI tests that synthesize no typing pass in Release.

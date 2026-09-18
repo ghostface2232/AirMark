@@ -50,6 +50,14 @@ import AirMarkCore
             // Let the text view close its undo group, as happens between real key events;
             // NSDocument marks the change count from that notification.
             try await waitUntilEdited(document)
+            // This assertion has failed three times in about twenty full-suite runs on a loaded
+            // machine, never in isolation and never under synthetic load, and it predates the work in
+            // this session. Nothing is printed unless it is about to fail; when it next does, this says
+            // which pass it was and whether the edit reached the editor and the snapshot at all, which
+            // is what nobody has had so far.
+            if !document.isDocumentEdited {
+                print("SAVE_DIAG pass=\(number) editorSource=\(document.editor?.source.count ?? -1) expected=\(source.count) snapshot=\(document.snapshot.get().source.count) canUndo=\(document.undoManager?.canUndo ?? false) grouping=\(document.undoManager?.groupingLevel ?? -1)")
+            }
             #expect(document.isDocumentEdited)
             try await document.save(to: url, ofType: Self.type, for: .saveOperation)
             #expect(try Data(contentsOf: url) == prefix + Data(source.utf8))

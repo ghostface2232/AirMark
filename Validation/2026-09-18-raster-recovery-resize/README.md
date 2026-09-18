@@ -183,3 +183,26 @@ live resize, so the tests drive geometry the way a non-drag change arrives and p
 notification directly. What that leaves untested is the one line that skips arming the wait during a
 drag; what it does test is that the end of a drag alone starts the renders, which is the behaviour the
 poll existed to approximate. The two typing UI tests were not run.
+
+## 4. One test that still fails now and then, and is not fixed
+
+`DocumentTests.repeatedSavesPreserveBytesWithoutFalseConflicts` has failed its
+`#expect(document.isDocumentEdited)` three times in about twenty full-suite runs today, on a loaded
+machine. It failed that way before anything in this session was written, so it is not a regression
+here, and nothing changed here touches the edit, undo or change-count path.
+
+What was done. The wait before the assertion was a flat 250 ms; it now keeps that and waits up to a
+second more for the document to be dirty, which is strictly longer than before. That reduced the rate
+but has not removed it. Waiting only for `isDocumentEdited` was tried first and was worse: the edit
+sets that flag at once, so the wait returned almost immediately, the save ran before the text view had
+closed its undo group, and the group closing afterwards marked the document dirty again — the failure
+moved to the `!isDocumentEdited` after the save in two of three runs. That is recorded because it says
+something about the mechanism: the 250 ms is waiting for the undo group, not for the flag.
+
+What could not be done. It does not reproduce on demand. Six runs of `--filter DocumentTests` under six
+spinning CPU hogs: no failure. Five full-suite runs under the same load: no failure. It appears only in
+an ordinary full parallel run, at a rate near one in seven.
+
+What is left behind. A print that fires only when the assertion is about to fail, naming the pass
+number and whether the edit reached the editor and the snapshot. The next occurrence will say whether
+the edit was lost or only the change count, which is the thing nobody knows yet.
