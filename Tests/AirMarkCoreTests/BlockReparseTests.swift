@@ -137,15 +137,20 @@ struct BlockReparseTests {
     static let items = ["- item **bold**", "- item\n  continued `code`", "- lazy\ncontinuation *em*", "- parent\n  - child\n    - grandchild\n  - child [l](u)",
                         "- [ ] task", "- [x] done", "* star", "+ plus", "1. one", "2) paren", "- > quoted\n  > more", "- ```\n  fenced\n  ```",
                         "- ```\n  left open", "- $$x^2$$ closed", "- $$ left open", "- closes $$", "- $a$ and $5", "-", "- # heading in item",
-                        "- | a | b |\n  | - | - |", "   - three spaces", "- 한글 😀 e\u{301}", "- [r][id]", "- <div>\n  html"]
+                        "- | a | b |\n  | - | - |", "   - three spaces", "- 한글 😀 e\u{301}", "- [r][id]", "- <div>\n  html",
+                        // What the review's fuzzer found the first version of this test without.
+                        "- setext\n  ===", "- setext\n  ---", "- ~~~", "- nul\u{0}byte", "\t- tab", "- > q\n\t  > lazy", "100.\n     > a\n    > lazy"]
 
     static func listDocument(_ generator: inout Generator) -> String {
         let newline = ["\n", "\n", "\r\n"][generator.next(3)]
         var parts: [String] = []
         for _ in 0..<(1 + generator.next(4)) {
             if generator.next(2) == 0 { parts.append(lines[generator.next(lines.count)] + newline) }
-            // Display math reaches over items, so a list holding `$$` is cut at blank lines only; most lists have none.
-            let pool = generator.next(4) == 0 ? items : items.filter { !$0.contains("$$") }
+            // Display math reaches over items, so a list holding `$$` is cut at blank lines only, and a
+            // block that ends on a line with a NUL has no span, which leaves the document without blocks.
+            // Most lists have neither.
+            let math = generator.next(4) == 0, nul = generator.next(5) == 0
+            let pool = items.filter { (math || !$0.contains("$$")) && (nul || !$0.contains("\u{0}")) }
             parts.append((0..<(10 + generator.next(50))).map { _ in pool[generator.next(pool.count)] }.joined(separator: "\n") + "\n")
             if generator.next(3) == 0 { parts.append("[id]: /u" + newline) }
         }

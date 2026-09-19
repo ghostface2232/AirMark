@@ -115,7 +115,11 @@ enum ReferenceParser {
             // Plain text and line breaks are most nodes and add no style; their spans have no side
             // effects (no delimiters to match), so skip computing them and the casts below.
             if node is Text || node is SoftBreak || node is LineBreak { return }
-            guard var s = span(node) else {
+            var resolved = span(node)
+            // As in the parser: a setext heading's end is worked out below, so its start is enough.
+            if resolved == nil, node is Heading, let range = node.range, let start = index.offset(line: range.lowerBound.line, utf8Column: range.lowerBound.column),
+               index.unit(at: start) != 35 { resolved = SourceSpan(start, 0) }
+            guard var s = resolved else {
                 if topLevel || topLevelItem { blockSpansComplete = false }
                 for child in node.children { walk(child) }
                 return

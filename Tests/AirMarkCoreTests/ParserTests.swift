@@ -278,6 +278,9 @@ import Testing
     #expect(codeBlocks("- ```\n  code\n\npara\n") == ["```\n  code\n"])
     #expect(codeBlocks("> ```\n> code\npara\n") == ["```\n> code"])
     #expect(codeBlocks("- ```\n  code\n  ```\n- next\n") == ["```\n  code\n  ```"])
+    // cmark counts a NUL as three bytes, so the end it gives the block, on the line after, is nowhere.
+    #expect(codeBlocks("- a\n- ~~~\n- x\u{0}y\n") == ["~~~"])
+    #expect(MarkdownParser.parse("Title\n===\nx\u{0}y\n").styles.contains { $0.kind == .heading(1) && $0.span == SourceSpan(0, 9) })
     // What follows is Markdown again: its math is found and a diagram fence takes only its own lines.
     #expect(MarkdownParser.parse("- ```\n  code\n\npara $x$\n").elements.map(\.content) == ["x"])
     let diagram = MarkdownParser.parse("- ```mermaid\n  graph TD\n- next\n")

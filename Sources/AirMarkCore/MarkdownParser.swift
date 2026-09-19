@@ -479,7 +479,16 @@ public enum MarkdownParser {
             // effects (no delimiters to match), so skip computing them.
             if kind == .text || kind == .softBreak || kind == .lineBreak { return }
             let cut = topLevel && kind != .list || topLevelItem
-            guard var s = span(node) else {
+            var resolved = span(node)
+            // The two blocks below are given an end on the line after them, and that line need not be
+            // addressable: cmark counts a NUL as the three bytes it replaces it with. Their start is
+            // enough, since their end is worked out here anyway; without it the block was dropped from
+            // the whole parse and kept by a window that stopped before that line.
+            if resolved == nil, let range = node.range, let start = index.offset(line: range.lowerLine, utf8Column: range.lowerColumn) {
+                if kind == .codeBlock, let within, start <= within { resolved = SourceSpan(start, within - start) }
+                else if node.isSetextHeading { resolved = SourceSpan(start, 0) }
+            }
+            guard var s = resolved else {
                 if topLevel || topLevelItem { blockSpansComplete = false }
                 for child in node.children { walk(child, within: within, depth: depth + 1) }
                 return
