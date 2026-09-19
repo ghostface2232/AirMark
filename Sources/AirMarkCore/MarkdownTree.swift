@@ -83,12 +83,23 @@ final class MarkdownTree {
         /// A link's or image's destination.
         var destination: String { cmark_node_get_url(pointer).map { String(cString: $0) } ?? "" }
 
-        /// The text a reader sees: text and code as written, a line break as a space.
+        /// The text a reader sees: text and code as written, a line break as a space. Walked with
+        /// cmark's own links rather than by recursion: this runs on nodes the parser has not yet
+        /// measured the depth of.
         var plainText: String {
-            switch kind {
-            case .text, .inlineCode: return literal
-            case .softBreak, .lineBreak: return " "
-            default: return children.map(\.plainText).joined()
+            var result = "", current = pointer
+            while true {
+                let node = Node(pointer: current)
+                switch node.kind {
+                case .text, .inlineCode: result += node.literal
+                case .softBreak, .lineBreak: result += " "
+                default:
+                    if let child = cmark_node_first_child(current) { current = child; continue }
+                }
+                // The next node in document order that is still under this one.
+                while current != pointer, cmark_node_next(current) == nil { current = cmark_node_parent(current) }
+                guard current != pointer, let next = cmark_node_next(current) else { return result }
+                current = next
             }
         }
     }

@@ -283,3 +283,17 @@ import Testing
     let diagram = MarkdownParser.parse("- ```mermaid\n  graph TD\n- next\n")
     #expect(diagram.elements.map(\.span) == [SourceSpan(2, 21)])
 }
+
+/// `~~~` inside an HTML block is not a fence, but the inline estimate takes it for one and skips what
+/// follows, so it reports nothing for nesting that cmark builds in full. The walk counts the depth of
+/// the tree itself: this document used to end the process with a stack overflow.
+@Test func nestingTheEstimateMissesIsStillRefused() async throws {
+    let deep = String(repeating: "*", count: 200_000)
+    let source = "<div>\n~~~\n</div>\n\n**bold**\n\n" + deep + "a" + deep + "\n"
+    #expect(MarkdownParser.inlineNestingEstimate(source) < 10)
+    let result = try await MarkdownParsingWorker().parse(source, revision: 1)
+    #expect(result.styles.isEmpty && result.blocks.isEmpty && result.source == source)
+    // An image measures its alternative text before the walk has gone down into it.
+    let image = "<div>\n~~~\n</div>\n\n![" + String(repeating: "*", count: 100_000) + "a" + String(repeating: "*", count: 100_000) + "](u)\n"
+    #expect(try await MarkdownParsingWorker().parse(image, revision: 1).styles.isEmpty)
+}

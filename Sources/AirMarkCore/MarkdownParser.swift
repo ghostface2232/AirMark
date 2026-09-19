@@ -449,8 +449,15 @@ public enum MarkdownParser {
         // spans are the ones `walk` computes anyway, except for a paragraph, whose own span it has no
         // other use for.
         var blockSpansComplete = true
+        /// The estimates above are meant to bound the tree's depth and do not always: they take `~~~`
+        /// inside an HTML block for a fence and skip what follows. The walk is the recursion they
+        /// protect, so it counts for itself, and a tree deeper than both limits together is presented
+        /// as plain text like one the estimates turned away. Measured on the tree, the verdict on a
+        /// block is the same whether it is parsed in a window or in its document.
+        var tooDeep = false
         /// `within` is where the block quote or list item around the node ends.
-        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false, topLevelItem: Bool = false, within: Int? = nil) {
+        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false, topLevelItem: Bool = false, within: Int? = nil, depth: Int = 0) {
+            guard depth <= nestingLimit + inlineNestingLimit else { tooDeep = true; return }
             let kind = node.kind
             if kind == .paragraph {
                 if topLevel {
@@ -458,7 +465,7 @@ public enum MarkdownParser {
                 }
                 let outer = inlineColumnShift
                 inlineColumnShift = continuationShifts(node)
-                for child in node.children { walk(child) }
+                for child in node.children { walk(child, depth: depth + 1) }
                 inlineColumnShift = outer
                 return
             }
@@ -468,7 +475,7 @@ public enum MarkdownParser {
             let cut = topLevel && kind != .list || topLevelItem
             guard var s = span(node) else {
                 if topLevel || topLevelItem { blockSpansComplete = false }
-                for child in node.children { walk(child, within: within) }
+                for child in node.children { walk(child, within: within, depth: depth + 1) }
                 return
             }
             // A fence left open ends with the container it is in, but cmark gives a fenced block the
@@ -477,7 +484,7 @@ public enum MarkdownParser {
             if kind == .codeBlock, let within, s.end > within { s = SourceSpan(s.location, max(0, within - s.location)) }
             if cut { output.blocks.append(Block(s, isListItem: topLevelItem)) }
             if topLevel, kind == .list {
-                for child in node.children { walk(child, topLevelItem: true) }
+                for child in node.children { walk(child, topLevelItem: true, depth: depth + 1) }
                 return
             }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
@@ -569,12 +576,13 @@ public enum MarkdownParser {
             default: break
             }
             let inside = kind == .blockQuote || kind == .listItem ? s.end : within
-            for child in node.children { walk(child, within: inside) }
+            for child in node.children { walk(child, within: inside, depth: depth + 1) }
         }
         // Nodes point into the tree, which nothing after this line would otherwise keep alive.
         withExtendedLifetime(document) {
             for child in document.root.children { walk(child, topLevel: true) }
         }
+        guard !tooDeep else { return ParsedDocument(source: source, revision: revision) }
         if !blockSpansComplete { output.blocks.removeAll() }
         finish(&output, protected: protected, units: index.units)
         return output
