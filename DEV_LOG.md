@@ -418,3 +418,29 @@ after the review fixes below; the UI state after them is in that entry.
   escapes, one inside a quote, swift-cmark's attribute form; over 1,000 partial parses of documents with
   definitions are asserted. Parsing the window with no definitions, with all of them ranked before it, or
   without comparing the window's own, each fails the suite. 110 + 65 tests, Debug.
+
+## 2026-09-19 — Each `>` to its own quote, and nesting that costs nothing
+
+`Validation/2026-09-19-incremental/adversarial-r*.txt`. Release, three runs, medians; before is
+`Validation/2026-09-19-direct-cmark/new-adversarial-r*.txt`.
+
+- **A bug, in every parser so far.** A block quote's markers were found by matching `^[ \t]{0,3}>` over
+  the quote's own text. From a nested quote's second line on, its text starts at the start of the line, so
+  the match was the outer quote's `>` again: in `> > a` / `> > b` the inner `>` of the second line belonged
+  to no marker and was never hidden, and the outer one was marked twice. The same match looked at most
+  three spaces into a line, so a quote in a second-level list item lost its markers altogether.
+- **The fix is also the cost.** The walk keeps, per line, where the containers walked so far stop. A quote
+  takes the next `>` from there on each of its lines; a list item moves the start past its indentation. One
+  look at one line's prefix per container, no text copied, no expression. A list item's marker is on its
+  first line, so only that line is read; the whole item used to be copied once for every list around it.
+  nested-quote-depth-256 553 → 21 ms, nested-list-depth-256 149 → 14 ms, nested-containers 110 → 72 ms,
+  long-quote 31 → 27 ms per 1MB; the rest unchanged (normal 35.4 → 35.2).
+- **Against the reference.** Generated, edited and repository documents still match `ReferenceParser` in
+  everything but quote markers, and there under a rule: a reference marker the parser lacks must be one the
+  reference gave to two quotes, or the same `>` without a list item's indentation before it; and the
+  parser's quote markers must each be a `>` with at most three spaces before and one space or tab after,
+  none shared. Eight written cases cover nesting, lazy lines, `    >` that is text, and quotes in list items.
+- **The editor.** A marker that does not start its line was taken for a closing marker, so Backspace after
+  an inner `>` would have removed the character before it. A quote's markers are opening markers wherever
+  they stand; `nestedQuoteMarkersAreOpeningMarkers` fails without that.
+- **Tests.** 111 + 66, Debug.

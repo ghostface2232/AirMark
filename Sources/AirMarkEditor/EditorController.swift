@@ -851,7 +851,9 @@ import os
             }
             for marker in run.markers where marker.length > 0 && marker.end <= text.length {
                 let afterBreak = marker.location == 0 || [10, 13, 0x2029].contains(text.character(at: marker.location - 1))
-                var kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
+                // A quote's `>` opens its line wherever it stands: after the `>` of a quote around it, or
+                // after a list item's indentation, not only at the start of the line.
+                var kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak || run.kind == .quote ? .opening : .closing
                 var removal = marker.nsRange
                 if run.kind == .codeBlock {
                     // A fenced block's markers are its fence lines, not line-start markers. The closing

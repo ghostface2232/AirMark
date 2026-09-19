@@ -1,0 +1,46 @@
+ADVERSARIAL normal bytes=124890 styles=7240 elements=905 parse_p50=4.312ms query2000_p50=0.382ms
+ADVERSARIAL normal bytes=249918 styles=14488 elements=1811 parse_p50=8.438ms query2000_p50=0.402ms parse_exponent=0.97 query_exponent=0.07
+ADVERSARIAL normal bytes=499974 styles=28984 elements=3623 parse_p50=17.515ms query2000_p50=0.483ms parse_exponent=1.05 query_exponent=0.26
+ADVERSARIAL normal bytes=999948 styles=57968 elements=7246 parse_p50=35.301ms query2000_p50=0.524ms parse_exponent=1.01 query_exponent=0.12
+ADVERSARIAL long-quote bytes=124992 styles=5953 elements=0 parse_p50=2.925ms query2000_p50=0.847ms
+ADVERSARIAL long-quote bytes=249984 styles=11905 elements=0 parse_p50=5.839ms query2000_p50=0.868ms parse_exponent=1.00 query_exponent=0.04
+ADVERSARIAL long-quote bytes=499968 styles=23809 elements=0 parse_p50=12.199ms query2000_p50=0.979ms parse_exponent=1.06 query_exponent=0.17
+ADVERSARIAL long-quote bytes=999978 styles=47619 elements=0 parse_p50=27.420ms query2000_p50=1.160ms parse_exponent=1.17 query_exponent=0.24
+ADVERSARIAL nested-containers bytes=124990 styles=30171 elements=0 parse_p50=8.491ms query2000_p50=1.310ms
+ADVERSARIAL nested-containers bytes=249980 styles=60341 elements=0 parse_p50=17.444ms query2000_p50=1.507ms parse_exponent=1.04 query_exponent=0.20
+ADVERSARIAL nested-containers bytes=499989 styles=120688 elements=0 parse_p50=36.393ms query2000_p50=1.680ms parse_exponent=1.06 query_exponent=0.16
+ADVERSARIAL nested-containers bytes=999978 styles=241375 elements=0 parse_p50=73.218ms query2000_p50=1.969ms parse_exponent=1.01 query_exponent=0.23
+ADVERSARIAL long-list bytes=124980 styles=16664 elements=0 parse_p50=6.005ms query2000_p50=0.578ms
+ADVERSARIAL long-list bytes=249990 styles=33332 elements=0 parse_p50=12.184ms query2000_p50=0.661ms parse_exponent=1.02 query_exponent=0.19
+ADVERSARIAL long-list bytes=499980 styles=66664 elements=0 parse_p50=25.573ms query2000_p50=0.714ms parse_exponent=1.07 query_exponent=0.11
+ADVERSARIAL long-list bytes=999990 styles=133332 elements=0 parse_p50=52.100ms query2000_p50=0.808ms parse_exponent=1.03 query_exponent=0.18
+ADVERSARIAL currency-lines bytes=124338 styles=0 elements=0 parse_p50=0.712ms query2000_p50=0.006ms
+ADVERSARIAL currency-lines bytes=249577 styles=0 elements=0 parse_p50=1.509ms query2000_p50=0.007ms parse_exponent=1.08 query_exponent=0.03
+ADVERSARIAL currency-lines bytes=499154 styles=0 elements=0 parse_p50=3.086ms query2000_p50=0.007ms parse_exponent=1.03 query_exponent=0.18
+ADVERSARIAL currency-lines bytes=999209 styles=0 elements=0 parse_p50=5.755ms query2000_p50=0.006ms parse_exponent=0.90 query_exponent=-0.21
+ADVERSARIAL escaped-dollars bytes=125000 styles=0 elements=0 parse_p50=2.022ms query2000_p50=0.006ms
+ADVERSARIAL escaped-dollars bytes=250000 styles=0 elements=0 parse_p50=4.322ms query2000_p50=0.006ms parse_exponent=1.10 query_exponent=0.01
+ADVERSARIAL escaped-dollars bytes=500000 styles=0 elements=0 parse_p50=8.654ms query2000_p50=0.006ms parse_exponent=1.00 query_exponent=0.00
+ADVERSARIAL escaped-dollars bytes=1000000 styles=0 elements=0 parse_p50=16.332ms query2000_p50=0.006ms parse_exponent=0.92 query_exponent=-0.01
+ADVERSARIAL unclosed-display bytes=124992 styles=13888 elements=0 parse_p50=4.930ms query2000_p50=0.458ms
+ADVERSARIAL unclosed-display bytes=249993 styles=27777 elements=0 parse_p50=9.769ms query2000_p50=0.494ms parse_exponent=0.99 query_exponent=0.11
+ADVERSARIAL unclosed-display bytes=499995 styles=55555 elements=0 parse_p50=20.238ms query2000_p50=0.554ms parse_exponent=1.05 query_exponent=0.17
+ADVERSARIAL unclosed-display bytes=999999 styles=111111 elements=0 parse_p50=41.059ms query2000_p50=0.644ms parse_exponent=1.02 query_exponent=0.22
+ADVERSARIAL nested-list-depth-256 bytes=67073 styles=512 elements=0 parse_p50=1.001ms query2000_p50=4.580ms
+ADVERSARIAL nested-list-depth-256 bytes=201219 styles=1536 elements=0 parse_p50=2.822ms query2000_p50=4.633ms parse_exponent=1.50 query_exponent=0.02
+ADVERSARIAL nested-list-depth-256 bytes=469511 styles=3584 elements=0 parse_p50=6.695ms query2000_p50=5.228ms parse_exponent=1.25 query_exponent=0.17
+ADVERSARIAL nested-list-depth-256 bytes=939022 styles=7168 elements=0 parse_p50=13.551ms query2000_p50=5.360ms parse_exponent=1.02 query_exponent=0.04
+ADVERSARIAL nested-quote-depth-256 bytes=103299 styles=768 elements=0 parse_p50=2.214ms query2000_p50=13.205ms
+ADVERSARIAL nested-quote-depth-256 bytes=241031 styles=1792 elements=0 parse_p50=5.306ms query2000_p50=14.902ms parse_exponent=1.26 query_exponent=0.17
+ADVERSARIAL nested-quote-depth-256 bytes=482062 styles=3584 elements=0 parse_p50=10.529ms query2000_p50=16.246ms parse_exponent=0.99 query_exponent=0.12
+ADVERSARIAL nested-quote-depth-256 bytes=998557 styles=7424 elements=0 parse_p50=21.356ms query2000_p50=17.309ms parse_exponent=1.02 query_exponent=0.09
+ADVERSARIAL currency-one-line bytes=4998 styles=0 elements=0 parse_p50=0.031ms query2000_p50=0.007ms
+ADVERSARIAL currency-one-line bytes=9999 styles=0 elements=0 parse_p50=0.058ms query2000_p50=0.007ms parse_exponent=0.94 query_exponent=-0.01
+ADVERSARIAL currency-one-line bytes=19998 styles=0 elements=0 parse_p50=0.113ms query2000_p50=0.006ms parse_exponent=0.96 query_exponent=-0.01
+ADVERSARIAL currency-one-line bytes=39999 styles=0 elements=0 parse_p50=0.236ms query2000_p50=0.006ms parse_exponent=1.06 query_exponent=0.00
+ADVERSARIAL currency-one-line bytes=79998 styles=0 elements=0 parse_p50=0.498ms query2000_p50=0.006ms parse_exponent=1.08 query_exponent=0.00
+ADVERSARIAL dollar-letters-one-line bytes=4998 styles=0 elements=0 parse_p50=0.030ms query2000_p50=0.006ms
+ADVERSARIAL dollar-letters-one-line bytes=9999 styles=0 elements=0 parse_p50=0.065ms query2000_p50=0.006ms parse_exponent=1.09 query_exponent=0.00
+ADVERSARIAL dollar-letters-one-line bytes=19998 styles=0 elements=0 parse_p50=0.124ms query2000_p50=0.006ms parse_exponent=0.93 query_exponent=-0.01
+ADVERSARIAL dollar-letters-one-line bytes=39999 styles=0 elements=0 parse_p50=0.256ms query2000_p50=0.006ms parse_exponent=1.05 query_exponent=0.01
+ADVERSARIAL dollar-letters-one-line bytes=79998 styles=0 elements=0 parse_p50=0.470ms query2000_p50=0.006ms parse_exponent=0.88 query_exponent=0.00

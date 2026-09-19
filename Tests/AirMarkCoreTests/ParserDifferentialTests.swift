@@ -37,9 +37,39 @@ struct ParserDifferentialTests {
         return blocks.map { $0 + newline + (generator.next(4) == 0 ? "" : newline) }.joined()
     }
 
+    /// Everything must be the reference's, except block quote markers, where the reference is wrong in
+    /// one way: it matched `>` from the start of each line of a quote's own text, so on the lines after
+    /// a nested quote's first it found the outer quote's `>` again and never the inner one. There the
+    /// parser may differ, under two conditions that pin it down. A marker of the reference's that the
+    /// parser lacks must be one the reference also gave to another quote, which is that duplicate, or
+    /// the same `>` without a list item's indentation before it. And
+    /// the parser's quote markers must each be a `>` with at most three spaces before it and one space
+    /// or tab after, none shared between two quotes.
     static func expectSame(_ source: String, _ context: @autoclosure () -> String) -> Bool {
-        let actual = MarkdownParser.parse(source, revision: 0, enforcingLimit: false)
-        return BlockReparseTests.expectSame(actual, ReferenceParser.parse(source), context(), definitions: false)
+        let actual = MarkdownParser.parse(source, revision: 0, enforcingLimit: false), expected = ReferenceParser.parse(source)
+        func withoutQuoteMarkers(_ document: ParsedDocument) -> ParsedDocument {
+            var document = document
+            document.styles = document.styles.map { $0.kind == .quote ? StyleRun(span: $0.span, kind: .quote) : $0 }
+            return document
+        }
+        guard BlockReparseTests.expectSame(withoutQuoteMarkers(actual), withoutQuoteMarkers(expected), context(), definitions: false) else { return false }
+        let index = SourceIndex(source)
+        let quotes = actual.styles.filter { $0.kind == .quote }, referenceQuotes = expected.styles.filter { $0.kind == .quote }
+        let markers = quotes.flatMap(\.markers)
+        var sound = Set(markers).count == markers.count, unsound: [String] = []
+        for marker in markers {
+            let text = index.text(in: marker).drop { $0 == " " }
+            if marker.length - text.utf16.count > 3 || ![">", "> ", ">\t"].contains(String(text)) { sound = false; unsound.append("\(marker.location):" + index.text(in: marker).debugDescription) }
+        }
+        for (quote, reference) in zip(quotes, referenceQuotes) {
+            for lost in Set(reference.markers).subtracting(quote.markers) {
+                // Inside a list item the indentation before `>` is the item's, and the marker starts after it.
+                let trimmed = quote.markers.contains { $0.end == lost.end && $0.location >= lost.location }
+                if !trimmed, !referenceQuotes.contains(where: { $0.span != reference.span && $0.markers.contains(lost) }) { sound = false; unsound.append("lost \(lost.location):" + index.text(in: lost).debugDescription) }
+            }
+        }
+        #expect(sound, "quote markers \(unsound.prefix(5)) \(context().prefix(300))")
+        return sound
     }
 
     @Test func generatedDocumentsParseAsTheReferenceDoes() {
@@ -84,6 +114,24 @@ struct ParserDifferentialTests {
             let bridged = NSMutableString(string: source).copy() as! String
             #expect(Self.expectSame(bridged, "bridged " + url.lastPathComponent))
         }
+    }
+
+    /// Each `>` belongs to the quote at its depth, on every line, and a line a quote only continues
+    /// lazily has no marker for it.
+    @Test func nestedQuoteMarkersBelongToTheirOwnQuote() {
+        func markers(_ source: String) -> [[String]] {
+            let index = SourceIndex(source)
+            return MarkdownParser.parse(source).styles.filter { $0.kind == .quote }.map { $0.markers.map { "\($0.location):" + index.text(in: $0) } }
+        }
+        #expect(markers("> > a\n> > b\n>> c\n") == [["0:> ", "6:> ", "12:>"], ["2:> ", "8:> ", "13:> "]])
+        #expect(markers("> a\nlazy\n> b\n") == [["0:> ", "9:> "]])
+        #expect(markers("> > a\n> lazy for the inner\n") == [["0:> ", "6:> "], ["2:> "]])
+        #expect(markers("> a\n    > not a marker\n") == [["0:> "]])
+        // Inside list items, however deep: the reference looked at most three spaces into the line.
+        #expect(markers("- a\n  - > q\n    > r\n") == [["8:> ", "16:> "]])
+        #expect(markers("1. > q\n   > r\n\n   > s\n") == [["3:> ", "10:> "], ["18:> "]])
+        #expect(markers("> - a\n>   > q\n>   > r\n") == [["0:> ", "6:> ", "14:> "], ["10:> ", "18:> "]])
+        #expect(markers(" > a\r\n >\r\n > b") == [["1:> ", "6: >", "10: > "]])
     }
 
     /// The tree is freed when the parse returns; nothing the parse hands back may point into it.

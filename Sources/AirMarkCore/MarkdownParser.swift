@@ -269,9 +269,8 @@ public enum MarkdownParser {
         return deepest
     }
 
-    /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
-    /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
-    nonisolated(unsafe) static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    /// Compiled once: compiling this per list item was about an eighth of a 10MB parse.
+    /// `NSRegularExpression` is immutable and safe to match from several threads.
     nonisolated(unsafe) static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
 
     /// cmark stops resolving reference links once their destinations and titles add up to the size of
@@ -400,6 +399,42 @@ public enum MarkdownParser {
             }
             return shifts
         }
+        /// Where, on each line, the containers walked so far stop and their content starts; -1 is the
+        /// line's start. A block quote's marker on a line is the next `>` from there, and a list item's
+        /// content starts at the item's indentation, so each container reads one line's prefix once and
+        /// leaves the rest to the containers inside it.
+        ///
+        /// Matching `^[ \t]{0,3}>` over each quote's own text instead found, on every line after a
+        /// nested quote's first, the outer quote's `>` again: the inner one was never hidden, and the
+        /// text of a quote was copied and matched once for each quote around it.
+        var contentStart = [Int](repeating: -1, count: index.lines.count)
+        /// The marker of a block quote on one-based `line`: up to three spaces, `>`, and one space or
+        /// tab. `first` is where the quote itself starts, on its first line. Nil on a line the quote only
+        /// continues lazily, which has no marker and none for the quotes inside either.
+        func quoteMarker(onLine line: Int, first: Int?) -> SourceSpan? {
+            let end = index.lines[line - 1].end
+            let start = first ?? (contentStart[line - 1] >= 0 ? contentStart[line - 1] : index.lines[line - 1].location)
+            var position = start
+            while position < end, position - start < 3, index.unit(at: position) == 32 { position += 1 }
+            guard position < end, index.unit(at: position) == 62 else { return nil }                 // ">"
+            position += 1
+            if position < end, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
+            contentStart[line - 1] = position
+            return SourceSpan(start, position - start)
+        }
+        /// A list item's later lines start their content where its first line does: past the marker,
+        /// measured from the start of the line. A line indented less continues the item lazily.
+        func indentItemContent(_ item: MarkdownTree.Node, _ range: MarkdownTree.Range) {
+            guard range.upperLine > range.lowerLine else { return }
+            let child = item.firstChild?.range
+            let indentation = (child.flatMap { $0.lowerLine == range.lowerLine ? $0.lowerColumn : nil } ?? range.lowerColumn + 2) - 1
+            for line in (range.lowerLine + 1)...min(range.upperLine, index.lines.count) {
+                let span = index.lines[line - 1]
+                var position = contentStart[line - 1] >= 0 ? contentStart[line - 1] : span.location
+                while position < span.end, position - span.location < indentation, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
+                contentStart[line - 1] = position
+            }
+        }
         // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
         // anyway, except for a paragraph, whose own span it has no other use for.
         var blockSpansComplete = true
@@ -460,16 +495,19 @@ public enum MarkdownParser {
                     add(.codeBlock, markers: markers)
                 }
             case .blockQuote:
-                let raw = index.text(in: s)
                 var markers: [SourceSpan] = []
-                if let regex = quoteMarker {
-                    for match in regex.matches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {
-                        markers.append(SourceSpan(s.location + match.range.location, match.range.length))
+                if let range = node.range {
+                    for line in range.lowerLine...min(range.upperLine, index.lines.count) {
+                        if let marker = quoteMarker(onLine: line, first: line == range.lowerLine ? s.location : nil) { markers.append(marker) }
                     }
                 }
                 add(.quote, markers: markers)
             case .listItem:
-                let raw = index.text(in: s)
+                if let range = node.range { indentItemContent(node, range) }
+                // The marker is on the item's first line; the item's whole text was copied here once for
+                // every list around it.
+                let firstLine = node.range.map { index.lines[min($0.lowerLine, index.lines.count) - 1].end } ?? s.end
+                let raw = index.text(in: SourceSpan(s.location, max(0, min(s.end, firstLine) - s.location)))
                 var extra: [StyleRun] = [], markers: [SourceSpan] = []
                 if let regex = listItemMarker,
                    let m = regex.firstMatch(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)) {

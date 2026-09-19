@@ -8,7 +8,8 @@ import Markdown
 /// differential tests compare, is how the tree is reached.
 enum ReferenceParser {
     static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
-        let quoteMarker = MarkdownParser.quoteMarker, listItemMarker = MarkdownParser.listItemMarker
+        let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+        let listItemMarker = MarkdownParser.listItemMarker
         func fenceMarkers(_ raw: String, at base: Int) -> [SourceSpan] { MarkdownParser.fenceMarkers(raw, at: base) }
         let index = SourceIndex(source)
         var output = ParsedDocument(source: source, revision: revision)
