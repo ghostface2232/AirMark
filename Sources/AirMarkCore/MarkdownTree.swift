@@ -77,6 +77,8 @@ final class MarkdownTree {
         var children: Children { Children(cursor: cmark_node_first_child(pointer)) }
 
         var headingLevel: Int { Int(cmark_node_get_heading_level(pointer)) }
+        /// A heading made by underlining a paragraph. cmark has no accessor for this.
+        var isSetextHeading: Bool { kind == .heading && pointer.pointee.as.heading.setext }
         /// A text node's text, a code span's or block's code, an HTML node's source.
         var literal: String { cmark_node_get_literal(pointer).map { String(cString: $0) } ?? "" }
         var fenceInfo: String { cmark_node_get_fence_info(pointer).map { String(cString: $0) } ?? "" }

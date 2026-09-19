@@ -111,6 +111,13 @@ public struct SourceIndex: Sendable {
         guard string.length > 0 else { return SourceSpan(0, 0) }
         return SourceSpan(string.paragraphRange(for: NSRange(location: min(max(0, offset), string.length), length: 0)))
     }
+    /// Where one-based `line` ends, before its line break.
+    public func contentEnd(ofLine line: Int) -> Int {
+        let span = lines[line - 1]
+        var end = span.end
+        while end > span.location, units[end - 1] == 10 || units[end - 1] == 13 { end -= 1 }
+        return end
+    }
     /// How many units at the start of one-based `line` satisfy `predicate`.
     public func leadingUnits(ofLine line: Int, while predicate: (UInt16) -> Bool) -> Int {
         let span = lines[line - 1]

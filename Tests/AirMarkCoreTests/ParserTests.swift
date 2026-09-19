@@ -297,3 +297,20 @@ import Testing
     let image = "<div>\n~~~\n</div>\n\n![" + String(repeating: "*", count: 100_000) + "a" + String(repeating: "*", count: 100_000) + "](u)\n"
     #expect(try await MarkdownParsingWorker().parse(image, revision: 1).styles.isEmpty)
 }
+
+/// A setext heading ends with its underline wherever it stands: cmark ends it on the line after, so the
+/// next line was hidden in the underline's place, or before a blank line only the line break was.
+@Test func setextHeadingEndsWithItsUnderline() {
+    func heading(_ source: String) -> [String] {
+        let index = SourceIndex(source)
+        let parsed = MarkdownParser.parse(source)
+        return parsed.styles.filter { if case .heading = $0.kind { true } else { false } }.flatMap { [index.text(in: $0.span)] + $0.markers.map { index.text(in: $0) } }
+    }
+    #expect(heading("Title\n===\nnext\n") == ["Title\n===", "\n==="])
+    #expect(heading("Title\n===\n\nnext\n") == ["Title\n===", "\n==="])
+    #expect(heading("Two\nlines\r\n---\r\nnext") == ["Two\nlines\r\n---", "\r\n---"])
+    #expect(heading("- a\n  ===\n- b\n") == ["a\n  ===", "\n  ==="])
+    #expect(heading("#tag\n===\nnext\n").first == "#tag\n===")
+    let blocks = MarkdownParser.parse("Title\n===\nnext\n").blocks.map(\.span)
+    #expect(blocks == [SourceSpan(0, 9), SourceSpan(10, 4)])
+}

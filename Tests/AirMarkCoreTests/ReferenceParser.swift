@@ -7,6 +7,8 @@ import Markdown
 /// `MarkdownParser.finish`, and the marker helpers are shared: what differs, and what the
 /// differential tests compare, is how the tree is reached. One thing was added since: a top-level
 /// list is recorded as its items, as the parser now records it, so that `blocks` stays comparable.
+/// And one thing was corrected in both: a setext heading ends with its underline, not on the line
+/// after it, where cmark puts it.
 enum ReferenceParser {
     static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
         let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
@@ -113,10 +115,13 @@ enum ReferenceParser {
             // Plain text and line breaks are most nodes and add no style; their spans have no side
             // effects (no delimiters to match), so skip computing them and the casts below.
             if node is Text || node is SoftBreak || node is LineBreak { return }
-            guard let s = span(node) else {
+            guard var s = span(node) else {
                 if topLevel || topLevelItem { blockSpansComplete = false }
                 for child in node.children { walk(child) }
                 return
+            }
+            if node is Heading, index.unit(at: s.location) != 35, let last = Array(node.children).last?.range?.upperBound.line, last < index.lines.count {
+                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: last + 1) - s.location))
             }
             let isList = node is UnorderedList || node is OrderedList
             if topLevel && !isList || topLevelItem { output.blocks.append(Block(s, isListItem: topLevelItem)) }

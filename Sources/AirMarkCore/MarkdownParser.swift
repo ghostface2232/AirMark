@@ -484,6 +484,14 @@ public enum MarkdownParser {
                 for child in node.children { walk(child, within: within, depth: depth + 1) }
                 return
             }
+            // cmark gives a setext heading, like a fenced block, the end of the line being read when it
+            // closes, and a heading closes on the line after its underline: the span took that line in,
+            // hid it as the underline, and left the underline showing. Before a blank line the span
+            // stopped short of nothing but the marker did, and hid only the line break. The heading ends
+            // with its underline, which is the line after its text.
+            if node.isSetextHeading, let last = node.lastChild?.range?.upperLine, last < index.lines.count {
+                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: last + 1) - s.location))
+            }
             // A fence left open ends with the container it is in, but cmark gives a fenced block the
             // end of the line being read when it closes, taking that for the closing fence; here it is
             // the first line after the container, which was then styled as code and kept from math.
