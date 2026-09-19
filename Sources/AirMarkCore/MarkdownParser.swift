@@ -14,6 +14,15 @@ public struct StyleRun: Hashable, Sendable {
     public init(span: SourceSpan, kind: StyleKind, markers: [SourceSpan] = []) { self.span = span; self.kind = kind; self.markers = markers }
 }
 public enum ElementKind: String, Codable, Sendable { case math, mermaid, image, table }
+/// A top-level block, or an item of a top-level list. Two items may be cut apart with no blank line
+/// between them: a list item starts on its own line whatever precedes it in the list.
+public struct Block: Hashable, Sendable {
+    public var span: SourceSpan
+    public var isListItem: Bool
+    public init(_ span: SourceSpan, isListItem: Bool = false) { self.span = span; self.isListItem = isListItem }
+    public var location: Int { span.location }
+    public var end: Int { span.end }
+}
 public struct RenderElement: Hashable, Sendable {
     public var span: SourceSpan
     public var kind: ElementKind
@@ -30,9 +39,10 @@ public struct ParsedDocument: Sendable {
     public var styles: [StyleRun]
     public var elements: [RenderElement]
     public var checkboxes: [SourceSpan]
-    /// Spans of the top-level blocks in order, which `MarkdownParser.reparse` cuts between. Empty when
-    /// a block has no source range or the document exceeded a nesting limit.
-    public var blocks: [SourceSpan]
+    /// What `MarkdownParser.reparse` cuts between, in order: the top-level blocks, with a top-level list
+    /// given as its items, so typing in a long list does not reparse the list. Empty when one of them
+    /// has no source range or the document exceeded a nesting limit.
+    public var blocks: [Block]
     /// The source's link reference definitions, in order. They resolve links anywhere in the document,
     /// so `MarkdownParser.reparse` hands the ones outside its window to the parse of the window.
     public var definitions: [ReferenceDefinition] = []
@@ -41,7 +51,7 @@ public struct ParsedDocument: Sendable {
     /// a partial one, which adds its window's without taking away what the window held before.
     public var referenceExpansion = 0
     public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = [],
-                blocks: [SourceSpan] = []) {
+                blocks: [Block] = []) {
         self.source = source; self.revision = revision; self.styles = styles; self.elements = elements; self.checkboxes = checkboxes
         self.blocks = blocks
     }
@@ -435,15 +445,16 @@ public enum MarkdownParser {
                 contentStart[line - 1] = position
             }
         }
-        // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
-        // anyway, except for a paragraph, whose own span it has no other use for.
+        // Top-level blocks, and the items of top-level lists, are what `reparse` cuts between; their
+        // spans are the ones `walk` computes anyway, except for a paragraph, whose own span it has no
+        // other use for.
         var blockSpansComplete = true
         /// `within` is where the block quote or list item around the node ends.
-        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false, within: Int? = nil) {
+        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false, topLevelItem: Bool = false, within: Int? = nil) {
             let kind = node.kind
             if kind == .paragraph {
                 if topLevel {
-                    if let span = span(node) { output.blocks.append(span) } else { blockSpansComplete = false }
+                    if let span = span(node) { output.blocks.append(Block(span)) } else { blockSpansComplete = false }
                 }
                 let outer = inlineColumnShift
                 inlineColumnShift = continuationShifts(node)
@@ -454,8 +465,9 @@ public enum MarkdownParser {
             // Plain text and line breaks are most nodes and add no style; their spans have no side
             // effects (no delimiters to match), so skip computing them.
             if kind == .text || kind == .softBreak || kind == .lineBreak { return }
+            let cut = topLevel && kind != .list || topLevelItem
             guard var s = span(node) else {
-                if topLevel { blockSpansComplete = false }
+                if topLevel || topLevelItem { blockSpansComplete = false }
                 for child in node.children { walk(child, within: within) }
                 return
             }
@@ -463,7 +475,11 @@ public enum MarkdownParser {
             // end of the line being read when it closes, taking that for the closing fence; here it is
             // the first line after the container, which was then styled as code and kept from math.
             if kind == .codeBlock, let within, s.end > within { s = SourceSpan(s.location, max(0, within - s.location)) }
-            if topLevel { output.blocks.append(s) }
+            if cut { output.blocks.append(Block(s, isListItem: topLevelItem)) }
+            if topLevel, kind == .list {
+                for child in node.children { walk(child, topLevelItem: true) }
+                return
+            }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch kind {

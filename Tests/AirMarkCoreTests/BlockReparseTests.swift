@@ -56,7 +56,9 @@ struct BlockReparseTests {
         let differing = [canonical(actual) == canonical(expected) ? nil : "styles", actual.elements == expected.elements ? nil : "elements",
                          actual.checkboxes == expected.checkboxes ? nil : "checkboxes", actual.blocks == expected.blocks ? nil : "blocks",
                          !definitions || actual.definitions == expected.definitions ? nil : "definitions"].compactMap { $0 }
-        #expect(same, "differing: \(differing) \(context)")
+        let styles = (Set(canonical(actual)), Set(canonical(expected)))
+        let detail = differing.contains("styles") ? " only actual \(styles.0.subtracting(styles.1).sorted().prefix(3)) only expected \(styles.1.subtracting(styles.0).sorted().prefix(3))" : ""
+        #expect(same, "differing: \(differing)\(detail) \(context)")
         return same
     }
 
@@ -95,21 +97,78 @@ struct BlockReparseTests {
                 "reparsed \(reparsed), under half the document \(partial), of those with definitions \(partialWithDefinitions), whole \(whole)")
     }
 
-    /// The recorded block spans are the source ranges of the document's top-level blocks.
+    /// The recorded blocks are the source ranges of the document's top-level blocks, with each
+    /// top-level list given as its items.
     @Test func blockSpansAreTheTopLevelBlocks() {
         var generator = Generator(state: 91)
+        var items = 0
         for _ in 0..<200 {
             let source = Self.document(&generator)
             let index = SourceIndex(source)
-            let children = Document(parsing: source).children.map { child -> SourceSpan? in
-                guard let range = child.range,
+            func block(_ node: any Markup, isListItem: Bool) -> Block? {
+                guard let range = node.range,
                       let start = index.offset(line: range.lowerBound.line, utf8Column: range.lowerBound.column),
                       let end = index.offset(line: range.upperBound.line, utf8Column: range.upperBound.column), end >= start else { return nil }
-                return SourceSpan(start, end - start)
+                return Block(SourceSpan(start, end - start), isListItem: isListItem)
+            }
+            let expected = Document(parsing: source).children.flatMap { child -> [Block?] in
+                guard child is UnorderedList || child is OrderedList else { return [block(child, isListItem: false)] }
+                return block(child, isListItem: false) == nil ? [nil] : child.children.map { block($0, isListItem: true) }
             }
             let parsed = MarkdownParser.parse(source)
-            #expect(parsed.blocks == (children.contains(where: { $0 == nil }) ? [] : children.map { $0! }), "\(source.debugDescription)")
+            #expect(parsed.blocks == (expected.contains(where: { $0 == nil }) ? [] : expected.map { $0! }), "\(source.debugDescription)")
+            items += parsed.blocks.filter(\.isListItem).count
         }
+        #expect(items > 500)
+    }
+
+    /// Long lists with no blank line between their items, which used to be one block each: items with
+    /// nested lists, lazy lines, quotes, fences closed and left open, display math closed, left open and
+    /// reaching over several items, other markers starting other lists, tasks, numbers.
+    static let items = ["- item **bold**", "- item\n  continued `code`", "- lazy\ncontinuation *em*", "- parent\n  - child\n    - grandchild\n  - child [l](u)",
+                        "- [ ] task", "- [x] done", "* star", "+ plus", "1. one", "2) paren", "- > quoted\n  > more", "- ```\n  fenced\n  ```",
+                        "- ```\n  left open", "- $$x^2$$ closed", "- $$ left open", "- closes $$", "- $a$ and $5", "-", "- # heading in item",
+                        "- | a | b |\n  | - | - |", "   - three spaces", "- 한글 😀 e\u{301}", "- [r][id]", "- <div>\n  html"]
+
+    static func listDocument(_ generator: inout Generator) -> String {
+        let newline = ["\n", "\n", "\r\n"][generator.next(3)]
+        var parts: [String] = []
+        for _ in 0..<(1 + generator.next(4)) {
+            if generator.next(2) == 0 { parts.append(lines[generator.next(lines.count)] + newline) }
+            // Display math reaches over items, so a list holding `$$` is cut at blank lines only; most lists have none.
+            let pool = generator.next(4) == 0 ? items : items.filter { !$0.contains("$$") }
+            parts.append((0..<(10 + generator.next(50))).map { _ in pool[generator.next(pool.count)] }.joined(separator: "\n") + "\n")
+            if generator.next(3) == 0 { parts.append("[id]: /u" + newline) }
+        }
+        return parts.joined(separator: newline).replacingOccurrences(of: "\n", with: newline)
+    }
+
+    /// Edits inside long lists reparse a few items, cut where no blank line is, and still equal the
+    /// whole parse.
+    @Test func listItemsAreCutPoints() {
+        var generator = Generator(state: 77)
+        var itemCuts = 0, reparsed = 0, whole = 0
+        for round in 0..<150 {
+            let text = NSMutableString(string: Self.listDocument(&generator))
+            var previous = MarkdownParser.parse(text as String)
+            for step in 0..<30 {
+                let (range, replacement) = Self.edit(&generator, in: text)
+                text.replaceCharacters(in: range, with: replacement)
+                let source = text as String
+                let expected = MarkdownParser.parse(source, revision: UInt64(step))
+                if let result = MarkdownParser.reparse(source, revision: UInt64(step), previous: previous, edits: [PresentationEdit(range: range, replacement: replacement)]) {
+                    reparsed += 1
+                    let window = result.changed
+                    guard Self.expectSame(result.document, expected, "round \(round) step \(step) window \(window) source \(source.debugDescription)") else { return }
+                    // The window starts right after a line with text on it: a cut between two items.
+                    if window.location >= 2, ![10, 13].contains(text.character(at: window.location - 2)), text.character(at: window.location - 1) == 10 { itemCuts += 1 }
+                } else {
+                    whole += 1
+                }
+                previous = expected
+            }
+        }
+        #expect(itemCuts > 800 && reparsed > whole * 4, "item cuts \(itemCuts), reparsed \(reparsed), whole \(whole)")
     }
 
     /// Outside the returned window, the new parse is the previous one moved by the edit.

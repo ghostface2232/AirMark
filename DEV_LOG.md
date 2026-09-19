@@ -444,3 +444,37 @@ after the review fixes below; the UI state after them is in that entry.
   an inner `>` would have removed the character before it. A quote's markers are opening markers wherever
   they stand; `nestedQuoteMarkersAreOpeningMarkers` fails without that.
 - **Tests.** 111 + 66, Debug.
+
+## 2026-09-19 — A long list is no longer one block
+
+`Validation/2026-09-19-incremental/lists.txt`. Release.
+
+- **What was wrong.** `reparse` cuts between top-level blocks, and a top-level list is one of them: one
+  character typed in a list of 20,000 items reparsed all 529KB of it. DEV_LOG.md itself is such a list.
+- **Items as blocks.** `ParsedDocument.blocks` records a top-level list as its items, and two items may be
+  cut apart with no blank line between them: a list item starts on its own line whatever the item before
+  it holds. Nothing the parser emits depends on the list around an item (tightness, numbering), so an item
+  parsed at the head of a window is the item the document has. The check is the one there was: the
+  unchanged margin blocks must reparse to what they were, item or not, or the margins double.
+- **Display math is the exception, and cost a rule twice.** It is found without regard to blocks and only a
+  blank line stops it. The first rule (no cut through a span of the previous parse, none when the window
+  holds `$$`) failed the new test: an edit that broke a table unprotected its cells, and a `$$` before the
+  window then paired through it with one after. The rule is now about what the window cannot see: items
+  are cut apart only when no `$$` stands between the window and the blank lines around it; otherwise the
+  window is widened to those, as before.
+- **Found on the way: an open fence swallowed the next line.** cmark gives a fenced block the end of the
+  line that closes it, taking that for the closing fence. A fence left open in a list item or a quote
+  closes with the container, on the first line after it, so the next item, or the paragraph after the
+  list, was styled as code and kept from math. Cut at the container's end; committed separately. A window
+  ending after such an item had disagreed with the whole parse, and the window was right.
+- **Measured.** One edit in the middle, p50 of five: flat list of 20,000 items, window 528,891 → 82 units,
+  23.8 ms whole → 1.8 ms; 5,000 items with nested children, 19.7 → 1.1 ms. With one `$$` in the list the
+  window is the list again (26.6 ms against 24.2 whole). `AirMarkBench --lists`.
+- **Tests.** `listItemsAreCutPoints`: 150 documents of long lists (nested lists, lazy lines, quotes, fences
+  closed and open, tables, display math in a quarter of them) through 30 random edits each, equal to the
+  whole parse every time, with over 800 windows asserted to start between two items. Without the `$$` rule
+  it fails. Allowing a cut between a paragraph and an item does not fail anything: that restriction is
+  caution, not something the tests show to be needed. `blockSpansAreTheTopLevelBlocks` checks the items
+  against swift-markdown's tree. 111 + 68, Debug and Release.
+- **Left.** Cuts inside a long block quote, and between the items of a nested list, would need the
+  container's prefix stripped and positions mapped back. A list that holds `$$` is one block as before.

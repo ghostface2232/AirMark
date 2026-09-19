@@ -5,7 +5,8 @@ import Markdown
 /// The parser as it was while swift-markdown's tree backed it, kept word for word as the reference
 /// for `MarkdownParser.parse`, which now reads cmark-gfm's tree directly. Both end in
 /// `MarkdownParser.finish`, and the marker helpers are shared: what differs, and what the
-/// differential tests compare, is how the tree is reached.
+/// differential tests compare, is how the tree is reached. One thing was added since: a top-level
+/// list is recorded as its items, as the parser now records it, so that `blocks` stays comparable.
 enum ReferenceParser {
     static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
         let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
@@ -98,10 +99,10 @@ enum ReferenceParser {
         // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
         // anyway, except for a paragraph, whose own span it has no other use for.
         var blockSpansComplete = true
-        func walk(_ node: any Markup, topLevel: Bool = false) {
+        func walk(_ node: any Markup, topLevel: Bool = false, topLevelItem: Bool = false) {
             if let paragraph = node as? Paragraph {
                 if topLevel {
-                    if let span = span(paragraph) { output.blocks.append(span) } else { blockSpansComplete = false }
+                    if let span = span(paragraph) { output.blocks.append(Block(span)) } else { blockSpansComplete = false }
                 }
                 let outer = inlineColumnShift
                 inlineColumnShift = continuationShifts(paragraph)
@@ -113,11 +114,16 @@ enum ReferenceParser {
             // effects (no delimiters to match), so skip computing them and the casts below.
             if node is Text || node is SoftBreak || node is LineBreak { return }
             guard let s = span(node) else {
-                if topLevel { blockSpansComplete = false }
+                if topLevel || topLevelItem { blockSpansComplete = false }
                 for child in node.children { walk(child) }
                 return
             }
-            if topLevel { output.blocks.append(s) }
+            let isList = node is UnorderedList || node is OrderedList
+            if topLevel && !isList || topLevelItem { output.blocks.append(Block(s, isListItem: topLevelItem)) }
+            if topLevel, isList {
+                for child in node.children { walk(child, topLevelItem: true) }
+                return
+            }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch node {

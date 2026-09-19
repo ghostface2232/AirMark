@@ -7,7 +7,12 @@ extension MarkdownParser {
     /// nil when the whole document has to be parsed.
     ///
     /// The window reparsed is the touched blocks plus at least one unchanged margin block on each side,
-    /// widened until both ends are at a blank line between blocks. Block structure is decided line by
+    /// widened until both ends are at a blank line between blocks, or between two items of a top-level
+    /// list: an item starts on its own line whatever the item before it holds, so a long list is not one
+    /// block. Display math is the one thing found without regard to blocks, and only a blank line stops
+    /// it: a `$$` outside the window could pair with one inside, or through the window, or stop at a
+    /// table or code span that the edit made or unmade. So items are cut apart only when no `$$` stands
+    /// between the window and the blank lines around it; otherwise the window is widened to those. Block structure is decided line by
     /// line from the containers still open, so when the margin blocks reparse to exactly what they were,
     /// the edit did not reach past them: an unterminated fence, an HTML block, or a paragraph or list
     /// that absorbed its neighbour would change them. The window then doubles its margins, and past a
@@ -61,17 +66,39 @@ extension MarkdownParser {
             }
             return false
         }
+        var betweenItems = true
+        /// Whether the window may be cut before block `index`; `itemCut` reports a cut with no blank line.
+        func cut(before index: Int, itemCut: inout Bool) -> Bool {
+            if blankLine(between: blocks[index - 1].end, blocks[index].location) { return true }
+            guard betweenItems, blocks[index - 1].isListItem, blocks[index].isListItem else { return false }
+            itemCut = true
+            return true
+        }
+        /// Whether `$$` stands outside the window `start..<end` of blocks `lower...upper`, before the
+        /// blank lines on either side of it.
+        func displayMathAround(_ lower: Int, _ upper: Int, _ start: Int, _ end: Int) -> Bool {
+            var first = lower, last = upper
+            while first > 0, !blankLine(between: blocks[first - 1].end, blocks[first].location) { first -= 1 }
+            while last < count - 1, !blankLine(between: blocks[last].end, blocks[last + 1].location) { last += 1 }
+            let from = first == 0 ? 0 : blocks[first].location, to = last == count - 1 ? old.length : blocks[last + 1].location
+            func found(_ lower: Int, _ upper: Int) -> Bool {
+                upper > lower && old.range(of: "$$", options: .literal, range: NSRange(location: lower, length: upper - lower)).location != NSNotFound
+            }
+            return found(min(from, start), start) || found(end, max(to, end))
+        }
         let limit = max(65_536, old.length / 4)
         var margin = 1
         while true {
             var lower = max(touchedFirst - margin, 0), upper = min(touchedLast + margin, count - 1)
-            while lower > 0, !blankLine(between: blocks[lower - 1].end, blocks[lower].location) { lower -= 1 }
-            while upper < count - 1, !blankLine(between: blocks[upper].end, blocks[upper + 1].location) { upper += 1 }
+            var itemCut = false
+            while lower > 0, !cut(before: lower, itemCut: &itemCut) { lower -= 1 }
+            while upper < count - 1, !cut(before: upper + 1, itemCut: &itemCut) { upper += 1 }
             let whole = lower == 0 && upper == count - 1
             let start = lower == 0 ? 0 : old.lineRange(for: NSRange(location: blocks[lower].location, length: 0)).location
             let oldEnd = upper == count - 1 ? old.length : old.lineRange(for: NSRange(location: blocks[upper + 1].location, length: 0)).location
             guard oldEnd - start <= limit || whole else { return nil }
             let window = SourceSpan(start, oldEnd + delta - start)
+            if itemCut, displayMathAround(lower, upper, start, oldEnd) { betweenItems = false; continue }
             let text = new.substring(with: window.nsRange)
             guard nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
             // The definitions the window held, and where they stand among the document's. Two equal
@@ -89,9 +116,10 @@ extension MarkdownParser {
             let largest = all.lazy.map(\.size).max() ?? 0
             guard part.referenceExpansion + largest <= referenceExpansionFloor,
                   previous.referenceExpansion + part.referenceExpansion + largest <= max(referenceExpansionFloor, new.length) else { return nil }
-            let reparsed = part.blocks.map { SourceSpan($0.location + start, $0.length) }
+            func moved(_ block: Block, by offset: Int) -> Block { Block(SourceSpan(block.location + offset, block.span.length), isListItem: block.isListItem) }
+            let reparsed = part.blocks.map { moved($0, by: start) }
             let leading = blocks[lower..<max(lower, touchedFirst)]
-            let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { SourceSpan($0.location + delta, $0.length) }
+            let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { moved($0, by: delta) }
             let fits = reparsed.count >= leading.count + trailing.count
                 && reparsed.prefix(leading.count).elementsEqual(leading)
                 && reparsed.suffix(trailing.count).elementsEqual(trailing)
@@ -126,7 +154,7 @@ extension MarkdownParser {
             var element = element; element.span = moved(element.span, by: offset); return element
         }
         document.checkboxes = stitch(previous.checkboxes, part.checkboxes, location: \.location) { moved($0, by: $1) }
-        document.blocks = stitch(previous.blocks, part.blocks, location: \.location) { moved($0, by: $1) }
+        document.blocks = stitch(previous.blocks, part.blocks, location: \.location) { Block(moved($0.span, by: $1), isListItem: $0.isListItem) }
         return document
     }
 

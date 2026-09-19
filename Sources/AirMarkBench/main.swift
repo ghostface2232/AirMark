@@ -122,6 +122,29 @@ if CommandLine.arguments.contains("--references") {
     }
     exit(0)
 }
+// A top-level list used to be one block, so an edit inside it reparsed the whole list. One edit in
+// the middle of a list of 20,000 items, flat and with nested children, and of one that holds `$$`,
+// which is still cut at blank lines only.
+if CommandLine.arguments.contains("--lists") {
+    let corpora: [(String, String)] = [
+        ("flat", (0..<20_000).map { "- item \($0) with **bold**\n" }.joined()),
+        ("nested", (0..<5_000).map { "- item \($0)\n  - child with `code`\n    - grandchild [l](u)\n  continued\n" }.joined()),
+        ("with-display-math", (0..<20_000).map { $0 == 10 ? "- $$x^2$$\n" : "- item \($0) with **bold**\n" }.joined()),
+    ]
+    for (name, source) in corpora {
+        let previous = MarkdownParser.parse(source)
+        let text = NSMutableString(string: source), location = text.length / 2
+        text.insert("x", at: location)
+        let edited = text.copy() as! String
+        let edit = PresentationEdit(range: NSRange(location: location, length: 0), replacement: "x")
+        func p50(_ body: () -> Void) -> Double { percentile((0..<5).map { _ in measure(body) }, 0.5) }
+        var window = 0
+        let reparse = p50 { window = MarkdownParser.reparse(edited, revision: 1, previous: previous, edits: [edit])?.changed.length ?? -1 }
+        print(String(format: "LISTS %@ bytes=%d blocks=%d window=%d reparse_p50=%.2fms whole_p50=%.2fms",
+                     name, source.utf8.count, previous.blocks.count, window, reparse, p50 { _ = MarkdownParser.parse(edited) }))
+    }
+    exit(0)
+}
 // Inputs chosen to defeat the index and the math scanner rather than to look like real notes.
 // Each corpus is measured at doubling sizes; the exponent between neighbours (log2 of the time ratio)
 // is about 1 for linear work and about 2 for quadratic work, whatever the absolute times are.
