@@ -1,0 +1,26 @@
+[
+  {
+    "bytes" : 99912,
+    "indexP50MS" : 0.444458,
+    "indexP95MS" : 0.635625,
+    "iterations" : 20,
+    "parseP50MS" : 19.19175,
+    "parseP95MS" : 24.295625
+  },
+  {
+    "bytes" : 999948,
+    "indexP50MS" : 4.303083,
+    "indexP95MS" : 5.81375,
+    "iterations" : 10,
+    "parseP50MS" : 191.810625,
+    "parseP95MS" : 199.975791
+  },
+  {
+    "bytes" : 9999894,
+    "indexP50MS" : 44.092334,
+    "indexP95MS" : 54.341166,
+    "iterations" : 3,
+    "parseP50MS" : 1944.367084,
+    "parseP95MS" : 1971.3469169999998
+  }
+]

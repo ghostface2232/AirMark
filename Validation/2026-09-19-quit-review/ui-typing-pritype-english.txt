@@ -1,0 +1,980 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project AirMark.xcodeproj -scheme AirMark -derivedDataPath /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix -destination platform=macOS,arch=arm64 -resultBundlePath ../typing.xcresult -test-timeouts-enabled YES -default-test-execution-time-allowance 120 "-only-testing:AirMarkUITests/AirMarkUITests/testRepeatedAsynchronousSavesPreserveSource" "-only-testing:AirMarkUITests/AirMarkUITests/testDiscardedDraftIsNotRestoredAfterRelaunch" "-only-testing:AirMarkUITests/AirMarkUITests/testCancelledCloseKeepsTheDraftAfterRelaunch" "-only-testing:AirMarkUITests/AirMarkUITests/testEditingASavedFileIsKeptOnCloseAndRelaunch" "-only-testing:AirMarkUITests/AirMarkUITests/testTypingUndoAndReplaceAll" test
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  AirMark: /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt @ local
+  cmark-gfm: https://github.com/swiftlang/swift-cmark.git @ 0.8.0
+  swift-markdown: https://github.com/swiftlang/swift-markdown.git @ 0.8.0
+
+Writing result bundle at path:
+	/private/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/typing.xcresult
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (15 targets)
+    Target 'AirMarkUITests' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMark' in project 'AirMark'
+    Target 'AirMark' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkCore-product' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkEditor-product' in project 'AirMark'
+    Target 'AirMarkEditor-product' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkEditor' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkCore' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkRender' in project 'AirMark'
+        ➜ Explicit dependency on target 'Markdown-product' in project 'swift-markdown'
+    Target 'AirMarkEditor' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkCore' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkRender' in project 'AirMark'
+        ➜ Explicit dependency on target 'Markdown-product' in project 'swift-markdown'
+    Target 'AirMarkRender' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMark_AirMarkRender' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkCore' in project 'AirMark'
+        ➜ Explicit dependency on target 'Markdown-product' in project 'swift-markdown'
+    Target 'AirMark_AirMarkRender' in project 'AirMark' (no dependencies)
+    Target 'AirMarkCore-product' in project 'AirMark'
+        ➜ Explicit dependency on target 'AirMarkCore' in project 'AirMark'
+        ➜ Explicit dependency on target 'Markdown-product' in project 'swift-markdown'
+    Target 'AirMarkCore' in project 'AirMark'
+        ➜ Explicit dependency on target 'Markdown-product' in project 'swift-markdown'
+    Target 'Markdown-product' in project 'swift-markdown'
+        ➜ Explicit dependency on target 'Markdown' in project 'swift-markdown'
+        ➜ Explicit dependency on target 'CAtomic' in project 'swift-markdown'
+        ➜ Explicit dependency on target 'cmark-gfm-product' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions-product' in project 'cmark-gfm'
+    Target 'Markdown' in project 'swift-markdown'
+        ➜ Explicit dependency on target 'CAtomic' in project 'swift-markdown'
+        ➜ Explicit dependency on target 'cmark-gfm-product' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions-product' in project 'cmark-gfm'
+    Target 'cmark-gfm-extensions-product' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm-extensions' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm-product' in project 'cmark-gfm'
+        ➜ Explicit dependency on target 'cmark-gfm' in project 'cmark-gfm'
+    Target 'cmark-gfm' in project 'cmark-gfm' (no dependencies)
+    Target 'CAtomic' in project 'swift-markdown' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: dc9cd4d94087819dc8161213d3a29859
+Build description path: /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/XCBuildData/dc9cd4d94087819dc8161213d3a29859.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache
+
+ProcessInfoPlistFile /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark_AirMarkRender.bundle/Contents/Info.plist /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark_AirMarkRender-b.build/empty-AirMark_AirMarkRender.plist (in target 'AirMark_AirMarkRender' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/Package.swift')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-infoPlistUtility /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark_AirMarkRender-b.build/empty-AirMark_AirMarkRender.plist -producttype com.apple.product-type.bundle -expandbuildsettings -platform macosx -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark_AirMarkRender.bundle/Contents/Info.plist
+
+SwiftDriver AirMark normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMark -Onone @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.SwiftFileList -DDEBUG -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include/module.modulemap -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -index-store-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Index.noindex/DataStore -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ main.swift /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/App/main.swift (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftCompile normal arm64 /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/App/main.swift (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-SwiftPerFileCompile main.swift
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ AirMark (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftCompile normal arm64 (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling main.swift (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftDriver\ Compilation AirMark normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMark -Onone @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.SwiftFileList -DDEBUG -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include/module.modulemap -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -index-store-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Index.noindex/DataStore -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for AirMark (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftDriver\ Compilation\ Requirements AirMark normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMark -Onone @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.SwiftFileList -DDEBUG -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include/module.modulemap -Xcc -fmodule-map-file\=/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include/module.modulemap -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -index-store-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Index.noindex/DataStore -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/src/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-cmark/extensions/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SourcePackages/checkouts/swift-markdown/Sources/CAtomic/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.swiftmodule/arm64-apple-macos.abi.json /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.abi.json (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -strip-unsigned-binaries -strip-deterministic -strip-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -resolve-src-symlinks -rename /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.abi.json /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.swiftmodule/arm64-apple-macos.abi.json
+
+Copy /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftsourceinfo (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -strip-unsigned-binaries -strip-deterministic -strip-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -resolve-src-symlinks -rename /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftsourceinfo /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo
+
+Ld /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib normal (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -Os -Xlinker -no_warn_duplicate_libraries -L/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -L/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -filelist /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.LinkFileList -install_name @rpath/AirMark.debug.dylib -Xlinker -rpath -Xlinker @loader_path -Xlinker -rpath -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/../Frameworks -Xlinker -object_path_lto -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_lto.o -rdynamic -Xlinker -dependency_info -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.swiftmodule -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib
+
+ConstructStubExecutorLinkFileList /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-ExecutorLinkFileList-normal-arm64.txt (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    construct-stub-executor-link-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+Ld /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark normal (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -Os -Xlinker -no_warn_duplicate_libraries -L/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @loader_path -Xlinker -rpath -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/PackageFrameworks -Xlinker -rpath -Xlinker @executable_path/../Frameworks -rdynamic -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark-ExecutorLinkFileList-normal-arm64.txt /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark
+
+ExtractAppIntentsMetadata (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.266.1.p9hO6R/Metal.xctoolchain --module-name AirMark --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk --xcode-version 27A266a --platform-family macOS --deployment-target 26.0 --bundle-identifier com.airmark.AirMark --output /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Resources --target-triple arm64-apple-macos26.0 --binary-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark --dependency-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark_dependency_info.dat --stringsdata-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.SwiftFileList --metadata-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark.DependencyMetadataFileList --static-metadata-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark.DependencyStaticMetadataFileList --swift-const-vals-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/Objects-normal/arm64/AirMark.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-09-19 19:34:13.669 appintentsmetadataprocessor[62068:1294556] Starting appintentsmetadataprocessor export
+2026-09-19 19:34:13.670 appintentsmetadataprocessor[62068:1294556] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+
+ProcessInfoPlistFile /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Info.plist /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/App/Info.plist (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-infoPlistUtility /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/App/Info.plist -producttype com.apple.product-type.application -genpkginfo /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/PkgInfo -expandbuildsettings -platform macosx -scanforprivacyfile /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Resources/AirMark_AirMarkRender.bundle -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Info.plist
+
+SwiftDriver AirMarkUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMarkUITests -O @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.SwiftFileList -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks -parse-as-library -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+CopySwiftLibs /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Frameworks --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/PlugIns --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Library/SystemExtensions --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Extensions --platform macosx --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.266.1.p9hO6R/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+CodeSign /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/AirMark.debug.dylib
+
+CodeSign /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/__preview.dylib (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/__preview.dylib
+/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app/Contents/MacOS/__preview.dylib: replacing existing signature
+
+CodeSign /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark.build/AirMark.app.xcent --timestamp\=none --generate-entitlement-der /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app
+
+Validate /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-validationUtility /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app -no-validate-extension -infoplist-subpath Contents/Info.plist
+
+RegisterWithLaunchServices /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-lsregisterurl --record-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/XCBuildData/registered-launchservices.txt -- /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMark.app
+
+ProcessInfoPlistFile /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Info.plist /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/empty-AirMarkUITests.plist (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-infoPlistUtility /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/empty-AirMarkUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -platform macosx -additionalcontentfile /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/ProductTypeInfoPlistAdditions.plist -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Info.plist
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ AirMarkUITests (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftCompile normal arm64 (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+
+SwiftCompile normal arm64 Compiling\ AirMarkUITests.swift /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/UITests/AirMarkUITests.swift (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftCompile normal arm64 /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/UITests/AirMarkUITests.swift (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-SwiftPerFileCompile AirMarkUITests.swift
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for AirMarkUITests (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftDriver\ Compilation\ Requirements AirMarkUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMarkUITests -O @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.SwiftFileList -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks -parse-as-library -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftsourceinfo (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -strip-unsigned-binaries -strip-deterministic -strip-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -resolve-src-symlinks -rename /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftsourceinfo /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo
+
+Copy /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/arm64-apple-macos.abi.json /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.abi.json (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -strip-unsigned-binaries -strip-deterministic -strip-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -resolve-src-symlinks -rename /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.abi.json /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/arm64-apple-macos.abi.json
+
+Copy /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/arm64-apple-macos.swiftmodule /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -strip-unsigned-binaries -strip-deterministic -strip-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -resolve-src-symlinks -rename /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests.swiftmodule/arm64-apple-macos.swiftmodule
+
+SwiftDriverJobDiscovery normal arm64 Compiling AirMarkUITests.swift (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+
+SwiftDriver\ Compilation AirMarkUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name AirMarkUITests -O @/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.SwiftFileList -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-macos26.0 -g -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -Xfrontend -serialize-debugging-options -swift-version 6 -I /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib -F /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -F /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks -parse-as-library -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKStatCaches.noindex/macosx27.0-26A425-e829b21a6f8c9b70876ba0858053c0447231f6df4def33e022ae2eb8f782df1a.sdkstatcache -output-file-map /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex -sdk-module-cache-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-generated-files.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-own-target-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMark-28693b7ffc12cdf30938770ea92f9932-VFS/all-product-headers.yaml -Xcc -iquote -Xcc /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests-project-headers.hmap -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/include -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources/arm64 -Xcc -I/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/DerivedSources -emit-objc-header -emit-objc-header-path /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests-Swift.h -working-directory /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/MacOS/AirMarkUITests normal (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-macos26.0 -bundle -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -Os -Xlinker -no_warn_duplicate_libraries -L/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -L/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/EagerLinkingTBDs/Debug -F/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks -filelist /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.LinkFileList -Xlinker -rpath -Xlinker @loader_path/../Frameworks -Xlinker -object_path_lto -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_lto.o -Xlinker -dependency_info -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.swiftmodule -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -Xlinker -no_adhoc_codesign -o /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/MacOS/AirMarkUITests
+
+CopySwiftLibs /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/MacOS/AirMarkUITests --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Frameworks --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/PlugIns --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Library/SystemExtensions --scan-folder /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Extensions --platform macosx --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.266.1.p9hO6R/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v27.1.266.1.p9hO6R/Metal.xctoolchain --module-name AirMarkUITests --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk --xcode-version 27A266a --platform-family macOS --deployment-target 26.0 --bundle-identifier com.airmark.AirMarkUITests --output /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/Resources --target-triple arm64-apple-macos26.0 --binary-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest/Contents/MacOS/AirMarkUITests --dependency-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests_dependency_info.dat --stringsdata-file /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.SwiftFileList --metadata-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests.DependencyMetadataFileList --static-metadata-file-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/Objects-normal/arm64/AirMarkUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-09-19 19:34:15.296 appintentsmetadataprocessor[62077:1294674] Starting appintentsmetadataprocessor export
+2026-09-19 19:34:15.297 appintentsmetadataprocessor[62077:1294674] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+
+CodeSign /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests.xctest.xcent --timestamp\=none --generate-entitlement-der /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app/Contents/PlugIns/AirMarkUITests.xctest
+
+CodeSign /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app (in target 'AirMarkUITests' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+    cd /tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/AirMark.build/Debug/AirMarkUITests.build/AirMarkUITests.xctest.xcent --timestamp\=none --generate-entitlement-der /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app
+/Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Products/Debug/AirMarkUITests-Runner.app: replacing existing signature
+
+PruneExplicitPrecompiledModules /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /Users/baemingwan/Library/Developer/Xcode/DerivedData/AirMark-quitfix/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+note: Disabling hardened runtime with ad-hoc codesigning. (in target 'AirMark' from project 'AirMark' at path '/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/wt/AirMark.xcodeproj')
+2026-09-19 19:34:15.602552+0900 AirMarkUITests-Runner[62080:1294699] [Default] Running tests...
+Test Suite 'Selected tests' started at 2026-09-19 19:34:15.635.
+Test Suite 'AirMarkUITests.xctest' started at 2026-09-19 19:34:15.635.
+Test Suite 'AirMarkUITests' started at 2026-09-19 19:34:15.635.
+Test Case '-[AirMarkUITests.AirMarkUITests testCancelledCloseKeepsTheDraftAfterRelaunch]' started.
+    t =     0.00s Start Test at 2026-09-19 19:34:15.636
+    t =     0.10s Set Up
+    t =     0.11s Open com.airmark.AirMark
+    t =     0.11s     Launch com.airmark.AirMark
+2026-09-19 19:34:15.808 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:15.808 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.48s         Wait for accessibility to load
+    t =     0.63s         Setting up automation session
+    t =     0.64s         Wait for com.airmark.AirMark to idle
+    t =     0.67s Waiting 10.0s for "markdown-editor" TextView to exist
+    t =     1.67s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     1.67s         Checking existence of `"markdown-editor" TextView`
+    t =     1.82s Click "markdown-editor" TextView
+    t =     1.82s     Wait for com.airmark.AirMark to idle
+    t =     1.82s     Find the "markdown-editor" TextView
+    t =     1.84s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     1.85s     Synthesize event
+    t =     2.28s     Wait for com.airmark.AirMark to idle
+    t =     2.29s Type 'KEEP ME' into "markdown-editor" TextView
+    t =     2.29s     Wait for com.airmark.AirMark to idle
+    t =     2.30s     Find the "markdown-editor" TextView
+    t =     2.33s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     2.35s     Synthesize event
+2026-09-19 19:34:17.984906+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (288.0, 266.0, 640.0, 722.0): [1]
+    t =     2.65s     Wait for com.airmark.AirMark to idle
+    t =     2.65s Find the "markdown-editor" TextView
+    t =     2.69s Type 'w' key with modifiers '⌘' (0x10)
+    t =     2.69s     Wait for com.airmark.AirMark to idle
+    t =     2.69s     Find the Target Application 'com.airmark.AirMark'
+    t =     2.71s     Check for interrupting elements affecting "AirMark" Application
+    t =     2.72s     Open com.airmark.AirMark
+    t =     2.72s         Activate com.airmark.AirMark
+    t =     2.72s             Wait for com.airmark.AirMark to idle
+    t =     2.74s     Synthesize event
+2026-09-19 19:34:18.378909+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:18.381509+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     8.27s     Wait for com.airmark.AirMark to idle
+    t =     8.29s Waiting 5.0s for Sheet (First Match) to exist
+    t =     9.32s     Checking `Expect predicate `existsNoRetry == 1` for object Sheet (First Match)`
+    t =     9.32s         Checking existence of `Sheet (First Match)`
+    t =     9.33s Click "Cancel" Button
+    t =     9.33s     Wait for com.airmark.AirMark to idle
+    t =     9.34s     Find the "Cancel" Button
+    t =     9.38s     Check for interrupting elements affecting "CancelButton" Button
+    t =     9.39s     Synthesize event
+2026-09-19 19:34:25.029115+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.82s     Wait for com.airmark.AirMark to idle
+    t =    10.10s Waiting 5.0s for "markdown-editor" TextView to exist
+    t =    11.13s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =    11.13s         Checking existence of `"markdown-editor" TextView`
+    t =    11.22s Find the "markdown-editor" TextView
+    t =    11.25s Terminate com.airmark.AirMark:62081
+    t =    12.33s Wait for com.airmark.AirMark to become Not Running
+    t =    12.34s Open com.airmark.AirMark
+    t =    12.34s     Launch com.airmark.AirMark
+2026-09-19 19:34:27.975 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:27.975 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    12.65s         Wait for accessibility to load
+    t =    12.83s         Setting up automation session
+    t =    12.84s         Wait for com.airmark.AirMark to idle
+    t =    12.85s Waiting 15.0s for "markdown-editor" TextView to exist
+    t =    13.90s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =    13.90s         Checking existence of `"markdown-editor" TextView`
+    t =    14.05s Find the "markdown-editor" TextView
+    t =    14.07s Terminate com.airmark.AirMark:62123
+    t =    15.13s Tear Down
+Test Case '-[AirMarkUITests.AirMarkUITests testCancelledCloseKeepsTheDraftAfterRelaunch]' passed (15.253 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch]' started.
+    t =     0.00s Start Test at 2026-09-19 19:34:30.890
+    t =     0.11s Set Up
+    t =     0.11s Open com.airmark.AirMark
+    t =     0.11s     Launch com.airmark.AirMark
+2026-09-19 19:34:31.006 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:31.006 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.41s         Wait for accessibility to load
+    t =     0.58s         Setting up automation session
+    t =     0.60s         Wait for com.airmark.AirMark to idle
+    t =     0.61s Waiting 10.0s for "markdown-editor" TextView to exist
+    t =     1.65s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     1.65s         Checking existence of `"markdown-editor" TextView`
+    t =     1.79s Click "markdown-editor" TextView
+    t =     1.80s     Wait for com.airmark.AirMark to idle
+    t =     1.80s     Find the "markdown-editor" TextView
+    t =     1.82s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     1.83s     Synthesize event
+    t =     2.31s     Wait for com.airmark.AirMark to idle
+    t =     2.31s Type 'DISCARD ME' into "markdown-editor" TextView
+    t =     2.31s     Wait for com.airmark.AirMark to idle
+    t =     2.32s     Find the "markdown-editor" TextView
+    t =     2.34s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     2.35s     Synthesize event
+2026-09-19 19:34:33.246027+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (288.0, 266.0, 640.0, 722.0): [1]
+    t =     2.74s     Wait for com.airmark.AirMark to idle
+    t =     2.74s Find the "markdown-editor" TextView
+    t =     2.82s Type 'w' key with modifiers '⌘' (0x10)
+    t =     2.82s     Wait for com.airmark.AirMark to idle
+    t =     2.82s     Find the Target Application 'com.airmark.AirMark'
+    t =     2.84s     Check for interrupting elements affecting "AirMark" Application
+    t =     2.84s     Open com.airmark.AirMark
+    t =     2.84s         Activate com.airmark.AirMark
+    t =     2.85s             Wait for com.airmark.AirMark to idle
+    t =     2.87s     Synthesize event
+2026-09-19 19:34:33.757328+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:33.766710+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     8.41s     Wait for com.airmark.AirMark to idle
+    t =     8.42s Waiting 5.0s for Sheet (First Match) to exist
+    t =     9.45s     Checking `Expect predicate `existsNoRetry == 1` for object Sheet (First Match)`
+    t =     9.45s         Checking existence of `Sheet (First Match)`
+    t =     9.47s Checking existence of `"Delete" Button`
+    t =     9.52s Click "Delete" Button
+    t =     9.52s     Wait for com.airmark.AirMark to idle
+    t =     9.52s     Find the "Delete" Button
+    t =     9.55s     Check for interrupting elements affecting "DontSaveButton" Button
+    t =     9.63s     Found 2 interrupting elements:
+    t =     9.63s Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     9.63s Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     9.63s     Invoking UI interruption monitors for Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     9.63s Checking for user permission dialogs...
+    t =     9.63s             Checking existence of `StaticText (Elements matching predicate 'value MATCHES[c] ".+ would like ((to|full) access|to find) .+"')`
+    t =     9.91s             Checking existence of `StaticText (Elements matching predicate 'title CONTAINS[c] "Trust This "')`
+    t =    10.00s Checking for Bluetooth Setup Assistant...
+    t =    10.00s             Find the Window at {{881.0, 243.0}, {740.0, 720.0}}
+    t =    10.08s Checking for Notification Center Banners...
+    t =    10.08s Checking for basic alerts
+    t =    10.08s             Checking existence of `"Main" Window`
+    t =    10.15s             Find the "Main" Window
+    t =    10.23s             Find the "Main" Window
+    t =    10.30s No monitors handled UI interruption, checking to see if element still exists...
+    t =    10.30s             Checking existence of `"Main" Window`
+    t =    10.38s     Invoking UI interruption monitors for Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =    10.38s Checking for user permission dialogs...
+    t =    10.38s             Checking existence of `StaticText (Elements matching predicate 'value MATCHES[c] ".+ would like ((to|full) access|to find) .+"')`
+    t =    10.46s             Checking existence of `StaticText (Elements matching predicate 'title CONTAINS[c] "Trust This "')`
+    t =    10.54s Checking for Bluetooth Setup Assistant...
+    t =    10.54s             Find the Window at {{881.0, 243.0}, {740.0, 720.0}}
+    t =    10.61s Checking for Notification Center Banners...
+    t =    10.61s Checking for basic alerts
+    t =    10.61s             Checking existence of `"Main" Window`
+    t =    10.67s             Find the "Main" Window
+    t =    10.75s             Find the "Main" Window
+    t =    10.83s No monitors handled UI interruption, checking to see if element still exists...
+    t =    10.84s             Checking existence of `"Main" Window`
+    t =    10.91s     Open com.airmark.AirMark
+    t =    10.91s         Activate com.airmark.AirMark
+    t =    10.93s             Wait for com.airmark.AirMark to idle
+    t =    10.93s Did not handle the interruption, but will attempt to continue…
+    t =    10.99s     Synthesize event
+2026-09-19 19:34:41.883784+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    11.51s     Wait for com.airmark.AirMark to idle
+    t =    11.80s Click "AirMark" MenuBarItem
+    t =    11.80s     Wait for com.airmark.AirMark to idle
+    t =    11.82s     Find the "AirMark" MenuBarItem
+    t =    11.85s     Check for interrupting elements affecting "AirMark" MenuBarItem
+    t =    11.85s     Synthesize event
+2026-09-19 19:34:42.737349+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    12.31s     Wait for com.airmark.AirMark to idle
+    t =    12.32s Click "Quit AirMark" MenuItem
+    t =    12.32s     Wait for com.airmark.AirMark to idle
+    t =    12.33s     Find the "Quit AirMark" MenuItem
+    t =    12.35s     Check for interrupting elements affecting "terminate:" MenuItem
+    t =    12.35s     Synthesize event
+2026-09-19 19:34:43.243714+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    12.36s         Checking existence of `"terminate:" MenuItem`
+    t =    12.38s         Hover menu item 'Quit AirMark'
+    t =    12.38s             Wait for com.airmark.AirMark to idle
+    t =    12.38s             Find the "terminate:" MenuItem
+    t =    12.41s             Check for interrupting elements affecting "terminate:" MenuItem
+    t =    12.41s             Synthesize event
+2026-09-19 19:34:43.296082+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    12.62s             Wait for com.airmark.AirMark to idle
+    t =    12.63s         Find the "terminate:" MenuItem
+    t =    13.53s     Wait for com.airmark.AirMark to idle
+    t =    13.53s Unable to monitor event loop
+    t =    13.53s Wait for com.airmark.AirMark to become Not Running
+    t =    13.53s Open com.airmark.AirMark
+    t =    13.55s     Launch com.airmark.AirMark
+2026-09-19 19:34:44.436 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:44.436 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    13.78s         Wait for accessibility to load
+    t =    13.94s         Setting up automation session
+    t =    13.96s         Wait for com.airmark.AirMark to idle
+    t =    13.96s Waiting 15.0s for "markdown-editor" TextView to exist
+    t =    15.00s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =    15.00s         Checking existence of `"markdown-editor" TextView`
+    t =    15.15s Find the "markdown-editor" TextView
+    t =    15.17s Get all elements bound by index for: Descendants matching type Window
+    t =    15.21s Find the Window (Element at index 0)
+    t =    15.22s Terminate com.airmark.AirMark:62186
+    t =    16.29s Tear Down
+Test Case '-[AirMarkUITests.AirMarkUITests testDiscardedDraftIsNotRestoredAfterRelaunch]' passed (16.376 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testEditingASavedFileIsKeptOnCloseAndRelaunch]' started.
+    t =     0.00s Start Test at 2026-09-19 19:34:47.266
+    t =     0.09s Set Up
+    t =     0.09s Open com.airmark.AirMark
+    t =     0.10s     Launch com.airmark.AirMark
+2026-09-19 19:34:47.368 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:47.368 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.39s         Wait for accessibility to load
+    t =     0.60s         Setting up automation session
+    t =     0.61s         Wait for com.airmark.AirMark to idle
+    t =     0.62s Waiting 10.0s for "markdown-editor" TextView to exist
+    t =     1.65s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     1.65s         Checking existence of `"markdown-editor" TextView`
+    t =     1.80s Click "markdown-editor" TextView
+    t =     1.80s     Wait for com.airmark.AirMark to idle
+    t =     1.81s     Find the "markdown-editor" TextView
+    t =     1.82s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     1.83s     Synthesize event
+    t =     2.32s     Wait for com.airmark.AirMark to idle
+    t =     2.33s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     2.33s     Wait for com.airmark.AirMark to idle
+    t =     2.33s     Find the Target Application 'com.airmark.AirMark'
+    t =     2.36s     Check for interrupting elements affecting "AirMark" Application
+    t =     2.36s     Synthesize event
+2026-09-19 19:34:49.630221+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:49.632163+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     2.43s     Wait for com.airmark.AirMark to idle
+    t =     2.43s Type 'EDITED' into "markdown-editor" TextView
+    t =     2.44s     Wait for com.airmark.AirMark to idle
+    t =     2.44s     Find the "markdown-editor" TextView
+    t =     2.52s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     2.53s     Open com.airmark.AirMark
+    t =     2.54s         Activate com.airmark.AirMark
+    t =     2.55s             Wait for com.airmark.AirMark to idle
+    t =     2.58s     Synthesize event
+2026-09-19 19:34:49.848251+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:49.852031+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (288.0, 266.0, 640.0, 722.0): [1]
+    t =     2.83s     Wait for com.airmark.AirMark to idle
+    t =     2.84s Type 'w' key with modifiers '⌘' (0x10)
+    t =     2.84s     Wait for com.airmark.AirMark to idle
+    t =     2.84s     Find the Target Application 'com.airmark.AirMark'
+    t =     2.87s     Check for interrupting elements affecting "AirMark" Application
+    t =     2.87s     Synthesize event
+2026-09-19 19:34:50.135093+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:50.136417+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     2.95s     Wait for com.airmark.AirMark to idle
+    t =     4.96s Get number of matches for: Descendants matching type Sheet
+    t =     5.01s Click "AirMark" MenuBarItem
+    t =     5.01s     Wait for com.airmark.AirMark to idle
+    t =     5.02s     Find the "AirMark" MenuBarItem
+    t =     5.05s     Check for interrupting elements affecting "AirMark" MenuBarItem
+    t =     5.05s     Open com.airmark.AirMark
+    t =     5.05s         Activate com.airmark.AirMark
+    t =     5.07s             Wait for com.airmark.AirMark to idle
+    t =     5.08s     Synthesize event
+2026-09-19 19:34:52.348214+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.57s     Wait for com.airmark.AirMark to idle
+    t =     5.57s Click "Quit AirMark" MenuItem
+    t =     5.57s     Wait for com.airmark.AirMark to idle
+    t =     5.57s     Find the "Quit AirMark" MenuItem
+    t =     5.60s     Check for interrupting elements affecting "terminate:" MenuItem
+    t =     5.61s     Synthesize event
+2026-09-19 19:34:52.870886+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.61s         Checking existence of `"terminate:" MenuItem`
+    t =     5.63s         Hover menu item 'Quit AirMark'
+    t =     5.63s             Wait for com.airmark.AirMark to idle
+    t =     5.63s             Find the "terminate:" MenuItem
+    t =     5.65s             Check for interrupting elements affecting "terminate:" MenuItem
+    t =     5.65s             Synthesize event
+2026-09-19 19:34:52.918851+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.87s             Wait for com.airmark.AirMark to idle
+    t =     5.88s         Find the "terminate:" MenuItem
+    t =     6.78s     Wait for com.airmark.AirMark to idle
+    t =     6.78s Wait for com.airmark.AirMark to become Not Running
+    t =     6.79s Open com.airmark.AirMark
+    t =     6.79s     Launch com.airmark.AirMark
+2026-09-19 19:34:54.054 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:54.054 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     7.10s         Wait for accessibility to load
+    t =     7.30s         Setting up automation session
+    t =     7.32s         Wait for com.airmark.AirMark to idle
+    t =     7.32s Waiting 15.0s for "markdown-editor" TextView to exist
+    t =     8.35s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     8.35s         Checking existence of `"markdown-editor" TextView`
+    t =     8.50s Find the "markdown-editor" TextView
+    t =     8.52s Terminate com.airmark.AirMark:62222
+    t =     9.59s Tear Down
+Test Case '-[AirMarkUITests.AirMarkUITests testEditingASavedFileIsKeptOnCloseAndRelaunch]' passed (9.758 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource]' started.
+    t =     0.00s Start Test at 2026-09-19 19:34:57.024
+    t =     0.11s Set Up
+    t =     0.11s Open com.airmark.AirMark
+    t =     0.11s     Launch com.airmark.AirMark
+2026-09-19 19:34:57.140 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:34:57.140 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.38s         Wait for accessibility to load
+    t =     0.55s         Setting up automation session
+    t =     0.56s         Wait for com.airmark.AirMark to idle
+    t =     0.56s Waiting 5.0s for "markdown-editor" TextView to exist
+    t =     1.61s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     1.61s         Checking existence of `"markdown-editor" TextView`
+    t =     1.77s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     1.77s     Wait for com.airmark.AirMark to idle
+    t =     1.77s     Find the Target Application 'com.airmark.AirMark'
+    t =     1.79s     Check for interrupting elements affecting "AirMark" Application
+    t =     1.79s     Synthesize event
+2026-09-19 19:34:58.814217+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:58.815415+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     1.87s     Wait for com.airmark.AirMark to idle
+    t =     1.88s Type 'Save 1. ' into Target Application 'com.airmark.AirMark'
+    t =     1.88s     Wait for com.airmark.AirMark to idle
+    t =     1.88s     Find the Target Application 'com.airmark.AirMark'
+    t =     1.94s     Check for interrupting elements affecting "AirMark" Application
+    t =     1.95s     Open com.airmark.AirMark
+    t =     1.96s         Activate com.airmark.AirMark
+    t =     1.97s             Wait for com.airmark.AirMark to idle
+    t =     2.05s     Synthesize event
+2026-09-19 19:34:59.081664+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:59.088172+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     2.47s     Wait for com.airmark.AirMark to idle
+    t =     2.48s Type 's' key with modifiers '⌘' (0x10)
+    t =     2.48s     Wait for com.airmark.AirMark to idle
+    t =     2.48s     Find the Target Application 'com.airmark.AirMark'
+    t =     2.53s     Check for interrupting elements affecting "AirMark" Application
+    t =     2.53s     Open com.airmark.AirMark
+    t =     2.53s         Activate com.airmark.AirMark
+    t =     2.55s             Wait for com.airmark.AirMark to idle
+    t =     2.56s     Synthesize event
+2026-09-19 19:34:59.588196+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:34:59.589444+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     2.64s     Wait for com.airmark.AirMark to idle
+    t =     3.76s Get number of matches for: Descendants matching type Sheet
+    t =     3.81s Get all elements bound by index for: Descendants matching type Dialog
+    t =     3.85s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     3.85s     Wait for com.airmark.AirMark to idle
+    t =     3.85s     Find the Target Application 'com.airmark.AirMark'
+    t =     3.87s     Check for interrupting elements affecting "AirMark" Application
+    t =     3.88s     Open com.airmark.AirMark
+    t =     3.88s         Activate com.airmark.AirMark
+    t =     3.90s             Wait for com.airmark.AirMark to idle
+    t =     3.92s     Synthesize event
+2026-09-19 19:35:00.947602+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:00.951450+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     3.99s     Wait for com.airmark.AirMark to idle
+    t =     4.00s Type 'Save 2. ' into Target Application 'com.airmark.AirMark'
+    t =     4.00s     Wait for com.airmark.AirMark to idle
+    t =     4.00s     Find the Target Application 'com.airmark.AirMark'
+    t =     4.06s     Check for interrupting elements affecting "AirMark" Application
+    t =     4.07s     Open com.airmark.AirMark
+    t =     4.07s         Activate com.airmark.AirMark
+    t =     4.08s             Wait for com.airmark.AirMark to idle
+    t =     4.10s     Synthesize event
+2026-09-19 19:35:01.120395+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:01.121564+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     4.41s     Wait for com.airmark.AirMark to idle
+    t =     4.41s Type 's' key with modifiers '⌘' (0x10)
+    t =     4.41s     Wait for com.airmark.AirMark to idle
+    t =     4.42s     Find the Target Application 'com.airmark.AirMark'
+    t =     4.46s     Check for interrupting elements affecting "AirMark" Application
+    t =     4.46s     Open com.airmark.AirMark
+    t =     4.46s         Activate com.airmark.AirMark
+    t =     4.47s             Wait for com.airmark.AirMark to idle
+    t =     4.49s     Synthesize event
+2026-09-19 19:35:01.512981+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:01.514842+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     4.58s     Wait for com.airmark.AirMark to idle
+    t =     5.60s Get number of matches for: Descendants matching type Sheet
+    t =     5.66s Get all elements bound by index for: Descendants matching type Dialog
+    t =     5.69s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     5.69s     Wait for com.airmark.AirMark to idle
+    t =     5.70s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.73s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.73s     Open com.airmark.AirMark
+    t =     5.73s         Activate com.airmark.AirMark
+    t =     5.75s             Wait for com.airmark.AirMark to idle
+    t =     5.76s     Synthesize event
+2026-09-19 19:35:02.789080+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:02.798127+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.86s     Wait for com.airmark.AirMark to idle
+    t =     5.86s Type 'Save 3. ' into Target Application 'com.airmark.AirMark'
+    t =     5.86s     Wait for com.airmark.AirMark to idle
+    t =     5.87s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.93s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.94s     Open com.airmark.AirMark
+    t =     5.94s         Activate com.airmark.AirMark
+    t =     5.95s             Wait for com.airmark.AirMark to idle
+    t =     5.96s     Synthesize event
+2026-09-19 19:35:02.985814+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:02.986884+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     6.27s     Wait for com.airmark.AirMark to idle
+    t =     6.28s Type 's' key with modifiers '⌘' (0x10)
+    t =     6.28s     Wait for com.airmark.AirMark to idle
+    t =     6.28s     Find the Target Application 'com.airmark.AirMark'
+    t =     6.31s     Check for interrupting elements affecting "AirMark" Application
+    t =     6.31s     Synthesize event
+2026-09-19 19:35:03.332835+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:03.334358+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     6.39s     Wait for com.airmark.AirMark to idle
+    t =     7.49s Get number of matches for: Descendants matching type Sheet
+    t =     7.54s Get all elements bound by index for: Descendants matching type Dialog
+    t =     7.57s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     7.58s     Wait for com.airmark.AirMark to idle
+    t =     7.58s     Find the Target Application 'com.airmark.AirMark'
+    t =     7.60s     Check for interrupting elements affecting "AirMark" Application
+    t =     7.61s     Open com.airmark.AirMark
+    t =     7.61s         Activate com.airmark.AirMark
+    t =     7.62s             Wait for com.airmark.AirMark to idle
+    t =     7.65s     Synthesize event
+2026-09-19 19:35:04.670095+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:04.671492+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     7.72s     Wait for com.airmark.AirMark to idle
+    t =     7.73s Type 'Save 4. ' into Target Application 'com.airmark.AirMark'
+    t =     7.73s     Wait for com.airmark.AirMark to idle
+    t =     7.73s     Find the Target Application 'com.airmark.AirMark'
+    t =     7.80s     Check for interrupting elements affecting "AirMark" Application
+    t =     7.80s     Open com.airmark.AirMark
+    t =     7.81s         Activate com.airmark.AirMark
+    t =     7.81s             Wait for com.airmark.AirMark to idle
+    t =     7.82s     Synthesize event
+2026-09-19 19:35:04.846841+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:04.849285+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     8.12s     Wait for com.airmark.AirMark to idle
+    t =     8.14s Type 's' key with modifiers '⌘' (0x10)
+    t =     8.14s     Wait for com.airmark.AirMark to idle
+    t =     8.14s     Find the Target Application 'com.airmark.AirMark'
+    t =     8.17s     Check for interrupting elements affecting "AirMark" Application
+    t =     8.17s     Synthesize event
+2026-09-19 19:35:05.196649+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:05.198250+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     8.24s     Wait for com.airmark.AirMark to idle
+    t =     9.28s Get number of matches for: Descendants matching type Sheet
+    t =     9.36s Get all elements bound by index for: Descendants matching type Dialog
+    t =     9.38s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     9.38s     Wait for com.airmark.AirMark to idle
+    t =     9.38s     Find the Target Application 'com.airmark.AirMark'
+    t =     9.40s     Check for interrupting elements affecting "AirMark" Application
+    t =     9.40s     Synthesize event
+2026-09-19 19:35:06.431082+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:06.433201+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.46s     Wait for com.airmark.AirMark to idle
+    t =     9.46s Type 'Save 5. ' into Target Application 'com.airmark.AirMark'
+    t =     9.46s     Wait for com.airmark.AirMark to idle
+    t =     9.47s     Find the Target Application 'com.airmark.AirMark'
+    t =     9.53s     Check for interrupting elements affecting "AirMark" Application
+    t =     9.53s     Synthesize event
+2026-09-19 19:35:06.552088+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:06.553504+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.83s     Wait for com.airmark.AirMark to idle
+    t =     9.83s Type 's' key with modifiers '⌘' (0x10)
+    t =     9.83s     Wait for com.airmark.AirMark to idle
+    t =     9.83s     Find the Target Application 'com.airmark.AirMark'
+    t =     9.86s     Check for interrupting elements affecting "AirMark" Application
+    t =     9.86s     Synthesize event
+2026-09-19 19:35:06.888817+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:06.890003+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.93s     Wait for com.airmark.AirMark to idle
+    t =    10.96s Get number of matches for: Descendants matching type Sheet
+    t =    11.04s Get all elements bound by index for: Descendants matching type Dialog
+    t =    11.06s Terminate com.airmark.AirMark:62234
+    t =    12.08s Open com.airmark.AirMark
+    t =    12.08s     Launch com.airmark.AirMark
+2026-09-19 19:35:09.105 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:35:09.105 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    12.43s         Wait for accessibility to load
+    t =    12.62s         Setting up automation session
+    t =    12.63s         Wait for com.airmark.AirMark to idle
+    t =    12.63s Waiting 5.0s for "markdown-editor" TextView to exist
+    t =    13.68s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =    13.68s         Checking existence of `"markdown-editor" TextView`
+    t =    13.83s Find the "markdown-editor" TextView
+    t =    13.86s Tear Down
+Test Case '-[AirMarkUITests.AirMarkUITests testRepeatedAsynchronousSavesPreserveSource]' passed (13.944 seconds).
+Test Case '-[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll]' started.
+    t =     0.00s Start Test at 2026-09-19 19:35:10.968
+    t =     0.15s Set Up
+    t =     0.15s Open com.airmark.AirMark
+    t =     0.15s     Launch com.airmark.AirMark
+    t =     0.15s         Terminate com.airmark.AirMark:62272
+2026-09-19 19:35:12.136 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-09-19 19:35:12.136 xcodebuild[62017:1294128] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.47s         Wait for accessibility to load
+    t =     1.64s         Setting up automation session
+    t =     1.65s         Wait for com.airmark.AirMark to idle
+    t =     1.67s Waiting 5.0s for "markdown-editor" TextView to exist
+    t =     2.68s     Checking `Expect predicate `existsNoRetry == 1` for object "markdown-editor" TextView`
+    t =     2.68s         Checking existence of `"markdown-editor" TextView`
+    t =     2.83s Find the "markdown-editor" TextView
+    t =     2.85s Click "markdown-editor" TextView
+    t =     2.85s     Wait for com.airmark.AirMark to idle
+    t =     2.85s     Find the "markdown-editor" TextView
+    t =     2.87s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     2.88s     Synthesize event
+    t =     3.33s     Wait for com.airmark.AirMark to idle
+    t =     3.34s Type '# A note
+
+alpha **...' into "markdown-editor" TextView
+    t =     3.34s     Wait for com.airmark.AirMark to idle
+    t =     3.34s     Find the "markdown-editor" TextView
+    t =     3.37s     Check for interrupting elements affecting "markdown-editor" TextView
+    t =     3.38s     Synthesize event
+2026-09-19 19:35:14.353125+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (288.0, 266.0, 640.0, 722.0): [1]
+    t =     4.50s     Wait for com.airmark.AirMark to idle
+    t =     4.50s Find the "markdown-editor" TextView
+    t =     4.59s Type '↑' key (XCUIKeyboardKeyUpArrow) with no modifiers
+    t =     4.59s     Wait for com.airmark.AirMark to idle
+    t =     4.59s     Find the Target Application 'com.airmark.AirMark'
+    t =     4.61s     Check for interrupting elements affecting "AirMark" Application
+    t =     4.61s     Open com.airmark.AirMark
+    t =     4.61s         Activate com.airmark.AirMark
+    t =     4.62s             Wait for com.airmark.AirMark to idle
+    t =     4.68s     Synthesize event
+2026-09-19 19:35:15.651704+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:15.655376+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     4.73s     Wait for com.airmark.AirMark to idle
+    t =     4.73s Type '→' key (XCUIKeyboardKeyRightArrow) with modifiers '⌘' (0x10)
+    t =     4.73s     Wait for com.airmark.AirMark to idle
+    t =     4.74s     Find the Target Application 'com.airmark.AirMark'
+    t =     4.80s     Check for interrupting elements affecting "AirMark" Application
+    t =     4.80s     Open com.airmark.AirMark
+    t =     4.80s         Activate com.airmark.AirMark
+    t =     4.81s             Wait for com.airmark.AirMark to idle
+    t =     4.82s     Synthesize event
+2026-09-19 19:35:15.784562+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:15.787077+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     4.90s     Wait for com.airmark.AirMark to idle
+    t =     4.91s Type '←' key (XCUIKeyboardKeyLeftArrow) with modifiers '⌥⇧' (0x0a)
+    t =     4.91s     Wait for com.airmark.AirMark to idle
+    t =     4.91s     Find the Target Application 'com.airmark.AirMark'
+    t =     4.97s     Check for interrupting elements affecting "AirMark" Application
+    t =     4.97s     Synthesize event
+2026-09-19 19:35:15.934757+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:15.937160+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.06s     Wait for com.airmark.AirMark to idle
+    t =     5.07s Type 'i' key with modifiers '⌘' (0x10)
+    t =     5.07s     Wait for com.airmark.AirMark to idle
+    t =     5.07s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.13s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.13s     Open com.airmark.AirMark
+    t =     5.14s         Activate com.airmark.AirMark
+    t =     5.15s             Wait for com.airmark.AirMark to idle
+    t =     5.15s     Synthesize event
+2026-09-19 19:35:16.119179+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:16.120599+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.25s     Wait for com.airmark.AirMark to idle
+    t =     5.25s Find the "markdown-editor" TextView
+    t =     5.32s Type 'z' key with modifiers '⌘' (0x10)
+    t =     5.32s     Wait for com.airmark.AirMark to idle
+    t =     5.32s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.34s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.34s     Synthesize event
+2026-09-19 19:35:16.311062+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:16.312707+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.40s     Wait for com.airmark.AirMark to idle
+    t =     5.40s Find the "markdown-editor" TextView
+    t =     5.47s Type '↓' key (XCUIKeyboardKeyDownArrow) with modifiers '⌘' (0x10)
+    t =     5.47s     Wait for com.airmark.AirMark to idle
+    t =     5.47s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.50s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.51s     Open com.airmark.AirMark
+    t =     5.51s         Activate com.airmark.AirMark
+    t =     5.52s             Wait for com.airmark.AirMark to idle
+    t =     5.54s     Synthesize event
+2026-09-19 19:35:16.505130+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:16.506231+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.63s     Wait for com.airmark.AirMark to idle
+    t =     5.63s Type 'z' key with modifiers '⌘' (0x10)
+    t =     5.63s     Wait for com.airmark.AirMark to idle
+    t =     5.64s     Find the Target Application 'com.airmark.AirMark'
+    t =     5.70s     Check for interrupting elements affecting "AirMark" Application
+    t =     5.70s     Open com.airmark.AirMark
+    t =     5.71s         Activate com.airmark.AirMark
+    t =     5.71s             Wait for com.airmark.AirMark to idle
+    t =     5.72s     Synthesize event
+2026-09-19 19:35:16.686616+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:16.687734+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     5.81s     Wait for com.airmark.AirMark to idle
+    t =     5.82s Find the "markdown-editor" TextView
+    t =     5.87s Type 'z' key with modifiers '⌘⇧' (0x12)
+    t =     5.88s     Wait for com.airmark.AirMark to idle
+    t =     5.88s     Find the Target Application 'com.airmark.AirMark'
+    t =     6.00s     Check for interrupting elements affecting "AirMark" Application
+    t =     6.00s     Synthesize event
+2026-09-19 19:35:16.971395+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:16.972927+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     6.11s     Wait for com.airmark.AirMark to idle
+    t =     6.12s Find the "markdown-editor" TextView
+    t =     6.20s Type 'f' key with modifiers '⌘⌥' (0x18)
+    t =     6.20s     Wait for com.airmark.AirMark to idle
+    t =     6.20s     Find the Target Application 'com.airmark.AirMark'
+    t =     6.23s     Check for interrupting elements affecting "AirMark" Application
+    t =     6.23s     Open com.airmark.AirMark
+    t =     6.23s         Activate com.airmark.AirMark
+    t =     6.25s             Wait for com.airmark.AirMark to idle
+    t =     6.27s     Synthesize event
+2026-09-19 19:35:17.237287+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:17.237982+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     6.46s     Wait for com.airmark.AirMark to idle
+    t =     6.47s Waiting 3.0s for SearchField (First Match) to exist
+    t =     7.56s     Checking `Expect predicate `existsNoRetry == 1` for object SearchField (First Match)`
+    t =     7.56s         Checking existence of `SearchField (First Match)`
+    t =     7.58s Click SearchField (First Match)
+    t =     7.58s     Wait for com.airmark.AirMark to idle
+    t =     7.59s     Find the SearchField (First Match)
+    t =     7.60s     Check for interrupting elements affecting "Find" SearchField
+    t =     7.63s     Found 2 interrupting elements:
+    t =     7.63s Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     7.64s Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     7.64s     Invoking UI interruption monitors for Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     7.64s Checking for user permission dialogs...
+    t =     7.64s             Checking existence of `StaticText (Elements matching predicate 'value MATCHES[c] ".+ would like ((to|full) access|to find) .+"')`
+    t =     7.78s             Checking existence of `StaticText (Elements matching predicate 'title CONTAINS[c] "Trust This "')`
+    t =     7.86s Checking for Bluetooth Setup Assistant...
+    t =     7.86s             Find the Window at {{881.0, 243.0}, {740.0, 720.0}}
+    t =     7.94s Checking for Notification Center Banners...
+    t =     7.94s Checking for basic alerts
+    t =     7.94s             Checking existence of `"Main" Window`
+    t =     8.02s             Find the "Main" Window
+    t =     8.10s             Find the "Main" Window
+    t =     8.17s No monitors handled UI interruption, checking to see if element still exists...
+    t =     8.17s             Checking existence of `"Main" Window`
+    t =     8.24s     Invoking UI interruption monitors for Window at {{881.0, 243.0}, {740.0, 720.0}} from Application 'com.apple.systempreferences'
+    t =     8.24s Checking for user permission dialogs...
+    t =     8.24s             Checking existence of `StaticText (Elements matching predicate 'value MATCHES[c] ".+ would like ((to|full) access|to find) .+"')`
+    t =     8.32s             Checking existence of `StaticText (Elements matching predicate 'title CONTAINS[c] "Trust This "')`
+    t =     8.40s Checking for Bluetooth Setup Assistant...
+    t =     8.40s             Find the Window at {{881.0, 243.0}, {740.0, 720.0}}
+    t =     8.47s Checking for Notification Center Banners...
+    t =     8.48s Checking for basic alerts
+    t =     8.48s             Checking existence of `"Main" Window`
+    t =     8.54s             Find the "Main" Window
+    t =     8.62s             Find the "Main" Window
+    t =     8.70s No monitors handled UI interruption, checking to see if element still exists...
+    t =     8.71s             Checking existence of `"Main" Window`
+    t =     8.80s     Open com.airmark.AirMark
+    t =     8.80s         Activate com.airmark.AirMark
+    t =     8.81s             Wait for com.airmark.AirMark to idle
+    t =     8.84s Did not handle the interruption, but will attempt to continue…
+    t =     8.84s     Synthesize event
+2026-09-19 19:35:19.806365+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.28s     Wait for com.airmark.AirMark to idle
+    t =     9.29s Type 'a' key with modifiers '⌘' (0x10)
+    t =     9.29s     Wait for com.airmark.AirMark to idle
+    t =     9.29s     Find the Target Application 'com.airmark.AirMark'
+    t =     9.37s     Check for interrupting elements affecting "AirMark" Application
+    t =     9.37s     Synthesize event
+2026-09-19 19:35:20.338441+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:20.339809+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =     9.45s     Wait for com.airmark.AirMark to idle
+    t =     9.45s Type 'alpha' into "Find" SearchField
+    t =     9.45s     Wait for com.airmark.AirMark to idle
+    t =     9.46s     Find the "Find" SearchField
+    t =     9.50s     Check for interrupting elements affecting "Find" SearchField
+    t =     9.52s     Open com.airmark.AirMark
+    t =     9.52s         Activate com.airmark.AirMark
+    t =     9.53s             Wait for com.airmark.AirMark to idle
+    t =     9.54s     Synthesize event
+2026-09-19 19:35:20.503398+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:20.505574+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (295.0, 303.0, 452.0, 22.0): [1]
+    t =     9.74s     Wait for com.airmark.AirMark to idle
+    t =     9.74s Waiting 3.0s for TextField (First Match) to exist
+    t =    10.76s     Checking `Expect predicate `existsNoRetry == 1` for object TextField (First Match)`
+    t =    10.77s         Checking existence of `TextField (First Match)`
+    t =    10.78s Click TextField (First Match)
+    t =    10.78s     Wait for com.airmark.AirMark to idle
+    t =    10.78s     Find the TextField (First Match)
+    t =    10.79s     Check for interrupting elements affecting "Replace" TextField
+    t =    10.80s     Synthesize event
+2026-09-19 19:35:21.771041+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    11.29s     Wait for com.airmark.AirMark to idle
+    t =    11.30s Type 'a' key with modifiers '⌘' (0x10)
+    t =    11.30s     Wait for com.airmark.AirMark to idle
+    t =    11.30s     Find the Target Application 'com.airmark.AirMark'
+    t =    11.39s     Check for interrupting elements affecting "AirMark" Application
+    t =    11.39s     Synthesize event
+2026-09-19 19:35:22.356970+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:22.364384+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    11.45s     Wait for com.airmark.AirMark to idle
+    t =    11.45s Type 'gamma' into "Replace" TextField
+    t =    11.45s     Wait for com.airmark.AirMark to idle
+    t =    11.46s     Find the "Replace" TextField
+    t =    11.47s     Check for interrupting elements affecting "Replace" TextField
+    t =    11.48s     Synthesize event
+2026-09-19 19:35:22.452523+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+2026-09-19 19:35:22.454852+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Found 1 displays containing rect (295.0, 327.0, 452.0, 24.0): [1]
+    t =    11.65s     Wait for com.airmark.AirMark to idle
+    t =    11.65s Checking existence of `"All" Button`
+    t =    11.72s Waiting 3.0s for "All" Button to exist
+    t =    12.73s     Checking `Expect predicate `existsNoRetry == 1` for object "All" Button`
+    t =    12.73s         Checking existence of `"All" Button`
+    t =    12.82s Click "All" Button
+    t =    12.82s     Wait for com.airmark.AirMark to idle
+    t =    12.82s     Find the "All" Button
+    t =    12.85s     Check for interrupting elements affecting "All" Button
+    t =    12.87s     Synthesize event
+2026-09-19 19:35:23.835018+0900 AirMarkUITests-Runner[62080:1294699] [DisplayManager] Could not find any displays containing rect (inf, inf, 0.0, 0.0)
+    t =    13.36s     Wait for com.airmark.AirMark to idle
+    t =    14.39s Find the "markdown-editor" TextView
+    t =    14.48s Get number of matches for: Descendants matching type Sheet
+    t =    14.50s Tear Down
+Test Case '-[AirMarkUITests.AirMarkUITests testTypingUndoAndReplaceAll]' passed (14.598 seconds).
+Test Suite 'AirMarkUITests' passed at 2026-09-19 19:35:25.566.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 69.928 (69.931) seconds
+Test Suite 'AirMarkUITests.xctest' passed at 2026-09-19 19:35:25.567.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 69.928 (69.932) seconds
+Test Suite 'Selected tests' passed at 2026-09-19 19:35:25.567.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 69.928 (69.933) seconds
+2026-09-19 19:35:25.870 xcodebuild[62017:1294128] [MT] IDETestOperationsObserverDebug: 70.545 elapsed -- Testing started completed.
+2026-09-19 19:35:25.870 xcodebuild[62017:1294128] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-19 19:35:25.870 xcodebuild[62017:1294128] [MT] IDETestOperationsObserverDebug: 70.545 sec, +70.545 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/claude-501/-Users-baemingwan-Documents-AI-airmark/209dc4a5-13e6-474a-853a-a37793fb7d8f/scratchpad/typing.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
+Result bundle: ../typing.xcresult
+Export captures with: xcrun xcresulttool export attachments --path "../typing.xcresult" --output-path <dir>

@@ -1,0 +1,19 @@
+TYPING bytes=10000056 prose position=head keys=200 interval=50ms drawn=200 WINDOW-OCCLUDED
+TYPING   returned  p50=2.53 p95=4.28 p99=7.65 max=14.92
+TYPING   drawn     p50=3.59 p95=6.02 p99=9.65 max=19.00
+TYPING   committed p50=3.87 p95=6.66 p99=11.83 max=23.18
+TYPING   styled    p50=92.24 p95=240.83 p99=250.41 max=267.61
+TYPING   stall     p50=0.02 p95=0.06 p99=4.18 max=22.40 over8.3ms=11 over16.7ms=2 probes=7198
+TYPING bytes=10000056 prose position=middle keys=200 interval=50ms drawn=200 WINDOW-OCCLUDED
+TYPING   returned  p50=2.20 p95=4.14 p99=6.71 max=8.41
+TYPING   drawn     p50=3.41 p95=6.27 p99=9.57 max=11.67
+TYPING   committed p50=3.73 p95=7.01 p99=10.53 max=12.45
+TYPING   styled    p50=89.09 p95=230.18 p99=238.70 max=248.14
+TYPING   stall     p50=0.02 p95=0.05 p99=4.53 max=10.67 over8.3ms=7 over16.7ms=0 probes=7226
+TYPING bytes=10000056 prose position=tail keys=200 interval=50ms drawn=200 WINDOW-OCCLUDED
+TYPING   returned  p50=1.33 p95=2.85 p99=3.83 max=4.41
+TYPING   drawn     p50=2.53 p95=5.48 p99=6.51 max=7.01
+TYPING   committed p50=2.92 p95=6.14 p99=7.18 max=7.98
+TYPING   styled    p50=72.87 p95=182.40 p99=221.71 max=226.78
+TYPING   stall     p50=0.02 p95=0.07 p99=4.78 max=8.26 over8.3ms=0 over16.7ms=0 probes=7303
+✔ Test run with 1 test in 1 suite passed after 49.415 seconds.

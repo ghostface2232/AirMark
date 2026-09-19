@@ -73,17 +73,28 @@ public struct PresentationStore: Sendable {
             update(index, for: edit)
             updateLeaf(index)
         }
-        if delta != 0 {
-            for index in suffix..<starts.count {
-                starts[index] += delta
-                if ends[index] != Self.removed { ends[index] += delta }
-                for marker in markerBounds[index]..<markerBounds[index + 1] { markerStarts[marker] += delta }
-                reach[leafBase + index] = ownReach(index)
+        if delta != 0, suffix < starts.count {
+            // Everything from `suffix` on lies after the edit and moves by `delta`: starts, live ends,
+            // every marker of those styles, and so each leaf, which is one of those positions. Four
+            // flat passes over contiguous integers, which the compiler vectorizes; visiting style by
+            // style and recomputing each reach from its markers cost ten times as much.
+            let count = starts.count, removed = Self.removed
+            Self.shift(&starts, from: suffix, to: count, by: delta)
+            ends.withUnsafeMutableBufferPointer { ends in
+                for index in suffix..<count where ends[index] != removed { ends[index] += delta }
             }
+            Self.shift(&markerStarts, from: markerBounds[suffix], to: markerStarts.count, by: delta)
+            Self.shift(&reach, from: leafBase + suffix, to: leafBase + count, by: delta)
             updateTree(from: suffix)
         }
-        Self.apply(edit, to: &elements, span: \.span)
-        Self.apply(edit, to: &checkboxes, span: \.self)
+        Self.apply(edit, to: &elements)
+        Self.apply(edit, to: &checkboxes)
+    }
+
+    private static func shift(_ values: inout [Int], from first: Int, to end: Int, by delta: Int) {
+        values.withUnsafeMutableBufferPointer { values in
+            for index in first..<end { values[index] += delta }
+        }
     }
 
     /// Moves one style that starts at or before the edit's end, exactly as `ParsedDocument.rebased` does.
@@ -139,18 +150,20 @@ public struct PresentationStore: Sendable {
 
     /// Moves sorted, disjoint spans exactly as `PresentationEdit.unchanged` does. The spans an edit
     /// removes are contiguous, and only those after them move.
-    private static func apply<Item>(_ edit: PresentationEdit, to items: inout [Item], span: WritableKeyPath<Item, SourceSpan>) {
+    private static func apply<Item: Spanned>(_ edit: PresentationEdit, to items: inout [Item]) {
         var low = 0, high = items.count
         while low < high {
             let middle = (low + high) / 2
-            if items[middle][keyPath: span].end > edit.range.location { high = middle } else { low = middle + 1 }
+            if items[middle].span.end > edit.range.location { high = middle } else { low = middle + 1 }
         }
         var last = low
-        while last < items.count, items[last][keyPath: span].location < edit.range.end { last += 1 }
-        items.removeSubrange(low..<last)
+        while last < items.count, items[last].span.location < edit.range.end { last += 1 }
+        if last > low { items.removeSubrange(low..<last) }
         let delta = edit.replacementLength - edit.range.length
         guard delta != 0 else { return }
-        for index in low..<items.count { items[index][keyPath: span].location += delta }
+        items.withUnsafeMutableBufferPointer { items in
+            for index in low..<items.count { items[index].span.location += delta }
+        }
     }
 
     /// The last source position at which an edit still changes style `index`. A live style is
@@ -220,10 +233,12 @@ public struct PresentationStore: Sendable {
     private mutating func updateTree(from first: Int) {
         guard first < starts.count else { return }
         var low = (leafBase + first) / 2, high = (leafBase + starts.count - 1) / 2
-        while low >= 1 {
-            for node in low...high { reach[node] = max(reach[2 * node], reach[2 * node + 1]) }
-            if low == 1 { break }
-            low /= 2; high /= 2
+        reach.withUnsafeMutableBufferPointer { reach in
+            while low >= 1 {
+                for node in low...high { reach[node] = max(reach[2 * node], reach[2 * node + 1]) }
+                if low == 1 { break }
+                low /= 2; high /= 2
+            }
         }
     }
 
@@ -334,4 +349,12 @@ public struct PresentationStore: Sendable {
         }
         return low
     }
+}
+
+/// Something at a source span that an edit can move: a generic over this is specialized, where
+/// reaching the span through a key path was a call per element.
+private protocol Spanned { var span: SourceSpan { get set } }
+extension RenderElement: Spanned {}
+extension SourceSpan: Spanned {
+    fileprivate var span: SourceSpan { get { self } set { self = newValue } }
 }

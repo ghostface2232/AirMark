@@ -265,3 +265,55 @@ import Testing
     #expect(MarkdownParser.inlineNestingEstimate(source) < 100, "estimate \(MarkdownParser.inlineNestingEstimate(source))")
     #expect(MarkdownParser.parse(source).styles.contains { $0.kind == .strong })
 }
+
+/// A fence left open inside a list item or a block quote ends where the item or the quote ends. cmark
+/// reports such a block as ending on the line that closed it, which is the line after.
+@Test func openFenceEndsWithItsContainer() {
+    func codeBlocks(_ source: String) -> [String] {
+        let index = SourceIndex(source)
+        return MarkdownParser.parse(source).styles.filter { $0.kind == .codeBlock }.map { index.text(in: $0.span) }
+    }
+    #expect(codeBlocks("- ```\n  code\n- next **b**\n") == ["```\n  code"])
+    // The blank line is inside the fence, so it is code; `para` is not.
+    #expect(codeBlocks("- ```\n  code\n\npara\n") == ["```\n  code\n"])
+    #expect(codeBlocks("> ```\n> code\npara\n") == ["```\n> code"])
+    #expect(codeBlocks("- ```\n  code\n  ```\n- next\n") == ["```\n  code\n  ```"])
+    // cmark counts a NUL as three bytes, so the end it gives the block, on the line after, is nowhere.
+    #expect(codeBlocks("- a\n- ~~~\n- x\u{0}y\n") == ["~~~"])
+    #expect(MarkdownParser.parse("Title\n===\nx\u{0}y\n").styles.contains { $0.kind == .heading(1) && $0.span == SourceSpan(0, 9) })
+    // What follows is Markdown again: its math is found and a diagram fence takes only its own lines.
+    #expect(MarkdownParser.parse("- ```\n  code\n\npara $x$\n").elements.map(\.content) == ["x"])
+    let diagram = MarkdownParser.parse("- ```mermaid\n  graph TD\n- next\n")
+    #expect(diagram.elements.map(\.span) == [SourceSpan(2, 21)])
+}
+
+/// `~~~` inside an HTML block is not a fence, but the inline estimate takes it for one and skips what
+/// follows, so it reports nothing for nesting that cmark builds in full. The walk counts the depth of
+/// the tree itself: this document used to end the process with a stack overflow.
+@Test func nestingTheEstimateMissesIsStillRefused() async throws {
+    let deep = String(repeating: "*", count: 200_000)
+    let source = "<div>\n~~~\n</div>\n\n**bold**\n\n" + deep + "a" + deep + "\n"
+    #expect(MarkdownParser.inlineNestingEstimate(source) < 10)
+    let result = try await MarkdownParsingWorker().parse(source, revision: 1)
+    #expect(result.styles.isEmpty && result.blocks.isEmpty && result.source == source)
+    // An image measures its alternative text before the walk has gone down into it.
+    let image = "<div>\n~~~\n</div>\n\n![" + String(repeating: "*", count: 100_000) + "a" + String(repeating: "*", count: 100_000) + "](u)\n"
+    #expect(try await MarkdownParsingWorker().parse(image, revision: 1).styles.isEmpty)
+}
+
+/// A setext heading ends with its underline wherever it stands: cmark ends it on the line after, so the
+/// next line was hidden in the underline's place, or before a blank line only the line break was.
+@Test func setextHeadingEndsWithItsUnderline() {
+    func heading(_ source: String) -> [String] {
+        let index = SourceIndex(source)
+        let parsed = MarkdownParser.parse(source)
+        return parsed.styles.filter { if case .heading = $0.kind { true } else { false } }.flatMap { [index.text(in: $0.span)] + $0.markers.map { index.text(in: $0) } }
+    }
+    #expect(heading("Title\n===\nnext\n") == ["Title\n===", "\n==="])
+    #expect(heading("Title\n===\n\nnext\n") == ["Title\n===", "\n==="])
+    #expect(heading("Two\nlines\r\n---\r\nnext") == ["Two\nlines\r\n---", "\r\n---"])
+    #expect(heading("- a\n  ===\n- b\n") == ["a\n  ===", "\n  ==="])
+    #expect(heading("#tag\n===\nnext\n").first == "#tag\n===")
+    let blocks = MarkdownParser.parse("Title\n===\nnext\n").blocks.map(\.span)
+    #expect(blocks == [SourceSpan(0, 9), SourceSpan(10, 4)])
+}

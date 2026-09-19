@@ -7,17 +7,28 @@ extension MarkdownParser {
     /// nil when the whole document has to be parsed.
     ///
     /// The window reparsed is the touched blocks plus at least one unchanged margin block on each side,
-    /// widened until both ends are at a blank line between blocks. Block structure is decided line by
+    /// widened until both ends are at a blank line between blocks, or between two items of a top-level
+    /// list: an item starts on its own line whatever the item before it holds, so a long list is not one
+    /// block. Display math is the one thing found without regard to blocks, and only a blank line stops
+    /// it: a `$$` outside the window could pair with one inside, or through the window, or stop at a
+    /// table or code span that the edit made or unmade. So items are cut apart only when no `$$` stands
+    /// between the window and the blank lines around it; otherwise the window is widened to those. Block structure is decided line by
     /// line from the containers still open, so when the margin blocks reparse to exactly what they were,
     /// the edit did not reach past them: an unterminated fence, an HTML block, or a paragraph or list
     /// that absorbed its neighbour would change them. The window then doubles its margins, and past a
     /// quarter of the document (or 64KB) the document is parsed whole. Inline syntax and math do not cross
-    /// a blank line, so the window holds them too. Link reference definitions resolve links anywhere,
-    /// so a document that may contain one is always parsed whole.
+    /// a blank line, so the window holds them too.
+    ///
+    /// Link reference definitions resolve links anywhere in the document, and nothing else about them
+    /// reaches outside their own paragraph: cmark collects them while it builds blocks and reads them
+    /// only when it parses inlines. So the window is parsed with the document's other definitions
+    /// standing before and after it, as they do in the document, and the result is kept only if the
+    /// window's own definitions are the ones it had. A change to a definition parses the document
+    /// whole; typing anywhere else does not, however many definitions there are.
     public static func reparse(_ source: String, revision: UInt64, previous: ParsedDocument, edits: [PresentationEdit])
         -> (document: ParsedDocument, changed: SourceSpan)? {
         let blocks = previous.blocks, count = blocks.count
-        guard count > 0, !previous.mayDefineReferences else { return nil }
+        guard count > 0 else { return nil }
         let old = previous.source as NSString, new = source as NSString
         guard let first = edits.first else {
             guard old.length == new.length else { return nil }
@@ -55,23 +66,71 @@ extension MarkdownParser {
             }
             return false
         }
+        var betweenItems = true
+        /// Whether the window may be cut before block `index`; `itemCut` reports a cut with no blank line.
+        func cut(before index: Int, itemCut: inout Bool) -> Bool {
+            if blankLine(between: blocks[index - 1].end, blocks[index].location) { return true }
+            guard betweenItems, blocks[index - 1].isListItem, blocks[index].isListItem else { return false }
+            itemCut = true
+            return true
+        }
+        /// The text around the window `start..<end` of blocks `lower...upper` out to the blank lines on
+        /// either side of it, in the old text.
+        func run(around lower: Int, _ upper: Int, _ start: Int, _ end: Int) -> (from: Int, to: Int) {
+            var first = lower, last = upper
+            while first > 0, !blankLine(between: blocks[first - 1].end, blocks[first].location) { first -= 1 }
+            while last < count - 1, !blankLine(between: blocks[last].end, blocks[last + 1].location) { last += 1 }
+            return (min(start, first == 0 ? 0 : blocks[first].location), max(end, last == count - 1 ? old.length : blocks[last + 1].location))
+        }
+        /// Whether `$$` stands in `run` outside the window `start..<end`.
+        func displayMath(in run: (from: Int, to: Int), outside start: Int, _ end: Int) -> Bool {
+            func found(_ lower: Int, _ upper: Int) -> Bool {
+                upper > lower && old.range(of: "$$", options: .literal, range: NSRange(location: lower, length: upper - lower)).location != NSNotFound
+            }
+            return found(run.from, start) || found(end, run.to)
+        }
         let limit = max(65_536, old.length / 4)
         var margin = 1
         while true {
             var lower = max(touchedFirst - margin, 0), upper = min(touchedLast + margin, count - 1)
-            while lower > 0, !blankLine(between: blocks[lower - 1].end, blocks[lower].location) { lower -= 1 }
-            while upper < count - 1, !blankLine(between: blocks[upper].end, blocks[upper + 1].location) { upper += 1 }
+            var itemCut = false
+            while lower > 0, !cut(before: lower, itemCut: &itemCut) { lower -= 1 }
+            while upper < count - 1, !cut(before: upper + 1, itemCut: &itemCut) { upper += 1 }
             let whole = lower == 0 && upper == count - 1
             let start = lower == 0 ? 0 : old.lineRange(for: NSRange(location: blocks[lower].location, length: 0)).location
             let oldEnd = upper == count - 1 ? old.length : old.lineRange(for: NSRange(location: blocks[upper + 1].location, length: 0)).location
             guard oldEnd - start <= limit || whole else { return nil }
             let window = SourceSpan(start, oldEnd + delta - start)
+            let around = itemCut ? run(around: lower, upper, start, oldEnd) : (from: start, to: oldEnd)
+            if itemCut, displayMath(in: around, outside: start, oldEnd) { betweenItems = false; continue }
             let text = new.substring(with: window.nsRange)
-            guard !mayDefineReferences(text), nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
-            let part = parse(text, revision: revision)
-            let reparsed = part.blocks.map { SourceSpan($0.location + start, $0.length) }
+            // `parse` presents a document over a nesting limit as plain text, and the result here has to
+            // be what it would give. Container nesting is estimated line by line, so the window's lines
+            // answer for themselves and the rest were under the limit before. Inline nesting is counted
+            // through a paragraph, up to a blank line, so between items the count is taken over the text
+            // out to the blank lines, where the document's count restarts too. And it skips what it takes
+            // for fenced code: a fence line in the window, before or after the edit, can change what is
+            // skipped anywhere below, and then the whole text is estimated, as `parse` would.
+            let oldText = old.substring(with: NSRange(location: start, length: oldEnd - start))
+            var inline = inlineNesting(itemCut ? new.substring(with: NSRange(location: around.from, length: around.to + delta - around.from)) : text)
+            if inline.fences || inlineNesting(oldText).fences { inline = inlineNesting(source) }
+            guard nestingEstimate(text) <= nestingLimit, inline.estimate <= inlineNestingLimit else { return nil }
+            // The definitions the window held, and where they stand among the document's. Two equal
+            // runs are interchangeable: either way the parse below ranks the same definitions in the
+            // same order as the document does.
+            let all = previous.definitions
+            var held: [ReferenceDefinition] = []
+            if !all.isEmpty, mayDefineReferences(oldText) { held = parse(oldText, revision: revision).definitions }
+            guard let position = held.isEmpty ? all.count : (0...(all.count - min(all.count, held.count))).first(where: { all[$0...].starts(with: held) }),
+                  let part = parse(text, revision: revision, enforcingLimit: true, before: Array(all[..<position]), after: Array(all[(position + held.count)...])),
+                  part.definitions == held else { return nil }
+            let largest = all.lazy.map(\.size).max() ?? 0
+            guard part.referenceExpansion + largest <= referenceExpansionFloor,
+                  previous.referenceExpansion + part.referenceExpansion + largest <= max(referenceExpansionFloor, new.length) else { return nil }
+            func moved(_ block: Block, by offset: Int) -> Block { Block(SourceSpan(block.location + offset, block.span.length), isListItem: block.isListItem) }
+            let reparsed = part.blocks.map { moved($0, by: start) }
             let leading = blocks[lower..<max(lower, touchedFirst)]
-            let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { SourceSpan($0.location + delta, $0.length) }
+            let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { moved($0, by: delta) }
             let fits = reparsed.count >= leading.count + trailing.count
                 && reparsed.prefix(leading.count).elementsEqual(leading)
                 && reparsed.suffix(trailing.count).elementsEqual(trailing)
@@ -97,6 +156,8 @@ extension MarkdownParser {
             return result
         }
         var document = ParsedDocument(source: source, revision: revision)
+        document.definitions = previous.definitions
+        document.referenceExpansion = previous.referenceExpansion + part.referenceExpansion
         document.styles = stitch(previous.styles, part.styles, location: \.span.location) { run, offset in
             StyleRun(span: moved(run.span, by: offset), kind: run.kind, markers: run.markers.map { moved($0, by: offset) })
         }
@@ -104,7 +165,7 @@ extension MarkdownParser {
             var element = element; element.span = moved(element.span, by: offset); return element
         }
         document.checkboxes = stitch(previous.checkboxes, part.checkboxes, location: \.location) { moved($0, by: $1) }
-        document.blocks = stitch(previous.blocks, part.blocks, location: \.location) { moved($0, by: $1) }
+        document.blocks = stitch(previous.blocks, part.blocks, location: \.location) { Block(moved($0.span, by: $1), isListItem: $0.isListItem) }
         return document
     }
 

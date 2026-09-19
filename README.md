@@ -1,6 +1,6 @@
 # AirMark
 
-A native Markdown editor for macOS 26+ and Apple Silicon. Swift 6, AppKit, TextKit 2, swift-markdown, bundled Mermaid and KaTeX.
+A native Markdown editor for macOS 26+ and Apple Silicon. Swift 6, AppKit, TextKit 2, cmark-gfm (swift-cmark), bundled Mermaid and KaTeX.
 
 ## Build and run
 

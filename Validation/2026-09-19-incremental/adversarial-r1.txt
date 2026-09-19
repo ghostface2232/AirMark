@@ -1,0 +1,46 @@
+ADVERSARIAL normal bytes=124890 styles=7240 elements=905 parse_p50=4.642ms query2000_p50=0.374ms
+ADVERSARIAL normal bytes=249918 styles=14488 elements=1811 parse_p50=8.784ms query2000_p50=0.412ms parse_exponent=0.92 query_exponent=0.14
+ADVERSARIAL normal bytes=499974 styles=28984 elements=3623 parse_p50=17.988ms query2000_p50=0.434ms parse_exponent=1.03 query_exponent=0.07
+ADVERSARIAL normal bytes=999948 styles=57968 elements=7246 parse_p50=35.222ms query2000_p50=0.474ms parse_exponent=0.97 query_exponent=0.13
+ADVERSARIAL long-quote bytes=124992 styles=5953 elements=0 parse_p50=2.870ms query2000_p50=0.830ms
+ADVERSARIAL long-quote bytes=249984 styles=11905 elements=0 parse_p50=5.936ms query2000_p50=0.877ms parse_exponent=1.05 query_exponent=0.08
+ADVERSARIAL long-quote bytes=499968 styles=23809 elements=0 parse_p50=12.493ms query2000_p50=0.960ms parse_exponent=1.07 query_exponent=0.13
+ADVERSARIAL long-quote bytes=999978 styles=47619 elements=0 parse_p50=27.140ms query2000_p50=1.104ms parse_exponent=1.12 query_exponent=0.20
+ADVERSARIAL nested-containers bytes=124990 styles=30171 elements=0 parse_p50=8.490ms query2000_p50=1.343ms
+ADVERSARIAL nested-containers bytes=249980 styles=60341 elements=0 parse_p50=17.176ms query2000_p50=1.492ms parse_exponent=1.02 query_exponent=0.15
+ADVERSARIAL nested-containers bytes=499989 styles=120688 elements=0 parse_p50=36.288ms query2000_p50=1.732ms parse_exponent=1.08 query_exponent=0.22
+ADVERSARIAL nested-containers bytes=999978 styles=241375 elements=0 parse_p50=72.179ms query2000_p50=1.856ms parse_exponent=0.99 query_exponent=0.10
+ADVERSARIAL long-list bytes=124980 styles=16664 elements=0 parse_p50=6.022ms query2000_p50=0.559ms
+ADVERSARIAL long-list bytes=249990 styles=33332 elements=0 parse_p50=12.249ms query2000_p50=0.607ms parse_exponent=1.02 query_exponent=0.12
+ADVERSARIAL long-list bytes=499980 styles=66664 elements=0 parse_p50=24.584ms query2000_p50=0.658ms parse_exponent=1.00 query_exponent=0.12
+ADVERSARIAL long-list bytes=999990 styles=133332 elements=0 parse_p50=51.812ms query2000_p50=0.806ms parse_exponent=1.08 query_exponent=0.29
+ADVERSARIAL currency-lines bytes=124338 styles=0 elements=0 parse_p50=0.812ms query2000_p50=0.006ms
+ADVERSARIAL currency-lines bytes=249577 styles=0 elements=0 parse_p50=1.484ms query2000_p50=0.006ms parse_exponent=0.87 query_exponent=0.00
+ADVERSARIAL currency-lines bytes=499154 styles=0 elements=0 parse_p50=3.025ms query2000_p50=0.006ms parse_exponent=1.03 query_exponent=0.12
+ADVERSARIAL currency-lines bytes=999209 styles=0 elements=0 parse_p50=6.232ms query2000_p50=0.006ms parse_exponent=1.04 query_exponent=-0.02
+ADVERSARIAL escaped-dollars bytes=125000 styles=0 elements=0 parse_p50=1.983ms query2000_p50=0.006ms
+ADVERSARIAL escaped-dollars bytes=250000 styles=0 elements=0 parse_p50=4.164ms query2000_p50=0.006ms parse_exponent=1.07 query_exponent=0.11
+ADVERSARIAL escaped-dollars bytes=500000 styles=0 elements=0 parse_p50=8.531ms query2000_p50=0.006ms parse_exponent=1.03 query_exponent=-0.00
+ADVERSARIAL escaped-dollars bytes=1000000 styles=0 elements=0 parse_p50=16.535ms query2000_p50=0.006ms parse_exponent=0.95 query_exponent=-0.11
+ADVERSARIAL unclosed-display bytes=124992 styles=13888 elements=0 parse_p50=4.952ms query2000_p50=0.467ms
+ADVERSARIAL unclosed-display bytes=249993 styles=27777 elements=0 parse_p50=9.709ms query2000_p50=0.499ms parse_exponent=0.97 query_exponent=0.10
+ADVERSARIAL unclosed-display bytes=499995 styles=55555 elements=0 parse_p50=19.673ms query2000_p50=0.543ms parse_exponent=1.02 query_exponent=0.12
+ADVERSARIAL unclosed-display bytes=999999 styles=111111 elements=0 parse_p50=40.332ms query2000_p50=0.651ms parse_exponent=1.04 query_exponent=0.26
+ADVERSARIAL nested-list-depth-256 bytes=67073 styles=512 elements=0 parse_p50=0.945ms query2000_p50=4.597ms
+ADVERSARIAL nested-list-depth-256 bytes=201219 styles=1536 elements=0 parse_p50=2.847ms query2000_p50=4.658ms parse_exponent=1.59 query_exponent=0.02
+ADVERSARIAL nested-list-depth-256 bytes=469511 styles=3584 elements=0 parse_p50=6.693ms query2000_p50=5.155ms parse_exponent=1.23 query_exponent=0.15
+ADVERSARIAL nested-list-depth-256 bytes=939022 styles=7168 elements=0 parse_p50=13.745ms query2000_p50=5.357ms parse_exponent=1.04 query_exponent=0.06
+ADVERSARIAL nested-quote-depth-256 bytes=103299 styles=768 elements=0 parse_p50=2.196ms query2000_p50=12.954ms
+ADVERSARIAL nested-quote-depth-256 bytes=241031 styles=1792 elements=0 parse_p50=5.053ms query2000_p50=15.131ms parse_exponent=1.20 query_exponent=0.22
+ADVERSARIAL nested-quote-depth-256 bytes=482062 styles=3584 elements=0 parse_p50=10.076ms query2000_p50=16.232ms parse_exponent=1.00 query_exponent=0.10
+ADVERSARIAL nested-quote-depth-256 bytes=998557 styles=7424 elements=0 parse_p50=21.142ms query2000_p50=17.565ms parse_exponent=1.07 query_exponent=0.11
+ADVERSARIAL currency-one-line bytes=4998 styles=0 elements=0 parse_p50=0.033ms query2000_p50=0.006ms
+ADVERSARIAL currency-one-line bytes=9999 styles=0 elements=0 parse_p50=0.063ms query2000_p50=0.006ms parse_exponent=0.94 query_exponent=0.00
+ADVERSARIAL currency-one-line bytes=19998 styles=0 elements=0 parse_p50=0.125ms query2000_p50=0.006ms parse_exponent=1.00 query_exponent=0.00
+ADVERSARIAL currency-one-line bytes=39999 styles=0 elements=0 parse_p50=0.241ms query2000_p50=0.006ms parse_exponent=0.94 query_exponent=-0.01
+ADVERSARIAL currency-one-line bytes=79998 styles=0 elements=0 parse_p50=0.502ms query2000_p50=0.006ms parse_exponent=1.06 query_exponent=0.01
+ADVERSARIAL dollar-letters-one-line bytes=4998 styles=0 elements=0 parse_p50=0.030ms query2000_p50=0.006ms
+ADVERSARIAL dollar-letters-one-line bytes=9999 styles=0 elements=0 parse_p50=0.061ms query2000_p50=0.006ms parse_exponent=1.03 query_exponent=0.00
+ADVERSARIAL dollar-letters-one-line bytes=19998 styles=0 elements=0 parse_p50=0.122ms query2000_p50=0.006ms parse_exponent=0.98 query_exponent=0.01
+ADVERSARIAL dollar-letters-one-line bytes=39999 styles=0 elements=0 parse_p50=0.248ms query2000_p50=0.006ms parse_exponent=1.02 query_exponent=0.00
+ADVERSARIAL dollar-letters-one-line bytes=79998 styles=0 elements=0 parse_p50=0.492ms query2000_p50=0.006ms parse_exponent=0.99 query_exponent=-0.01

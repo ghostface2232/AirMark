@@ -17,6 +17,47 @@ import os
         // independent autosaved-document reopening would create duplicate windows.
         completionHandler(nil, false, CocoaError(.userCancelled))
     }
+    /// Records every open document as open at the quit, and marks the quit begun so the closes AppKit
+    /// performs for it say the same. A record that cannot be written cancels the quit with the error
+    /// shown: a quit that went ahead would leave nothing to restore.
+    func beginQuit() -> Bool {
+        MarkdownDocument.isTerminating = true
+        for document in documents.compactMap({ $0 as? MarkdownDocument }) {
+            do { try AppDelegate.recovery.saveImmediately(document.quitRecord()) }
+            catch { MarkdownDocument.isTerminating = false; NSApp.presentError(error); return false }
+        }
+        return true
+    }
+    /// The original receiver of the quit's review answer, while the review runs.
+    private var review: (delegate: NSObject?, selector: Selector?, contextInfo: UnsafeMutableRawPointer?)?
+    /// AppKit calls this when AirMark quits — Cmd-Q or a logout — with any document edited, and closes
+    /// every document inside it, clean ones included, before `applicationShouldTerminate` is asked.
+    /// So the quit begins here: a flag set only in the delegate came after the closes, each close wrote
+    /// `.closed`, and the delegate found no documents left to record. This is also the one place a quit
+    /// can still be called off once begun, with the review panel's Cancel, and AppKit says so in the
+    /// answer passed back; that answer, and nothing on a timer, is what clears the flag.
+    override func reviewUnsavedDocuments(withAlertTitle title: String?, cancellable: Bool, delegate: Any?,
+                                         didReviewAllSelector: Selector?, contextInfo: UnsafeMutableRawPointer?) {
+        let original = (delegate: delegate as? NSObject, selector: didReviewAllSelector, contextInfo: contextInfo)
+        guard beginQuit() else { answer(original, didReviewAll: false); return }
+        review = original
+        super.reviewUnsavedDocuments(withAlertTitle: title, cancellable: cancellable, delegate: self,
+                                     didReviewAllSelector: #selector(quitReview(_:didReviewAll:contextInfo:)), contextInfo: nil)
+    }
+    @objc private func quitReview(_ controller: NSDocumentController, didReviewAll: Bool, contextInfo: UnsafeMutableRawPointer?) {
+        // Documents closed before a Cancel keep their `.quit` records: AppKit closed them for the quit,
+        // not the user, so the next launch brings them back with the rest of the session.
+        if !didReviewAll { MarkdownDocument.isTerminating = false }
+        let original = review; review = nil
+        if let original { answer(original, didReviewAll: didReviewAll) }
+    }
+    /// Passes the answer on in the shape AppKit documents for the review's callback:
+    /// `documentController:didReviewAll:contextInfo:`.
+    private func answer(_ to: (delegate: NSObject?, selector: Selector?, contextInfo: UnsafeMutableRawPointer?), didReviewAll: Bool) {
+        guard let delegate = to.delegate, let selector = to.selector, delegate.responds(to: selector) else { return }
+        typealias Callback = @convention(c) (NSObject, Selector, NSDocumentController, Bool, UnsafeMutableRawPointer?) -> Void
+        unsafeBitCast(delegate.method(for: selector), to: Callback.self)(delegate, selector, self, didReviewAll, to.contextInfo)
+    }
 }
 
 /// Where a launch collects the documents it is opening, so their windows can be stacked once they all
@@ -144,20 +185,13 @@ import os
         // Written synchronously: after `.terminateLater` AppKit waits in a nested event loop that
         // never runs a main-actor Task, so an asynchronous reply would hang the quit.
         //
-        // The flag stays set for the rest of a quit that goes through. AppKit closes the documents
-        // after this returns, and `close()` would write `.closed` over the `.quit` records written
-        // here; nothing clears the flag on a timer, because that is a race the quit does not decide.
-        // A logout cancelled after this returns leaves it set on a process that keeps running, and a
-        // document closed then comes back at the next launch — a window to close again, against a
-        // session that never returns. No callback reports that cancellation; it is the one case left.
-        MarkdownDocument.isTerminating = true
-        for document in NSDocumentController.shared.documents.compactMap({ $0 as? MarkdownDocument }) {
-            // Recorded as open at the quit, so the next launch restores every one of these windows.
-            // The one path that really does cancel the quit is the one that clears the flag.
-            do { try Self.recovery.saveImmediately(document.record(state: .quit)) }
-            catch { MarkdownDocument.isTerminating = false; NSApp.presentError(error); return .terminateCancel }
-        }
-        return .terminateNow
+        // With a document edited, the quit began in the controller's review, which closed every
+        // document; this finds none left. With none edited it begins here, and AppKit closes the
+        // documents only after `applicationWillTerminate`. Nothing after this can call the quit off:
+        // the review and a document refusing to close both come before it, for Cmd-Q and for a logout
+        // alike, and after `.terminateNow` AppKit goes straight to `applicationWillTerminate` and exits.
+        // So the flag cannot outlive a quit on a process that keeps running.
+        documents?.beginQuit() == false ? .terminateCancel : .terminateNow
     }
     func buildMenu() {
         let main = NSMenu()

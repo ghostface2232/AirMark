@@ -6,12 +6,16 @@ import ApplicationServices
     /// Fixtures are bundled with the runner; reading them from the source tree would trigger the
     /// Documents-folder permission dialog and block the run.
     static var fixtures: URL { Bundle(for: AirMarkUITests.self).resourceURL!.appendingPathComponent("Fixtures") }
-    /// XCUIAutomation types key events through the active input method. Pin an ASCII source for
-    /// these English keyboard fixtures, then restore the user's original source after each test.
-    private func useASCIIInputSource() {
+    /// XCUIAutomation types key events through the active input method. The Mac these run on types
+    /// with PriType only, so its English mode is selected rather than a different keyboard layout;
+    /// right Cmd, PriType's 한/영 key, is not something XCUIAutomation can press. A Mac without
+    /// PriType gets its ASCII-capable source. The original source is restored after each test.
+    private func useEnglishInputMode() {
         let previous = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-        let ascii = TISCopyCurrentASCIICapableKeyboardInputSource().takeRetainedValue()
-        XCTAssertEqual(TISSelectInputSource(ascii), noErr)
+        let filter = [kTISPropertyInputSourceID as String: "com.pritype.inputmethod.v2.v2.english"] as CFDictionary
+        let pritype = (TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource])?.first
+        let english = pritype ?? TISCopyCurrentASCIICapableKeyboardInputSource().takeRetainedValue()
+        XCTAssertEqual(TISSelectInputSource(english), noErr)
         addTeardownBlock { XCTAssertEqual(TISSelectInputSource(previous), noErr) }
     }
     func testRepeatedAsynchronousSavesPreserveSource() throws {
@@ -25,7 +29,7 @@ import ApplicationServices
         app.launchArguments = ["--open", file.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = directory.appendingPathComponent("Recovery").path
         app.launch()
-        useASCIIInputSource()
+        useEnglishInputMode()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         for number in 1...5 {
@@ -165,6 +169,111 @@ import ApplicationServices
         XCTAssertNotNil(stored["sessionID"] as? String, "the record does not name the run that wrote it")
     }
 
+    /// A quit with an edit not yet autosaved still records the document as open at the quit. With an
+    /// edited document AppKit reviews and closes every document *before* `applicationShouldTerminate`,
+    /// so a flag set there came too late: each close wrote `.closed`, and the delegate found no
+    /// documents left to record. The edit goes in through Edit ▸ Paste and the quit through the menu,
+    /// so nothing is typed and the input method cannot interfere.
+    func testQuitRightAfterAnEditRecordsTheDocumentAsQuit() throws {
+        let output = try temporaryOutput("AirMarkEditQuit")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("original\n".utf8).write(to: file)
+        let recovery = output.appendingPathComponent("Recovery")
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        paste("PASTED", into: app)
+        XCTAssertTrue((editor.value as? String ?? "").contains("PASTED"), "the paste did not land")
+        quit(app)
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15), "the quit did not end the app")
+
+        XCTAssertTrue(try String(contentsOf: file, encoding: .utf8).contains("PASTED"), "the quit did not keep the edit")
+        let names = try FileManager.default.contentsOfDirectory(atPath: recovery.path).filter { $0.hasSuffix(".json") }
+        XCTAssertEqual(names.count, 1, "one document was open: \(names)")
+        let name = try XCTUnwrap(names.first)
+        let stored = try XCTUnwrap(JSONSerialization.jsonObject(with: try Data(contentsOf: recovery.appendingPathComponent(name))) as? [String: Any])
+        XCTAssertEqual(stored["state"] as? String, "quit", "a document open at the quit was recorded as put away")
+        XCTAssertEqual(stored["filePath"] as? String, file.path)
+    }
+
+    /// Puts `text` into the front document through Edit ▸ Paste, which types nothing.
+    private func paste(_ text: String, into app: XCUIApplication) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        app.menuBars.menuBarItems["Edit"].click()
+        app.menuItems["Paste"].click()
+    }
+    private func records(in recovery: URL) throws -> [[String: Any]] {
+        try FileManager.default.contentsOfDirectory(atPath: recovery.path).filter { $0.hasSuffix(".json") }.compactMap {
+            try JSONSerialization.jsonObject(with: Data(contentsOf: recovery.appendingPathComponent($0))) as? [String: Any]
+        }
+    }
+
+    /// Delete in the quit's review panel throws the draft away, as it does when closing the window:
+    /// the quit records the draft first, and the close that Delete leads to must still discard it.
+    func testDraftDeletedInTheQuitReviewIsNotRecorded() throws {
+        let output = try temporaryOutput("AirMarkQuitDelete")
+        let recovery = output.appendingPathComponent("Recovery")
+        let app = XCUIApplication()
+        app.launchArguments = ["--blank"]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        let editor = app.textViews["markdown-editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        paste("DISCARD ME", into: app)
+        XCTAssertEqual(editor.value as? String, "DISCARD ME")
+        quit(app)
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "quitting with an edited draft did not ask")
+        sheet.buttons["Delete"].click()
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15), "the quit did not end the app")
+        let left = try records(in: recovery)
+        XCTAssertTrue(left.isEmpty, "the deleted draft is still recorded: \(left)")
+    }
+
+    /// Cancel in the quit's review panel calls the quit off, and AirMark keeps running as it was. The
+    /// quit had already begun, so the flag that makes a close record `.quit` must be cleared again:
+    /// left set, the next document the user closes would come back at the next launch.
+    func testCancelledQuitLeavesALaterCloseRecordedAsClosed() throws {
+        let output = try temporaryOutput("AirMarkQuitCancel")
+        let file = output.appendingPathComponent("Note.md")
+        try Data("original\n".utf8).write(to: file)
+        let recovery = output.appendingPathComponent("Recovery")
+        let app = XCUIApplication()
+        app.launchArguments = ["--open", file.path]
+        app.launchEnvironment["AIRMARK_STATE_DIR"] = recovery.path
+        app.launch()
+        XCTAssertTrue(app.textViews["markdown-editor"].waitForExistence(timeout: 10))
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["New"].click()
+        XCTAssertTrue(app.windows.element(boundBy: 1).waitForExistence(timeout: 5), "File ▸ New opened no window")
+        paste("KEEP ME", into: app)
+        quit(app)
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "quitting with an edited draft did not ask")
+        sheet.buttons["Cancel"].click()
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(app.state, .runningForeground, "Cancel did not call the quit off")
+        XCTAssertEqual(app.windows.count, 2, "the review closed a document before the Cancel")
+
+        // Put the draft away, then close the saved file the ordinary way.
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["Close"].click()
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
+        sheet.buttons["Delete"].click()
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["Close"].click()
+        XCTAssertTrue(app.windows.firstMatch.waitForNonExistence(timeout: 5), "the saved file's window did not close")
+        let note = try XCTUnwrap(try records(in: recovery).first { $0["filePath"] as? String == file.path })
+        XCTAssertEqual(note["state"] as? String, "closed", "a close after the cancelled quit was recorded as part of it")
+        app.terminate()
+    }
+
     /// The close panel of an unsaved draft, and what each of its three buttons leaves for the next
     /// launch. Needs an idle machine: these type into the app.
     ///
@@ -175,7 +284,7 @@ import ApplicationServices
         app.launchArguments = ["--blank"]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
         app.launch()
-        useASCIIInputSource()
+        useEnglishInputMode()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.click(); editor.typeText(text)
@@ -285,7 +394,7 @@ import ApplicationServices
         app.launchArguments = ["--open", file.path]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = output.appendingPathComponent("Recovery").path
         app.launch()
-        useASCIIInputSource()
+        useEnglishInputMode()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.click()
@@ -519,7 +628,7 @@ import ApplicationServices
         app.launchArguments = ["--blank"]
         app.launchEnvironment["AIRMARK_STATE_DIR"] = NSTemporaryDirectory() + "AirMarkUITests-" + UUID().uuidString
         app.launch()
-        useASCIIInputSource()
+        useEnglishInputMode()
         let editor = app.textViews["markdown-editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         XCTAssertEqual(editor.label, "Markdown editor")

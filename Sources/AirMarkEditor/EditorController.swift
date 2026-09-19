@@ -67,7 +67,7 @@ import os
     /// large file stalls for seconds; these are applied as the viewport reaches them.
     private var pendingInvalidation: [NSRange] = []
     /// The text storage's own NSString. `textView.string` bridges a copy of the whole document.
-    private var text: NSString { textView.textStorage?.mutableString ?? NSMutableString() }
+    var text: NSString { textView.textStorage?.mutableString ?? NSMutableString() }
     private var renderEnvironment: RenderEnvironment?
     /// Pending adoption of a new environment. While it is armed the editor still measures and draws in
     /// `renderEnvironment`, which is what keeps the geometry moving from replacing every rendered
@@ -131,6 +131,13 @@ import os
 
     public init(source: String = "") { sourceForInitialLoad = source; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+    /// A block observer stays registered until it is removed, whatever happens to what it captured
+    /// weakly: every closed document left its five behind, three of them listening to every window.
+    isolated deinit {
+        for observation in observations { NotificationCenter.default.removeObserver(observation) }
+        parseTask?.cancel(); environmentTask?.cancel()
+        for task in renderTasks.values { task.cancel() }
+    }
     public override func loadView() {
         let root = EditorRootView()
         root.onAppearanceChange = { [weak self] in self?.appearanceChanged() }
@@ -212,9 +219,11 @@ import os
     /// artifacts are dropped and rendered again.
     public func fileLocationChanged(to url: URL?) {
         fileURL = url
-        let images = Set(parsed.elements.filter { $0.kind == .image }.map(\.span))
+        // From the presentation, which has moved with every edit; `parsed` is in the coordinates of
+        // the last parse, and a Save As while a parse is pending would miss every image after the edit.
+        let images = presentation.elements.filter { $0.kind == .image }.map(\.span)
         for span in images { artifacts.remove(span); setIssue(nil, at: span); renderTasks[span]?.cancel(); renderTasks[span] = nil; renderTokens[span] = nil }
-        invalidatePresentation(spans: Array(images))
+        invalidatePresentation(spans: images)
         scheduleRenders()
     }
     public func restore(selection: SourceSpan, scrollY: Double) {
@@ -376,8 +385,9 @@ import os
     public func textStorage(_ textStorage: NSTextStorage, willProcessEditing editedMask: NSTextStorageEditActions, range editedRange: NSRange, changeInLength delta: Int) {
         guard editedMask.contains(.editedCharacters), editedRange.location != NSNotFound else { return }
         let previous = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
-        let replacement = textStorage.mutableString.substring(with: editedRange)
-        let edit = PresentationEdit(range: previous, replacement: replacement)
+        // The length alone: copying the replaced text out to count it copied a whole document on
+        // every load, revert and large paste.
+        let edit = PresentationEdit(range: previous, replacementLength: editedRange.length)
         editSequence += 1
         editLog.append((editSequence, edit))
         EditorPhases.shared.measure(.rebase) { presentation.apply(edit) }
@@ -510,7 +520,7 @@ import os
         for task in renderTasks.values { task.cancel() }
         renderTasks.removeAll(); renderTokens.removeAll(); errors.removeAll()
         if let previous, previous.matchesAppearance(of: next) { artifacts.holdGeometry() } else { artifacts.removeAll() }
-        invalidatePresentation(spans: parsed.elements.map(\.span))
+        invalidatePresentation(spans: presentation.elements.map(\.span))
     }
     /// Adopts the current environment once geometry that reports no end of its own has held still for
     /// `environmentSettleDelay`. Every change restarts the wait, so one transition costs one
@@ -536,7 +546,8 @@ import os
     /// Pixels near the viewport stay; farther ones go, then the farthest while over budget. Layout
     /// metrics stay, so the document does not move, and scrolling back renders them again.
     func releaseDistantPixels() {
-        guard let near = sourceRange(screensAroundVisible: Self.nearScreens) else { return }
+        // Asked on every scroll step and render; under budget there is nothing to find a range for.
+        guard artifacts.pixelBytes > artifacts.pixelBudget, let near = sourceRange(screensAroundVisible: Self.nearScreens) else { return }
         EditorPhases.shared.measure(.artifacts) { artifacts.releasePixels(protecting: near) }
     }
     /// Where renders start: `near` always, `ahead` while under budget.
@@ -549,7 +560,14 @@ import os
         return (near, ahead)
     }
     /// The source range laid out within `screens` screen heights above and below the scroll view's
-    /// visible bounds. Lays out that area if needed, never the whole document. Computed from the scroll
+    /// visible bounds. Lays out that area if needed, never the whole document.
+    ///
+    /// That layout is relied on, and not only by renders. Skipping this in documents with nothing to
+    /// render looked like saved work and was measured as the opposite: typing at the end of a 10MB
+    /// prose document after edits further up drew each key in 42 ms instead of 3, with one stall of a
+    /// second, all of it in `NSTextViewportLayoutController.layoutViewport` enumerating fragments up to
+    /// the viewport. With the area around the viewport kept laid out, that enumeration stays short
+    /// (`TypingLatencyBench`, Validation/2026-09-19-typing-latency). Computed from the scroll
     /// position rather than the viewport controller's range, which can briefly fall back to the start of
     /// the document between layout passes; releasing from that dropped pixels on screen and rendered
     /// them again in a loop. Nil when the area cannot be mapped, in which case nothing is released.
@@ -837,7 +855,9 @@ import os
             }
             for marker in run.markers where marker.length > 0 && marker.end <= text.length {
                 let afterBreak = marker.location == 0 || [10, 13, 0x2029].contains(text.character(at: marker.location - 1))
-                var kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak ? .opening : .closing
+                // A quote's `>` opens its line wherever it stands: after the `>` of a quote around it, or
+                // after a list item's indentation, not only at the start of the line.
+                var kind: ConcealUnit.Kind = marker.location == run.span.location || afterBreak || run.kind == .quote ? .opening : .closing
                 var removal = marker.nsRange
                 if run.kind == .codeBlock {
                     // A fenced block's markers are its fence lines, not line-start markers. The closing

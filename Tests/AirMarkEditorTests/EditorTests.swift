@@ -42,6 +42,18 @@ import AirMarkCore
         #expect(editor.source == source)
         #expect(editor.textKitFallbackCount == 0)
     }
+    /// A closed editor goes away, and takes its notification observers with it: block observers stay
+    /// registered until removed, and three of the editor's listen to every window in the app.
+    @Test func releasedEditorDeallocates() async throws {
+        weak var released: EditorController?
+        do {
+            let editor = try await make("# Heading\n\nBody **bold**")
+            editor.textView.insertText("x", replacementRange: NSRange(location: 0, length: 0))
+            released = editor
+        }
+        for _ in 0..<100 where released != nil { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(released == nil)
+    }
     @Test func editsKeepMarkdownAndUndo() async throws {
         let editor = try await make("hello")
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
@@ -142,6 +154,21 @@ import AirMarkCore
         view.setSelectedRange(NSRange(location: 13, length: 0))
         #expect(caret() == 13)
         #expect(editor.source == "## Heading\n\n**bold** more\n")
+    }
+    /// An inner quote's `>` on a later line stands after the outer quote's. It is still the marker
+    /// that opens that line for the inner quote: the caret does not rest inside it, and Backspace
+    /// after it removes it, not the character before it.
+    @Test func nestedQuoteMarkersAreOpeningMarkers() async throws {
+        // "> > a\n" 0..<6, then "> " 6..<8 (outer), "> " 8..<10 (inner), "b\n"
+        let editor = try await make("> > a\n> > b\n")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentViewController = editor
+        window.makeFirstResponder(editor.textView)
+        editor.textView.setSelectedRange(NSRange(location: 9, length: 0))
+        #expect(editor.textView.selectedRange().location == 10)
+        #expect(editor.deleteBackwardAcrossMarkers(at: 10))
+        #expect(editor.source == "> > a\n> b\n")
+        window.orderOut(nil)
     }
     @Test func deletingAtMarkerEdgesEditsSourceUnits() async throws {
         let editor = try await make("## Heading\n\n**bold** more\n- [ ] task\n")

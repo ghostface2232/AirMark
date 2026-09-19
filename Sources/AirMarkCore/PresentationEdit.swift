@@ -6,7 +6,11 @@ public struct PresentationEdit: Sendable {
     public let range: SourceSpan
     public let replacementLength: Int
     public init(range: NSRange, replacement: String) {
-        self.range = SourceSpan(range); replacementLength = replacement.utf16.count
+        self.init(range: range, replacementLength: replacement.utf16.count)
+    }
+    /// An edit is only ever asked how long its replacement is, never what it says.
+    public init(range: NSRange, replacementLength: Int) {
+        self.range = SourceSpan(range); self.replacementLength = replacementLength
     }
     public func unchanged(_ span: SourceSpan) -> SourceSpan? {
         let delta = replacementLength - range.length

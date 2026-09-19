@@ -35,12 +35,17 @@ public final class DocumentSnapshot: @unchecked Sendable {
     public static var recoveryStore: RecoveryStore?
     /// Launch milestones for Scripts/measure.sh; nil unless AIRMARK_LAUNCH_LOG is set.
     public static var launchTimeline: LaunchTimeline?
-    /// Set while AirMark is quitting, so a document closed by the quit keeps the record the quit wrote.
+    /// Set while AirMark is quitting, so a document closed by the quit is recorded as open at the quit
+    /// and not as one the user put away.
     public static var isTerminating = false
     public nonisolated let snapshot = DocumentSnapshot()
     public var editor: EditorController?
     public var identity = UUID()
     var recoveryTask: Task<Void, Never>?
+    /// The document's place in the window order when the quit recorded it. The quit closes the documents
+    /// one after another and writes each record again as it goes; the order read then would be of the
+    /// windows still left, not of the session.
+    private var orderAtQuit: Int?
     public nonisolated var externalConflict: Bool {
         get { snapshot.hasConflict() }
         set { snapshot.setConflict(newValue) }
@@ -195,6 +200,11 @@ public final class DocumentSnapshot: @unchecked Sendable {
     /// restores the last session rather than every session that ever ended with a document open.
     /// `order` is the document's place in the window order, front first, recorded with each record so
     /// the session's stacking survives the quit; a document with no window in the order has none.
+    /// The record the quit writes when it begins, before AppKit starts closing documents.
+    public func quitRecord() -> RecoveryRecord {
+        orderAtQuit = NSApplication.shared.orderedDocuments.firstIndex { $0 === self }
+        return record(state: .quit)
+    }
     public func record(state: RecoveryState = .open) -> RecoveryRecord {
         let (bytes, version) = snapshot.versioned()
         return record(state: state, bytes: bytes, revision: version, hasUnsavedChanges: isDocumentEdited)
@@ -204,7 +214,7 @@ public final class DocumentSnapshot: @unchecked Sendable {
                        selection: editor?.selection ?? restoredSelection, scrollY: editor?.scrollY ?? restoredScroll,
                        state: state, hasUnsavedChanges: hasUnsavedChanges,
                        sessionID: Self.recoveryStore?.sessionID,
-                       order: NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
+                       order: (state == .quit ? orderAtQuit : nil) ?? NSApplication.shared.orderedDocuments.firstIndex { $0 === self })
     }
     public func scheduleRecovery() {
         recoveryTask?.cancel()
@@ -218,15 +228,19 @@ public final class DocumentSnapshot: @unchecked Sendable {
     }
     public override func close() {
         recoveryTask?.cancel()
-        // Skipped while quitting: the quit writes every open document's record itself and AppKit closes
-        // the documents afterwards, so a close record written then would say the user had put them away.
+        // While quitting, the record says `.quit`: the document was open when AirMark stopped, and AppKit
+        // closes it as part of the quit, not because the user put it away. It is written again rather
+        // than left as the quit first wrote it, because a draft saved from the quit's review panel has a
+        // file by now. A draft the user chose Delete for is still edited here and is discarded below,
+        // quitting or not.
         //
         // Synchronous, not a Task: closing a document and quitting straight after left a detached save
         // unrun, and the record still said the document was open. The cancelled debounced save cannot
         // undo this one — same revision, earlier date, which the writer's ordering gate rejects. The
         // error goes nowhere because the window is going: a failed write here costs a reopened document.
-        if !Self.isTerminating, let store = Self.recoveryStore {
-            if isDocumentEdited { discardRecovery(in: store) } else { try? store.saveImmediately(record(state: .closed)) }
+        if let store = Self.recoveryStore {
+            if isDocumentEdited { discardRecovery(in: store) }
+            else { try? store.saveImmediately(record(state: Self.isTerminating ? .quit : .closed)) }
         }
         super.close()
     }

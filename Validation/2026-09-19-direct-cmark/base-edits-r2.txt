@@ -1,0 +1,12 @@
+EDITS normal bytes=124890 head=9.820ms middle=4.988ms inside-tail=0.031ms tail=0.032ms after-delete-query2000=7.329ms
+EDITS normal bytes=249918 head=19.712ms(exp 1.01) middle=9.940ms(exp 0.99) inside-tail=0.038ms(exp 0.29) tail=0.037ms(exp 0.21) after-delete-query2000=14.062ms(exp 0.94)
+EDITS normal bytes=499974 head=39.150ms(exp 0.99) middle=18.974ms(exp 0.93) inside-tail=0.053ms(exp 0.48) tail=0.051ms(exp 0.46) after-delete-query2000=28.561ms(exp 1.02)
+EDITS normal bytes=999948 head=75.310ms(exp 0.94) middle=38.015ms(exp 1.00) inside-tail=0.075ms(exp 0.51) tail=0.074ms(exp 0.52) after-delete-query2000=55.484ms(exp 0.96)
+EDITS long-quote bytes=124992 head=7.154ms middle=3.720ms inside-tail=0.072ms tail=0.009ms after-delete-query2000=8.025ms
+EDITS long-quote bytes=249984 head=13.895ms(exp 0.96) middle=7.033ms(exp 0.92) inside-tail=0.072ms(exp 0.00) tail=0.008ms(exp -0.16) after-delete-query2000=14.313ms(exp 0.83)
+EDITS long-quote bytes=499968 head=29.683ms(exp 1.10) middle=14.960ms(exp 1.09) inside-tail=0.082ms(exp 0.19) tail=0.011ms(exp 0.42) after-delete-query2000=28.767ms(exp 1.01)
+EDITS long-quote bytes=999978 head=56.161ms(exp 0.92) middle=28.064ms(exp 0.91) inside-tail=0.091ms(exp 0.16) tail=0.009ms(exp -0.25) after-delete-query2000=56.368ms(exp 0.97)
+EDITS nested-list bytes=124992 head=17.178ms middle=8.706ms inside-tail=0.052ms tail=0.009ms after-delete-query2000=19.211ms
+EDITS nested-list bytes=249984 head=34.092ms(exp 0.99) middle=18.329ms(exp 1.07) inside-tail=0.062ms(exp 0.24) tail=0.010ms(exp 0.15) after-delete-query2000=38.540ms(exp 1.00)
+EDITS nested-list bytes=500000 head=71.434ms(exp 1.07) middle=37.217ms(exp 1.02) inside-tail=0.063ms(exp 0.03) tail=0.010ms(exp 0.04) after-delete-query2000=74.715ms(exp 0.96)
+EDITS nested-list bytes=1000000 head=139.774ms(exp 0.97) middle=69.868ms(exp 0.91) inside-tail=0.064ms(exp 0.03) tail=0.013ms(exp 0.30) after-delete-query2000=149.961ms(exp 1.01)

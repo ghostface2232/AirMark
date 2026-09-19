@@ -322,3 +322,228 @@ after the review fixes below; the UI state after them is in that entry.
 - **Not end to end.** These stop when `performEdit` returns. Input-to-screen latency and the time for
   formatting to catch up after typing are different measurements and were not taken here.
 
+
+## 2026-09-19 — cmark's tree read directly, a flat edit shift, and a review
+
+`Validation/2026-09-19-direct-cmark/`. Release, base `fd44d09` in a separate worktree, runs alternated.
+
+- **A whole parse is five times cheaper.** Sampled at 10MB, cmark-gfm was 6% of a parse; swift-markdown
+  converting cmark's tree into its own was 37%, and walking that tree 43%, mostly dynamic casts from
+  `any Markup`. `MarkdownTree` reads cmark's nodes in place — same cmark-gfm 0.8.0, same options and
+  extensions, same position adjustments as swift-markdown's `Document(parsing:)`. p50: 100KB 19.1 → 3.5 ms,
+  1MB 193 → 35 ms, 10MB 1,959 → 374 ms, three alternating runs each. The two depth-256 adversarial corpora
+  did not move (1.0–1.1×); their cost is marker matching over each nested container's text.
+- **This keeps PLAN.md's rule and changes its letter.** PLAN.md leaves Markdown semantics to swift-markdown
+  and rules out a parser of our own. Semantics are still decided by the cmark-gfm that swift-markdown wraps,
+  at the version it pins; what was removed is the conversion layer. swift-markdown stays in the package as
+  the core tests' reference and is no longer linked into the app.
+- **Held to the old parser.** `ReferenceParser` is the previous `parse` word for word. 3,000 generated
+  documents, 300 documents through 10 random edits each, and every Markdown file in the repository, native
+  and bridged, produce identical styles, markers, elements, checkboxes and block spans. Dropping
+  `CMARK_OPT_SMART` or the backtick widening fails these tests; dropping the end-before-start guard does
+  not, and that guard is uncovered.
+- **The benchmarks parsed text the app never sees.** They use native strings; the editor's text is bridged
+  from `NSString`. At `fd44d09` 10MB parsed in 1,992 ms native and 2,222 ms bridged. The UTF-8 is now
+  produced once per parse, in bulk, for the estimates, the `]:` scan and cmark; `AirMarkBench --bridged`
+  measures both (10MB: 366 / 363 ms).
+- **An edit's shift is flat.** Moving the styles after an edit went style by style and recomputed each
+  reach from its markers; it is four passes over contiguous integers, and elements move through a
+  specialized protocol instead of a key path. `--edits` 1MB head 75 → 16 ms per 200 edits, interleaved. In
+  the editor at 10MB: head p50 4.12–4.35 → 1.19–1.20 ms, plain space max 7.32 → 4.80 ms, Return 2.05–2.19 →
+  0.61–0.63 ms. The earlier figures are 2026-09-18's, not re-run today. Still linear in what follows the
+  edit; not input-to-screen latency.
+- **Review fixes.** `EditorController` never removed its five block observers, so each closed document left
+  them registered, three listening to every window; removed in an `isolated deinit`, with a test that the
+  editor deallocates. `insertNewline` compiled its expression and bridged the document three times per
+  Return. `willProcessEditing` copied the replaced text only to count it. `fileLocationChanged` and
+  `adoptEnvironment` used `parsed`'s stale coordinates while a parse was pending. A scroll step in a
+  document with nothing to render still laid out screens of text to find render and release windows.
+- **Tried and dropped.** Bulk-encoding `DocumentBytes.data` measured the same 13 ms for a bridged 10MB
+  source as before; the cost is the transcoding. Reverted.
+- **Tests.** Debug and Release: 110 tests in 16 suites and 64 in 5 suites. Release app build succeeded and
+  has no swift-markdown symbols. UI tests not run: the runner timed out enabling automation mode before any
+  test, which needs someone at the console.
+
+## 2026-09-19 — A quit with an edit pending, and where a quit can be cancelled
+
+`Validation/2026-09-19-quit-review/`. Debug, base `fd44d09` in a separate worktree.
+
+- **The case left open was not there.** A probe app logging AppKit's order shows that every point where
+  a quit can be called off, Cmd-Q or a logout Apple Event, comes before `applicationShouldTerminate`,
+  and nothing after `.terminateNow` does. The documents of a clean quit close after
+  `applicationWillTerminate`, not merely after the delegate.
+- **A quit right after an edit lost the session.** With any document edited, AppKit reviews and closes
+  every document, clean ones too, before the delegate. Each close wrote `.closed`, and the delegate found
+  nothing to record. `testQuitRightAfterAnEditRecordsTheDocumentAsQuit` (Edit ▸ Paste, then quit through
+  the menu, nothing typed) fails on the base with `closed`.
+- **Fix.** `AirMarkDocumentController.reviewUnsavedDocuments` begins the quit, recording `.quit` and
+  setting the flag before AppKit's review, and clears the flag when the review's `didReviewAll` answer
+  says the quit was cancelled. That answer is the callback the earlier note said did not exist, and the
+  quit now begins before a point that can cancel it. A close during a quit writes `.quit` again, keeping
+  the window order taken when the quit began. An edited document at close is still discarded, which is
+  what Delete in the review panel means.
+- **Tests.** Three new UI tests pass. The Cancel test fails with the flag-clearing line removed. The
+  existing quit and session tests and all five typing tests pass. The typing tests now run under PriType's
+  English mode instead of ABC, because PriType is the only input method on the machine they run on. Unit:
+  109 + 60. One batch run had `testCancelledCloseKeepsTheDraftAfterRelaunch` miss its sheet; it passed
+  alone on base and fix and in a full rerun.
+- **Not verified.** A real logout; the review panel's Save; Release.
+
+## 2026-09-19 — Link reference definitions no longer force a whole parse
+
+`Validation/2026-09-19-incremental/references.txt`. Release.
+
+- **What was wrong.** Any document containing `]:` was parsed whole on every keystroke, because a
+  definition resolves links anywhere. The five Markdown files in this repository that contain `]:`,
+  this one among them, contain no definition at all.
+- **What cmark does.** It collects definitions while it builds blocks, as each paragraph closes, and reads
+  them only when it parses inlines, in `cmark_parser_finish`; of two with one label the earlier wins.
+  Nothing else about a definition reaches outside its own paragraph. So `reparse` parses its window with
+  the document's other definitions put into cmark's map before and after the feed, in document order, and
+  keeps the result only if the window's own definitions are the ones it held before. A changed, added or
+  removed definition parses whole; typing anywhere else does not.
+- **Not public API.** cmark has no call for this. The map is declared in headers swift-cmark exports, and
+  the package pins swift-cmark exactly; entries are made as `cmark_reference_create` makes them, with
+  values already cleaned. `finish` frees the map before returning, so it is read from an extension's
+  postprocess hook, the one call cmark makes between resolving links and freeing it.
+- **The expansion cap.** cmark refuses reference links once their destinations and titles add up to the
+  document's size (100KB if smaller). A window has less to spend, so a partial parse is used only while
+  the document's total, which partial parses only ever overestimate, leaves room for the largest
+  definition. `documentsNearTheExpansionCapParseWhole`.
+- **Measured.** One edit in the middle, p50 of five: 1MB with one definition 33.4 ms whole → 1.0 ms
+  partial; with 2,000 definitions 35.8 → 1.6 ms; 10MB 339 → 9.9 ms and 351 → 12.8 ms.
+  `AirMarkBench --references`.
+- **Tests.** Half the generated documents of `reparseEqualsWholeParseAfterRandomEdits` now define up to
+  six references: duplicate labels, another case, a title over two lines, angle brackets, entities and
+  escapes, one inside a quote, swift-cmark's attribute form; over 1,000 partial parses of documents with
+  definitions are asserted. Parsing the window with no definitions, with all of them ranked before it, or
+  without comparing the window's own, each fails the suite. 110 + 65 tests, Debug.
+
+## 2026-09-19 — Each `>` to its own quote, and nesting that costs nothing
+
+`Validation/2026-09-19-incremental/adversarial-r*.txt`. Release, three runs, medians; before is
+`Validation/2026-09-19-direct-cmark/new-adversarial-r*.txt`.
+
+- **A bug, in every parser so far.** A block quote's markers were found by matching `^[ \t]{0,3}>` over
+  the quote's own text. From a nested quote's second line on, its text starts at the start of the line, so
+  the match was the outer quote's `>` again: in `> > a` / `> > b` the inner `>` of the second line belonged
+  to no marker and was never hidden, and the outer one was marked twice. The same match looked at most
+  three spaces into a line, so a quote in a second-level list item lost its markers altogether.
+- **The fix is also the cost.** The walk keeps, per line, where the containers walked so far stop. A quote
+  takes the next `>` from there on each of its lines; a list item moves the start past its indentation. One
+  look at one line's prefix per container, no text copied, no expression. A list item's marker is on its
+  first line, so only that line is read; the whole item used to be copied once for every list around it.
+  nested-quote-depth-256 553 → 21 ms, nested-list-depth-256 149 → 14 ms, nested-containers 110 → 72 ms,
+  long-quote 31 → 27 ms per 1MB; the rest unchanged (normal 35.4 → 35.2).
+- **Against the reference.** Generated, edited and repository documents still match `ReferenceParser` in
+  everything but quote markers, and there under a rule: a reference marker the parser lacks must be one the
+  reference gave to two quotes, or the same `>` without a list item's indentation before it; and the
+  parser's quote markers must each be a `>` with at most three spaces before and one space or tab after,
+  none shared. Eight written cases cover nesting, lazy lines, `    >` that is text, and quotes in list items.
+- **The editor.** A marker that does not start its line was taken for a closing marker, so Backspace after
+  an inner `>` would have removed the character before it. A quote's markers are opening markers wherever
+  they stand; `nestedQuoteMarkersAreOpeningMarkers` fails without that.
+- **Tests.** 111 + 66, Debug.
+
+## 2026-09-19 — A long list is no longer one block
+
+`Validation/2026-09-19-incremental/lists.txt`. Release.
+
+- **What was wrong.** `reparse` cuts between top-level blocks, and a top-level list is one of them: one
+  character typed in a list of 20,000 items reparsed all 529KB of it. DEV_LOG.md itself is such a list.
+- **Items as blocks.** `ParsedDocument.blocks` records a top-level list as its items, and two items may be
+  cut apart with no blank line between them: a list item starts on its own line whatever the item before
+  it holds. Nothing the parser emits depends on the list around an item (tightness, numbering), so an item
+  parsed at the head of a window is the item the document has. The check is the one there was: the
+  unchanged margin blocks must reparse to what they were, item or not, or the margins double.
+- **Display math is the exception, and cost a rule twice.** It is found without regard to blocks and only a
+  blank line stops it. The first rule (no cut through a span of the previous parse, none when the window
+  holds `$$`) failed the new test: an edit that broke a table unprotected its cells, and a `$$` before the
+  window then paired through it with one after. The rule is now about what the window cannot see: items
+  are cut apart only when no `$$` stands between the window and the blank lines around it; otherwise the
+  window is widened to those, as before.
+- **Found on the way: an open fence swallowed the next line.** cmark gives a fenced block the end of the
+  line that closes it, taking that for the closing fence. A fence left open in a list item or a quote
+  closes with the container, on the first line after it, so the next item, or the paragraph after the
+  list, was styled as code and kept from math. Cut at the container's end; committed separately. A window
+  ending after such an item had disagreed with the whole parse, and the window was right.
+- **Measured.** One edit in the middle, p50 of five: flat list of 20,000 items, window 528,891 → 82 units,
+  23.8 ms whole → 1.8 ms; 5,000 items with nested children, 19.7 → 1.1 ms. With one `$$` in the list the
+  window is the list again (26.6 ms against 24.2 whole). `AirMarkBench --lists`.
+- **Tests.** `listItemsAreCutPoints`: 150 documents of long lists (nested lists, lazy lines, quotes, fences
+  closed and open, tables, display math in a quarter of them) through 30 random edits each, equal to the
+  whole parse every time, with over 800 windows asserted to start between two items. Without the `$$` rule
+  it fails. Allowing a cut between a paragraph and an item does not fail anything: that restriction is
+  caution, not something the tests show to be needed. `blockSpansAreTheTopLevelBlocks` checks the items
+  against swift-markdown's tree. 111 + 68, Debug and Release.
+- **Left.** Cuts inside a long block quote, and between the items of a nested list, would need the
+  container's prefix stripped and positions mapped back. A list that holds `$$` is one block as before.
+
+## 2026-09-19 — What a review of the three changes found
+
+A review agent read the branch with cmark's sources beside it and fuzzed `reparse` against `parse` from a
+scratch package, about 400,000 comparisons. Five findings were confirmed with inputs; each is fixed in its
+own commit with its input as a test. Two were holes in that day's work, three were older.
+
+- **A crash, older than the branch.** The inline nesting estimate takes `~~~` inside an HTML block for a
+  fence and skips what follows, so `<div>` / `~~~` / `</div>` and then 200,000 `*` on each side of a letter
+  was estimated at nothing and overflowed the stack in the walk. The walk now counts its own depth and
+  refuses a tree deeper than both limits together; `plainText`, which an image calls before the walk goes
+  down, follows cmark's links instead of recursing. The test ends the process without the guard.
+- **The verdict on nesting was the window's, not the document's.** `parse` presents a document over a limit
+  as plain text; `reparse` judged its window alone. An edit that removed a `~~~` uncovered a deep paragraph
+  below, and between list items there is no blank line to restart the count, so a thousand items that each
+  open emphasis add up: the second is a hole the item cuts opened. The count is now taken out to the blank
+  lines around an item cut, and the whole text is estimated when the window holds a fence line before or
+  after the edit.
+- **Setext headings, older than the branch.** cmark ends one on the line after its underline. Followed by
+  text, that line was hidden as the underline and the underline shown; followed by a blank line, only the
+  line break was hidden. The one test had the heading at the end of the document, the only place cmark is
+  right. In a list item it also broke an item cut, which is how it was found.
+- **A NUL on the next line.** cmark counts a NUL as three bytes, so an end given on such a line is nowhere;
+  an open fence in a container and a setext heading lost their span in the whole parse and kept it in a
+  window. Their start is enough, since their end is worked out in the walk.
+- **Quote markers counted characters.** After `- > a`, a tab and two spaces and `> b` is past the item's
+  content and is text; after `100.`, four columns are short of the item's five. Both `>` were hidden.
+  Prefixes are now advanced in columns as cmark advances them, with an item's indentation read from
+  cmark's node, and a lazy line is marked so nothing further in takes a marker from it.
+- **Checked again.** The reviewer's fuzzer, rebuilt against the fixes: 15 runs over its five pools
+  (lists, references, math, quotes, exotic), about 143,000 partial parses, 0 differences, and three more
+  runs (29,000) after the last change.
+  `listItemsAreCutPoints` now has setext headings, an open `~~~`, a NUL, tabs and lazy `>` lines among
+  its items.
+- **Found sound by the review.** The map entries made for cmark (allocator, ages, sizes; ASan and `leaks`
+  clean), reading the map in the postprocess hook, the thread-dictionary hand-off, `definitionsAreOrdered`,
+  duplicate labels, the expansion cap arithmetic, the `$$` rule, the flat shift in `PresentationStore`.
+- **Left as they are.** Backspace on a bullet in a long list merges the item into the block before it, so
+  the margins double to the whole list: a whole parse for that key. A block that ends on a line holding a
+  NUL has no span, which leaves its document without blocks and always parsed whole. A quote's first-line
+  marker starts at its `>` while later lines include the spaces before it.
+- **Tests.** 111 + 71, Debug and Release. Per 1MB after the fixes: normal 35.6 ms, nested-list-depth-256
+  16.9, nested-quote-depth-256 30.6; `--lists` flat 2.2 ms, `--references` 1.0 ms.
+
+## 2026-09-19 — Typing measured to the draw, and a regression it caught the same day
+
+`Validation/2026-09-19-typing-latency/`. Release, 200 keys 50 ms apart, three runs with elements at 1MB and
+10MB and one of prose.
+
+- **The benchmark that was missing.** `ScaleTests` stops when `performEdit` returns and `ParsePacingBench`
+  when a parse is installed. `TypingLatencyBench` (`AIRMARK_TYPING_BYTES`) types through `insertText` and
+  `insertNewline` for ten seconds at the head, middle and tail and records, per key, when the call
+  returned, when TextKit drew the fragment holding the key in AppKit's own display pass, when that run
+  loop turn ended after Core Animation's commit, and when a parse including the key was installed; and
+  how long blocks posted to the main queue waited. p50/p95/p99/max. Not HID, no input method, and nothing
+  past the commit: the window server and the display cannot be timed from inside the process.
+- **Figures.** Drawn p95 5.5–9.4 ms and p99 6.5–10.0 ms across sizes and positions, worst key 24.3 ms.
+  Longest main-thread stall 21–28 ms, at the head; 13 of about 85,000 probes over 16.7 ms. `returned` p50
+  1.3–4.1 ms, several times `performEdit` alone: the rest is `NSTextView`'s own work, not broken down.
+- **It caught a regression of this branch.** Skipping `scheduleRenders` in documents with nothing to
+  render (`b7bccdb`) also skipped the layout around the viewport that finding the render windows does,
+  and that layout kept `layoutViewport` short. Typing at the tail of a 10MB prose document after edits
+  further up: drawn p50 42 ms, one key 994 ms. Removed; p50 2.5 ms, max 7.0 ms. A 4-second run did not
+  show it, and no unit test could have.
+- **Not explained.** 1MB costs more per key than 10MB (returned p50 about 4 against 2.5 ms).
+- **Next candidate.** Formatting trails typing by 70–110 ms at p50 and 200–240 ms at p95: at 50 ms between
+  keys the 45 ms parse delay restarts with nearly every key and the 150 ms staleness limit starts the
+  parse. The partial parse is about a millisecond now, so the delay is all of it.
+- **Tests.** 112 + 71, Debug.

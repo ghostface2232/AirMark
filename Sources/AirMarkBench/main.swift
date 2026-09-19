@@ -88,6 +88,63 @@ if CommandLine.arguments.contains("--edits") {
     }
     exit(0)
 }
+
+// The editor never hands over a native string: its text is bridged from the text storage's NSString,
+// which has no UTF-8 to point at. Every other mode here measures native strings, so this one measures
+// the same work on the text as the app sees it.
+if CommandLine.arguments.contains("--bridged") {
+    for size in [1_000_000, 10_000_000] {
+        let native = String(repeating: fixture, count: size / fixture.utf8.count)
+        let bridged = NSMutableString(string: native).copy() as! String
+        func p50(_ body: () -> Void) -> Double { percentile((0..<5).map { _ in measure(body) }, 0.5) }
+        print(String(format: "BRIDGED bytes=%d parse_native=%.2fms parse_bridged=%.2fms",
+                     native.utf8.count, p50 { _ = MarkdownParser.parse(native) }, p50 { _ = MarkdownParser.parse(bridged) }))
+    }
+    exit(0)
+}
+// A document that defines link references used to be parsed whole on every keystroke. One edit in
+// the middle, reparsed against the previous parse and parsed whole, with one definition and with many.
+if CommandLine.arguments.contains("--references") {
+    let block = "## Heading\n\nA paragraph with **bold**, [link](https://example.org), [ref][id7] and 한글.\n\n- [ ] Task\n\nInline $x^2$ formula.\n\n"
+    for (size, definitions) in [(1_000_000, 1), (1_000_000, 2_000), (10_000_000, 1), (10_000_000, 2_000)] {
+        let source = String(repeating: block, count: size / block.utf8.count)
+            + (0..<definitions).map { "[id\($0)]: https://example.org/page/\($0) \"Title \($0)\"\n" }.joined()
+        let previous = MarkdownParser.parse(source)
+        let text = NSMutableString(string: source), location = text.length / 2
+        text.insert("x", at: location)
+        let edited = text.copy() as! String
+        let edit = PresentationEdit(range: NSRange(location: location, length: 0), replacement: "x")
+        func p50(_ body: () -> Void) -> Double { percentile((0..<5).map { _ in measure(body) }, 0.5) }
+        var partial = false
+        let reparse = p50 { partial = MarkdownParser.reparse(edited, revision: 1, previous: previous, edits: [edit]) != nil }
+        print(String(format: "REFERENCES bytes=%d definitions=%d partial=%@ reparse_p50=%.2fms whole_p50=%.2fms",
+                     source.utf8.count, previous.definitions.count, "\(partial)", reparse, p50 { _ = MarkdownParser.parse(edited) }))
+    }
+    exit(0)
+}
+// A top-level list used to be one block, so an edit inside it reparsed the whole list. One edit in
+// the middle of a list of 20,000 items, flat and with nested children, and of one that holds `$$`,
+// which is still cut at blank lines only.
+if CommandLine.arguments.contains("--lists") {
+    let corpora: [(String, String)] = [
+        ("flat", (0..<20_000).map { "- item \($0) with **bold**\n" }.joined()),
+        ("nested", (0..<5_000).map { "- item \($0)\n  - child with `code`\n    - grandchild [l](u)\n  continued\n" }.joined()),
+        ("with-display-math", (0..<20_000).map { $0 == 10 ? "- $$x^2$$\n" : "- item \($0) with **bold**\n" }.joined()),
+    ]
+    for (name, source) in corpora {
+        let previous = MarkdownParser.parse(source)
+        let text = NSMutableString(string: source), location = text.length / 2
+        text.insert("x", at: location)
+        let edited = text.copy() as! String
+        let edit = PresentationEdit(range: NSRange(location: location, length: 0), replacement: "x")
+        func p50(_ body: () -> Void) -> Double { percentile((0..<5).map { _ in measure(body) }, 0.5) }
+        var window = 0
+        let reparse = p50 { window = MarkdownParser.reparse(edited, revision: 1, previous: previous, edits: [edit])?.changed.length ?? -1 }
+        print(String(format: "LISTS %@ bytes=%d blocks=%d window=%d reparse_p50=%.2fms whole_p50=%.2fms",
+                     name, source.utf8.count, previous.blocks.count, window, reparse, p50 { _ = MarkdownParser.parse(edited) }))
+    }
+    exit(0)
+}
 // Inputs chosen to defeat the index and the math scanner rather than to look like real notes.
 // Each corpus is measured at doubling sizes; the exponent between neighbours (log2 of the time ratio)
 // is about 1 for linear work and about 2 for quadratic work, whatever the absolute times are.
