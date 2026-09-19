@@ -446,9 +446,6 @@ import os
             }
             adoptEnvironment(live)
         }
-        // Most documents are prose. With nothing to render there is nothing to release either, and
-        // finding the windows below lays out screens of text around the viewport on every scroll step.
-        guard !presentation.elements.isEmpty else { return }
         let environment = live
         let currentRevision = revision
         releaseDistantPixels()
@@ -563,7 +560,14 @@ import os
         return (near, ahead)
     }
     /// The source range laid out within `screens` screen heights above and below the scroll view's
-    /// visible bounds. Lays out that area if needed, never the whole document. Computed from the scroll
+    /// visible bounds. Lays out that area if needed, never the whole document.
+    ///
+    /// That layout is relied on, and not only by renders. Skipping this in documents with nothing to
+    /// render looked like saved work and was measured as the opposite: typing at the end of a 10MB
+    /// prose document after edits further up drew each key in 42 ms instead of 3, with one stall of a
+    /// second, all of it in `NSTextViewportLayoutController.layoutViewport` enumerating fragments up to
+    /// the viewport. With the area around the viewport kept laid out, that enumeration stays short
+    /// (`TypingLatencyBench`, Validation/2026-09-19-typing-latency). Computed from the scroll
     /// position rather than the viewport controller's range, which can briefly fall back to the start of
     /// the document between layout passes; releasing from that dropped pixels on screen and rendered
     /// them again in a loop. Nil when the area cannot be mapped, in which case nothing is released.
