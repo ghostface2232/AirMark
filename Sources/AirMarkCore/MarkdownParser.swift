@@ -1,5 +1,4 @@
 import Foundation
-import Markdown
 
 public enum StyleKind: Hashable, Sendable {
     case heading(Int), strong, emphasis, strike, code, codeBlock, quote, list, link(String), rule
@@ -44,10 +43,10 @@ public struct ParsedDocument: Sendable {
     }
 }
 
-/// Parses off the main actor on a thread with a large stack. swift-markdown converts its tree
-/// recursively, and a concurrency-pool thread's stack (about 512KB) ran out at about 70 nested block
-/// quotes, which crashed the app. With 16MB, nesting survives past 1,500 levels, far above
-/// `MarkdownParser.nestingLimit`.
+/// Parses off the main actor on a thread with a large stack. The tree is walked recursively, and a
+/// concurrency-pool thread's stack (about 512KB) ran out at about 70 nested block quotes when
+/// swift-markdown's conversion was the recursion, which crashed the app. With 16MB, nesting survives
+/// far past `MarkdownParser.nestingLimit`.
 ///
 /// A parse thread cannot be stopped, so parses run one at a time: callers wait their turn in order,
 /// and a caller cancelled while waiting leaves the queue at once instead of holding its source until
@@ -160,40 +159,39 @@ public enum MarkdownParser {
     /// from the line's real column, markers included. A lazy continuation line cannot open containers,
     /// so the line that opened them bounds the depth. Byte order marks at the start are skipped, as the
     /// parser skips them. Linear; no parse.
-    public static func nestingEstimate(_ source: String) -> Int {
-        withBytes(source) { bytes in
-            var deepest = 0, depth = 0, whitespace = 0, column = 0, atLineStart = true
-            var index = leadingByteOrderMarks(bytes)
-            func endsMarker(_ position: Int) -> Bool {
-                position >= bytes.count || bytes[position] == 32 || bytes[position] == 9 || bytes[position] == 10 || bytes[position] == 13
-            }
-            while index < bytes.count {
-                let byte = bytes[index]
-                if byte == 10 || byte == 13 {
-                    deepest = max(deepest, depth + whitespace / 2)
-                    depth = 0; whitespace = 0; column = 0; atLineStart = true
-                    index += 1
-                    continue
-                }
-                guard atLineStart else { index += 1; continue }
-                switch byte {
-                case 32: column += 1; whitespace += 1
-                case 9: let width = 4 - column % 4; column += width; whitespace += width
-                case 62: depth += 1; column += 1                                      // ">"
-                case 45, 43, 42:                                                     // "-", "+", "*"
-                    if endsMarker(index + 1) { depth += 1; column += 1 } else { atLineStart = false }
-                case 48...57:                                                        // "1." or "1)"
-                    var end = index
-                    while end < bytes.count, (48...57).contains(bytes[end]) { end += 1 }
-                    if end < bytes.count, bytes[end] == 46 || bytes[end] == 41, endsMarker(end + 1) {
-                        depth += 1; column += end + 1 - index; index = end
-                    } else { atLineStart = false }
-                default: atLineStart = false
-                }
-                index += 1
-            }
-            return max(deepest, depth + whitespace / 2)
+    public static func nestingEstimate(_ source: String) -> Int { withBytes(source, nestingEstimate) }
+    static func nestingEstimate(_ bytes: Bytes) -> Int {
+        var deepest = 0, depth = 0, whitespace = 0, column = 0, atLineStart = true
+        var index = leadingByteOrderMarks(bytes)
+        func endsMarker(_ position: Int) -> Bool {
+            position >= bytes.count || bytes[position] == 32 || bytes[position] == 9 || bytes[position] == 10 || bytes[position] == 13
         }
+        while index < bytes.count {
+            let byte = bytes[index]
+            if byte == 10 || byte == 13 {
+                deepest = max(deepest, depth + whitespace / 2)
+                depth = 0; whitespace = 0; column = 0; atLineStart = true
+                index += 1
+                continue
+            }
+            guard atLineStart else { index += 1; continue }
+            switch byte {
+            case 32: column += 1; whitespace += 1
+            case 9: let width = 4 - column % 4; column += width; whitespace += width
+            case 62: depth += 1; column += 1                                      // ">"
+            case 45, 43, 42:                                                     // "-", "+", "*"
+                if endsMarker(index + 1) { depth += 1; column += 1 } else { atLineStart = false }
+            case 48...57:                                                        // "1." or "1)"
+                var end = index
+                while end < bytes.count, (48...57).contains(bytes[end]) { end += 1 }
+                if end < bytes.count, bytes[end] == 46 || bytes[end] == 41, endsMarker(end + 1) {
+                    depth += 1; column += end + 1 - index; index = end
+                } else { atLineStart = false }
+            default: atLineStart = false
+            }
+            index += 1
+        }
+        return max(deepest, depth + whitespace / 2)
     }
 
     /// An upper bound on inline nesting within a paragraph: the open emphasis delimiters plus the open
@@ -203,91 +201,93 @@ public enum MarkdownParser {
     /// open nor close and is skipped. `[` and `]` add and subtract one. A backslash makes the next character
     /// literal. Lines inside a fenced code block are skipped. Counts restart at blank lines, which end
     /// paragraphs; CRLF is one line break. Linear; no parse.
-    public static func inlineNestingEstimate(_ source: String) -> Int {
-        withBytes(source) { bytes in
-            var deepest = 0, emphasis = 0, brackets = 0, index = 0
-            var fence: (character: UInt8, length: Int)? = nil
-            func isSpace(_ byte: UInt8) -> Bool { byte == 32 || byte == 9 || byte == 10 || byte == 13 }
-            func isWordCharacter(_ byte: UInt8) -> Bool { byte >= 0x80 || (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) }
-            while index < bytes.count {
-                var lineEnd = index
-                while lineEnd < bytes.count, bytes[lineEnd] != 10, bytes[lineEnd] != 13 { lineEnd += 1 }
-                let next = lineEnd < bytes.count && bytes[lineEnd] == 13 && lineEnd + 1 < bytes.count && bytes[lineEnd + 1] == 10 ? lineEnd + 2 : lineEnd + 1
-                // A fence line opens or closes a code block; neither it nor the block's content can nest inline.
-                var start = index
-                while start < lineEnd, start - index < 3, bytes[start] == 32 { start += 1 }
-                if start < lineEnd, bytes[start] == 96 || bytes[start] == 126 {
-                    var run = start
-                    while run < lineEnd, bytes[run] == bytes[start] { run += 1 }
-                    // A backtick fence's info string cannot contain a backtick; such a line is inline code.
-                    let isFence = run - start >= 3 && (bytes[start] == 126 || fence != nil || !bytes[run..<lineEnd].contains(96))
-                    if isFence {
-                        if let open = fence {
-                            if open.character == bytes[start], run - start >= open.length { fence = nil }
-                        } else {
-                            fence = (bytes[start], run - start)
-                        }
-                        emphasis = 0; brackets = 0
-                        index = next
-                        continue
+    public static func inlineNestingEstimate(_ source: String) -> Int { withBytes(source, inlineNestingEstimate) }
+    static func inlineNestingEstimate(_ bytes: Bytes) -> Int {
+        var deepest = 0, emphasis = 0, brackets = 0, index = 0
+        var fence: (character: UInt8, length: Int)? = nil
+        func isSpace(_ byte: UInt8) -> Bool { byte == 32 || byte == 9 || byte == 10 || byte == 13 }
+        func isWordCharacter(_ byte: UInt8) -> Bool { byte >= 0x80 || (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) }
+        while index < bytes.count {
+            var lineEnd = index
+            while lineEnd < bytes.count, bytes[lineEnd] != 10, bytes[lineEnd] != 13 { lineEnd += 1 }
+            let next = lineEnd < bytes.count && bytes[lineEnd] == 13 && lineEnd + 1 < bytes.count && bytes[lineEnd + 1] == 10 ? lineEnd + 2 : lineEnd + 1
+            // A fence line opens or closes a code block; neither it nor the block's content can nest inline.
+            var start = index
+            while start < lineEnd, start - index < 3, bytes[start] == 32 { start += 1 }
+            if start < lineEnd, bytes[start] == 96 || bytes[start] == 126 {
+                var run = start
+                while run < lineEnd, bytes[run] == bytes[start] { run += 1 }
+                // A backtick fence's info string cannot contain a backtick; such a line is inline code.
+                let isFence = run - start >= 3 && (bytes[start] == 126 || fence != nil || !bytes[run..<lineEnd].contains(96))
+                if isFence {
+                    if let open = fence {
+                        if open.character == bytes[start], run - start >= open.length { fence = nil }
+                    } else {
+                        fence = (bytes[start], run - start)
                     }
+                    emphasis = 0; brackets = 0
+                    index = next
+                    continue
                 }
-                if fence != nil { index = next; continue }
-                var position = index, blank = true
-                while position < lineEnd {
-                    let byte = bytes[position]
-                    switch byte {
-                    case 92:                                                         // "\" escapes the next character
-                        blank = false
-                        position += position + 1 < lineEnd && !isSpace(bytes[position + 1]) ? 2 : 1
-                    case 42, 95, 126:                                                // "*", "_", "~"
-                        var end = position
-                        while end < lineEnd, bytes[end] == byte { end += 1 }
-                        let length = end - position
-                        let before: UInt8? = position > 0 ? bytes[position - 1] : nil
-                        let after: UInt8? = end < bytes.count ? bytes[end] : nil
-                        let spaceBefore = before.map(isSpace) ?? true
-                        let spaceAfter = after.map(isSpace) ?? true
-                        let intraword = byte == 95 && before.map(isWordCharacter) == true && after.map(isWordCharacter) == true
-                        if !intraword {
-                            if !spaceAfter { emphasis += length } else if !spaceBefore { emphasis = max(0, emphasis - length) }
-                        }
-                        blank = false
-                        position = end
-                    case 91: brackets += 1; blank = false; position += 1               // "["
-                    case 93: brackets = max(0, brackets - 1); blank = false; position += 1  // "]"
-                    case 32, 9: position += 1
-                    default: blank = false; position += 1
-                    }
-                    deepest = max(deepest, emphasis + brackets)
-                }
-                if blank { emphasis = 0; brackets = 0 }
-                index = next
             }
-            return deepest
+            if fence != nil { index = next; continue }
+            var position = index, blank = true
+            while position < lineEnd {
+                let byte = bytes[position]
+                switch byte {
+                case 92:                                                         // "\" escapes the next character
+                    blank = false
+                    position += position + 1 < lineEnd && !isSpace(bytes[position + 1]) ? 2 : 1
+                case 42, 95, 126:                                                // "*", "_", "~"
+                    var end = position
+                    while end < lineEnd, bytes[end] == byte { end += 1 }
+                    let length = end - position
+                    let before: UInt8? = position > 0 ? bytes[position - 1] : nil
+                    let after: UInt8? = end < bytes.count ? bytes[end] : nil
+                    let spaceBefore = before.map(isSpace) ?? true
+                    let spaceAfter = after.map(isSpace) ?? true
+                    let intraword = byte == 95 && before.map(isWordCharacter) == true && after.map(isWordCharacter) == true
+                    if !intraword {
+                        if !spaceAfter { emphasis += length } else if !spaceBefore { emphasis = max(0, emphasis - length) }
+                    }
+                    blank = false
+                    position = end
+                case 91: brackets += 1; blank = false; position += 1               // "["
+                case 93: brackets = max(0, brackets - 1); blank = false; position += 1  // "]"
+                case 32, 9: position += 1
+                default: blank = false; position += 1
+                }
+                deepest = max(deepest, emphasis + brackets)
+            }
+            if blank { emphasis = 0; brackets = 0 }
+            index = next
         }
+        return deepest
     }
 
     /// Compiled once: compiling these per list item and block quote was about a quarter of a 10MB
     /// parse. `NSRegularExpression` is immutable and safe to match from several threads.
-    nonisolated(unsafe) private static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
-    nonisolated(unsafe) private static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
+    nonisolated(unsafe) static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
+    nonisolated(unsafe) static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
 
     /// Whether `source` contains `]:`, which every link reference definition does.
-    static func mayDefineReferences(_ source: String) -> Bool {
+    static func mayDefineReferences(_ source: String) -> Bool { withBytes(source, mayDefineReferences) }
+    static func mayDefineReferences(_ bytes: Bytes) -> Bool {
         var previous: UInt8 = 0
-        for byte in source.utf8 {
+        for byte in bytes {
             if byte == 58, previous == 93 { return true }
             previous = byte
         }
         return false
     }
 
-    private static func withBytes<Result>(_ source: String, _ body: ([UInt8]) -> Result) -> Result {
-        body(Array(source.utf8))
-    }
+    typealias Bytes = UnsafeBufferPointer<UInt8>
 
-    private static func leadingByteOrderMarks(_ bytes: [UInt8]) -> Int {
+    /// `parse` comes here once for every scan it makes and for cmark; copying the bytes into an array
+    /// per scan cost two document-sized allocations per parse.
+    static func withBytes<Result>(_ source: String, _ body: (Bytes) -> Result) -> Result { source.withUTF8Bytes(body) }
+
+    private static func leadingByteOrderMarks(_ bytes: Bytes) -> Int {
         var index = 0
         while index + 2 < bytes.count, bytes[index] == 0xEF, bytes[index + 1] == 0xBB, bytes[index + 2] == 0xBF { index += 3 }
         return index
@@ -297,44 +297,46 @@ public enum MarkdownParser {
         parse(source, revision: revision, enforcingLimit: true)
     }
     static func parse(_ source: String, revision: UInt64, enforcingLimit: Bool) -> ParsedDocument {
-        if enforcingLimit, nestingEstimate(source) > nestingLimit || inlineNestingEstimate(source) > inlineNestingLimit {
-            return ParsedDocument(source: source, revision: revision)
-        }
-        let index = SourceIndex(source)
         var output = ParsedDocument(source: source, revision: revision)
-        let document = Document(parsing: source)
+        let parsed: MarkdownTree? = withBytes(source) { bytes in
+            if enforcingLimit, nestingEstimate(bytes) > nestingLimit || inlineNestingEstimate(bytes) > inlineNestingLimit { return nil }
+            output.mayDefineReferences = mayDefineReferences(bytes)
+            return MarkdownTree(parsing: bytes)
+        }
+        guard let document = parsed else { return output }
+        let index = SourceIndex(source)
         var protected: [SourceSpan] = []
-        /// Column corrections for inline nodes, by line. swift-markdown reports inline columns on a
-        /// paragraph's continuation lines relative to where it considers the line's content to start, so
+        /// Column corrections for inline nodes, by line. cmark reports inline columns on a paragraph's
+        /// continuation lines relative to where it considers the line's content to start, so
         /// "para\n   three **b**" placed the strong run three columns early and concealed "ee". The shift is
         /// first estimated from the line's leading whitespace and quote markers, then checked against the
         /// delimiters (and, on one line, the text) of nodes that have them; a line whose delimiters are
         /// found elsewhere nearby takes that shift for all its inline nodes. A delimited node that cannot be
         /// matched to its source is left unstyled.
         var inlineColumnShift: [Int: Int] = [:]
-        func offsets(_ r: SourceRange, shift lower: Int, _ upper: Int) -> SourceSpan? {
-            guard let a = index.offset(line: r.lowerBound.line, utf8Column: r.lowerBound.column + lower),
-                  let b = index.offset(line: r.upperBound.line, utf8Column: r.upperBound.column + upper), b >= a, b <= index.utf16Count else { return nil }
+        func offsets(_ r: MarkdownTree.Range, shift lower: Int, _ upper: Int) -> SourceSpan? {
+            guard let a = index.offset(line: r.lowerLine, utf8Column: r.lowerColumn + lower),
+                  let b = index.offset(line: r.upperLine, utf8Column: r.upperColumn + upper), b >= a, b <= index.utf16Count else { return nil }
             return SourceSpan(a, b - a)
         }
         /// The characters a delimited inline node's source must start and end with, or nil.
-        func delimiters(_ node: any Markup) -> (start: Set<UInt16>, end: Set<UInt16>)? {
-            switch node {
-            case is Strong, is Emphasis: return ([42, 95], [42, 95])                  // * _
-            case is Strikethrough: return ([126], [126])                              // ~
-            case is InlineCode: return ([96], [96])                                   // `
-            case is Link: return ([91, 60], [41, 93, 62])                             // [ <  ) ] >
-            case is Markdown.Image: return ([33], [41, 93])                           // !  ) ]
+        func delimiters(_ kind: MarkdownTree.Kind) -> (start: Set<UInt16>, end: Set<UInt16>)? {
+            switch kind {
+            case .strong, .emphasis: return ([42, 95], [42, 95])                      // * _
+            case .strikethrough: return ([126], [126])                                // ~
+            case .inlineCode: return ([96], [96])                                     // `
+            case .link: return ([91, 60], [41, 93, 62])                               // [ <  ) ] >
+            case .image: return ([33], [41, 93])                                      // !  ) ]
             default: return nil
             }
         }
-        func span(_ node: any Markup) -> SourceSpan? {
+        func span(_ node: MarkdownTree.Node) -> SourceSpan? {
             guard let r = node.range else { return nil }
-            guard !(node is BlockMarkup) else { return offsets(r, shift: 0, 0) }
-            let lowerLine = r.lowerBound.line, upperLine = r.upperBound.line
+            guard !node.isBlock else { return offsets(r, shift: 0, 0) }
+            let lowerLine = r.lowerLine, upperLine = r.upperLine
             let lower = inlineColumnShift[lowerLine] ?? 0, upper = inlineColumnShift[upperLine] ?? 0
             let estimated = offsets(r, shift: lower, upper)
-            guard let expected = delimiters(node) else { return estimated }
+            guard let expected = delimiters(node.kind) else { return estimated }
             // On one line, a shifted candidate must also contain the node's text: adjacent runs such as
             // "**b**> **b**" put matching delimiters at the ends of a wrong candidate. Computed only when a
             // shift is involved; unshifted positions are what the parser reported and are accepted.
@@ -343,7 +345,7 @@ public enum MarkdownParser {
                 guard let span, span.length >= 2 else { return false }
                 guard expected.start.contains(index.unit(at: span.location)), expected.end.contains(index.unit(at: span.end - 1)) else { return false }
                 guard checkingContent, lowerLine == upperLine else { return true }
-                if content == nil { content = plain(node) }
+                if content == nil { content = node.plainText }
                 return content!.isEmpty || index.text(in: span).contains(content!)
             }
             if fits(estimated, checkingContent: lower != 0 || upper != 0) { return estimated }
@@ -364,43 +366,34 @@ public enum MarkdownParser {
         /// start column. The parser reports a continuation line's inline columns as if its content began
         /// at that column, after stripping leading whitespace and block quote markers. List item content
         /// indentation is whitespace here and already matches the start column, so it needs no correction.
-        func continuationShifts(_ paragraph: Paragraph) -> [Int: Int] {
-            guard let range = paragraph.range, range.upperBound.line > range.lowerBound.line else { return [:] }
+        func continuationShifts(_ paragraph: MarkdownTree.Node) -> [Int: Int] {
+            guard let range = paragraph.range, range.upperLine > range.lowerLine else { return [:] }
             var shifts: [Int: Int] = [:]
-            for line in (range.lowerBound.line + 1)...min(range.upperBound.line, index.lines.count) {
-                var contentStart = 0
-                for byte in index.text(in: index.lines[line - 1]).utf8 {
-                    guard byte == 32 || byte == 9 || byte == 62 else { break }        // space, tab, ">"
-                    contentStart += 1
-                }
-                let shift = contentStart - (range.lowerBound.column - 1)
+            for line in (range.lowerLine + 1)...min(range.upperLine, index.lines.count) {
+                let contentStart = index.leadingUnits(ofLine: line) { $0 == 32 || $0 == 9 || $0 == 62 }   // space, tab, ">"
+                let shift = contentStart - (range.lowerColumn - 1)
                 if shift != 0 { shifts[line] = shift }
             }
             return shifts
         }
-        func plain(_ node: any Markup) -> String {
-            if let t = node as? Text { return t.string }
-            if let t = node as? InlineCode { return t.code }
-            if node is SoftBreak || node is LineBreak { return " " }
-            return node.children.map { plain($0) }.joined()
-        }
         // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
         // anyway, except for a paragraph, whose own span it has no other use for.
         var blockSpansComplete = true
-        func walk(_ node: any Markup, topLevel: Bool = false) {
-            if let paragraph = node as? Paragraph {
+        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false) {
+            let kind = node.kind
+            if kind == .paragraph {
                 if topLevel {
-                    if let span = span(paragraph) { output.blocks.append(span) } else { blockSpansComplete = false }
+                    if let span = span(node) { output.blocks.append(span) } else { blockSpansComplete = false }
                 }
                 let outer = inlineColumnShift
-                inlineColumnShift = continuationShifts(paragraph)
+                inlineColumnShift = continuationShifts(node)
                 for child in node.children { walk(child) }
                 inlineColumnShift = outer
                 return
             }
             // Plain text and line breaks are most nodes and add no style; their spans have no side
-            // effects (no delimiters to match), so skip computing them and the casts below.
-            if node is Text || node is SoftBreak || node is LineBreak { return }
+            // effects (no delimiters to match), so skip computing them.
+            if kind == .text || kind == .softBreak || kind == .lineBreak { return }
             guard let s = span(node) else {
                 if topLevel { blockSpansComplete = false }
                 for child in node.children { walk(child) }
@@ -409,8 +402,8 @@ public enum MarkdownParser {
             if topLevel { output.blocks.append(s) }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
-            switch node {
-            case let heading as Heading:
+            switch kind {
+            case .heading:
                 let raw = index.text(in: s)
                 let prefix = raw.prefix { $0 == "#" || $0 == " " }.utf16.count
                 var markers: [SourceSpan] = []
@@ -418,19 +411,19 @@ public enum MarkdownParser {
                 else if let last = raw.lastIndex(where: { $0.isNewline }) {                // "\r\n" is one Character
                     markers.append(SourceSpan(s.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
                 }
-                add(.heading(heading.level), markers: markers)
-            case is Strong: add(.strong, markers: edges(2))
-            case is Emphasis: add(.emphasis, markers: edges(1))
-            case is Strikethrough: add(.strike, markers: edges(2))
-            case is InlineCode:
+                add(.heading(node.headingLevel), markers: markers)
+            case .strong: add(.strong, markers: edges(2))
+            case .emphasis: add(.emphasis, markers: edges(1))
+            case .strikethrough: add(.strike, markers: edges(2))
+            case .inlineCode:
                 let raw = index.text(in: s)
                 let count = raw.prefix { $0 == "`" }.count
                 add(.code, markers: edges(count)); protected.append(s)
-            case let code as CodeBlock:
+            case .codeBlock:
                 protected.append(s)
-                let lang = (code.language ?? "").lowercased().split(separator: " ").first.map(String.init) ?? ""
+                let lang = node.fenceInfo.lowercased().split(separator: " ").first.map(String.init) ?? ""
                 if lang == "mermaid" || lang == "math" || lang == "latex" {
-                    output.elements.append(RenderElement(span: s, kind: lang == "mermaid" ? .mermaid : .math, content: code.code))
+                    output.elements.append(RenderElement(span: s, kind: lang == "mermaid" ? .mermaid : .math, content: node.literal))
                 } else {
                     var markers = fenceMarkers(index.text(in: s), at: s.location)
                     // The block span stops before its line break. Hide that break with the closing
@@ -442,7 +435,7 @@ public enum MarkdownParser {
                     }
                     add(.codeBlock, markers: markers)
                 }
-            case is BlockQuote:
+            case .blockQuote:
                 let raw = index.text(in: s)
                 var markers: [SourceSpan] = []
                 if let regex = quoteMarker {
@@ -451,7 +444,7 @@ public enum MarkdownParser {
                     }
                 }
                 add(.quote, markers: markers)
-            case is ListItem:
+            case .listItem:
                 let raw = index.text(in: s)
                 var extra: [StyleRun] = [], markers: [SourceSpan] = []
                 if let regex = listItemMarker,
@@ -471,39 +464,44 @@ public enum MarkdownParser {
                 }
                 add(.list, markers: markers)
                 output.styles += extra
-            case let image as Markdown.Image:
-                output.elements.append(RenderElement(span: s, kind: .image, content: image.source ?? "", label: plain(image)))
+            case .image:
+                output.elements.append(RenderElement(span: s, kind: .image, content: node.destination, label: node.plainText))
                 protected.append(s); return
-            case let link as Link:
+            case .link:
                 var markers: [SourceSpan] = []
-                let children = Array(link.children)
-                if let first = children.first, let last = children.last, let a = span(first), let b = span(last) {
+                if let first = node.firstChild, let last = node.lastChild, let a = span(first), let b = span(last) {
                     if a.location > s.location { markers.append(SourceSpan(s.location, a.location - s.location)) }
                     if b.end < s.end { markers.append(SourceSpan(b.end, s.end - b.end)) }
                 }
-                add(.link(link.destination ?? ""), markers: markers)
-            case let table as Table:
-                var rows: [[String]] = []
-                for child in table.children {
-                    if child is Table.Head { rows.append(child.children.map { plain($0) }) }
-                    else { for row in child.children { rows.append(row.children.map { plain($0) }) } }
-                }
+                add(.link(node.destination), markers: markers)
+            case .table:
+                // The header row, then the body rows; cmark keeps them as the table's children in order.
+                let rows = node.children.map { row in row.children.map(\.plainText) }
                 if let data = try? JSONEncoder().encode(rows), let json = String(data: data, encoding: .utf8) {
                     output.elements.append(RenderElement(span: s, kind: .table, content: json, label: "Table, \(rows.count) rows"))
                 }
                 protected.append(s); return
-            case is ThematicBreak: add(.rule)
-            case is HTMLBlock, is InlineHTML: protected.append(s)
+            case .thematicBreak: add(.rule)
+            case .htmlBlock, .inlineHTML: protected.append(s)
             default: break
             }
             for child in node.children { walk(child) }
         }
-        for child in document.children { walk(child, topLevel: true) }
+        // Nodes point into the tree, which nothing after this line would otherwise keep alive.
+        withExtendedLifetime(document) {
+            for child in document.root.children { walk(child, topLevel: true) }
+        }
         if !blockSpansComplete { output.blocks.removeAll() }
-        output.mayDefineReferences = mayDefineReferences(source)
+        finish(&output, protected: protected, units: index.units)
+        return output
+    }
+
+    /// Orders what the walk collected, adds math, and drops styles inside it. `units` is the source's
+    /// UTF-16 when the caller already has it.
+    static func finish(_ output: inout ParsedDocument, protected: [SourceSpan], units: [UInt16]?) {
         // Sorted by start, containers before their contents, so presentation can binary-search.
         output.styles.sort { $0.span.location != $1.span.location ? $0.span.location < $1.span.location : $0.span.length > $1.span.length }
-        output.elements += mathSpans(source, excluding: protected)
+        output.elements += mathSpans(units ?? Array(output.source.utf16), excluding: protected)
         output.elements.sort { $0.span.location < $1.span.location }
         // A math expression's contents are TeX, never Markdown emphasis/links.
         let mathElements = output.elements.filter { $0.kind == .math }
@@ -520,12 +518,11 @@ public enum MarkdownParser {
             let math = mathElements[low - 1].span
             return math.end >= run.span.end && math.intersects(run.span)
         }
-        return output
     }
 
     /// The opening fence line including its line break, and the closing fence including the
     /// line break before it. Indented code blocks and unterminated fences have fewer markers.
-    private static func fenceMarkers(_ raw: String, at base: Int) -> [SourceSpan] {
+    static func fenceMarkers(_ raw: String, at base: Int) -> [SourceSpan] {
         let text = raw as NSString
         guard text.length > 0 else { return [] }
         let firstLine = text.lineRange(for: NSRange(location: 0, length: 0))
@@ -558,7 +555,9 @@ public enum MarkdownParser {
     /// closes depends only on its own neighbours. Remembering the boundary keeps a line of unclosed
     /// `$` linear instead of rescanning the rest of the line from each one.
     static func mathSpans(_ source: String, excluding: [SourceSpan]) -> [RenderElement] {
-        let units = Array(source.utf16), text = source as NSString
+        mathSpans(Array(source.utf16), excluding: excluding)
+    }
+    static func mathSpans(_ units: [UInt16], excluding: [SourceSpan]) -> [RenderElement] {
         var result: [RenderElement] = [], i = 0, protectedIndex = 0
         var inlineFailsBefore = 0, displayFailsBefore = 0
         let excluded = excluding.sorted { $0.location < $1.location }
@@ -594,7 +593,7 @@ public enum MarkdownParser {
             }
             if let close = found {
                 let s = SourceSpan(i, close + delimiter - i)
-                result.append(RenderElement(span: s, kind: .math, content: text.substring(with: NSRange(location: i + delimiter, length: close - i - delimiter)), inline: !display))
+                result.append(RenderElement(span: s, kind: .math, content: String(decoding: units[(i + delimiter)..<close], as: UTF16.self), inline: !display))
                 i = s.end
             } else {
                 if display { displayFailsBefore = j } else { inlineFailsBefore = j }

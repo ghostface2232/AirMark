@@ -9,13 +9,21 @@ let package = Package(
         .library(name: "AirMarkEditor", targets: ["AirMarkEditor"]),
         .executable(name: "AirMarkBench", targets: ["AirMarkBench"]),
     ],
-    dependencies: [.package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.8.0")],
+    dependencies: [
+        // The parser reads cmark-gfm's tree directly. swift-markdown wraps the same cmark-gfm and is
+        // linked only into the core tests, where the parser it used to back is the reference.
+        .package(url: "https://github.com/swiftlang/swift-cmark.git", exact: "0.8.0"),
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.8.0"),
+    ],
     targets: [
-        .target(name: "AirMarkCore", dependencies: [.product(name: "Markdown", package: "swift-markdown")]),
+        .target(name: "AirMarkCore", dependencies: [
+            .product(name: "cmark-gfm", package: "swift-cmark"),
+            .product(name: "cmark-gfm-extensions", package: "swift-cmark"),
+        ]),
         .target(name: "AirMarkRender", dependencies: ["AirMarkCore"], resources: [.copy("Resources")]),
         .target(name: "AirMarkEditor", dependencies: ["AirMarkCore", "AirMarkRender"]),
         .executableTarget(name: "AirMarkBench", dependencies: ["AirMarkCore"]),
-        .testTarget(name: "AirMarkCoreTests", dependencies: ["AirMarkCore"]),
+        .testTarget(name: "AirMarkCoreTests", dependencies: ["AirMarkCore", .product(name: "Markdown", package: "swift-markdown")]),
         .testTarget(name: "AirMarkEditorTests", dependencies: ["AirMarkEditor", "AirMarkRender"]),
     ],
     swiftLanguageModes: [.v6]

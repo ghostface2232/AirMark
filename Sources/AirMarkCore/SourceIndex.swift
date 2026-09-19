@@ -15,7 +15,8 @@ public struct SourceSpan: Hashable, Codable, Sendable {
 public struct SourceIndex: Sendable {
     public private(set) var source: String
     public private(set) var lines: [SourceSpan]
-    private var units: [UInt16]
+    /// The source's UTF-16, which every offset here counts in.
+    public private(set) var units: [UInt16]
     private struct Checkpoint: Sendable {
         var utf8: Int
         var utf16: Int
@@ -29,7 +30,13 @@ public struct SourceIndex: Sendable {
     public var utf16Count: Int { units.count }
     public init(_ source: String) {
         self.source = source
-        self.units = Array(source.utf16)
+        // One bulk copy. The editor's text is bridged from `NSString`, whose `utf16` view is iterated
+        // a unit at a time through the bridge; a native string transcodes here as fast either way.
+        let text = source as NSString, length = text.length
+        self.units = [UInt16](unsafeUninitializedCapacity: length) { buffer, count in
+            if length > 0 { text.getCharacters(buffer.baseAddress!, range: NSRange(location: 0, length: length)) }
+            count = length
+        }
         self.lines = Self.lineRanges(units)
         rebuildColumns()
     }
@@ -104,6 +111,13 @@ public struct SourceIndex: Sendable {
         guard string.length > 0 else { return SourceSpan(0, 0) }
         return SourceSpan(string.paragraphRange(for: NSRange(location: min(max(0, offset), string.length), length: 0)))
     }
+    /// How many units at the start of one-based `line` satisfy `predicate`.
+    public func leadingUnits(ofLine line: Int, while predicate: (UInt16) -> Bool) -> Int {
+        let span = lines[line - 1]
+        var count = 0
+        while count < span.length, predicate(units[span.location + count]) { count += 1 }
+        return count
+    }
     /// The UTF-16 unit at `offset`, or 0 outside the source.
     public func unit(at offset: Int) -> UInt16 { offset >= 0 && offset < units.count ? units[offset] : 0 }
     public func text(in span: SourceSpan) -> String {
@@ -125,3 +139,19 @@ public struct SourceIndex: Sendable {
 }
 
 public enum SourceError: Error { case invalidRange, invalidUTF8 }
+
+extension String {
+    /// The string's UTF-8, in place when the string is native. The editor's text arrives bridged from
+    /// `NSString`, which has no UTF-8 to point at: Foundation transcodes that in bulk, where reading a
+    /// bridged string's `utf8` view, or making the string native, goes through the bridge a piece at a
+    /// time (measured on 10MB: about 14 ms against 85–105 ms). Only text Foundation will not encode, a lone
+    /// surrogate, takes the slow way, which encodes it as the standard library does.
+    public func withUTF8Bytes<Result>(_ body: (UnsafeBufferPointer<UInt8>) -> Result) -> Result {
+        if let result = utf8.withContiguousStorageIfAvailable(body) { return result }
+        if let data = (self as NSString).data(using: String.Encoding.utf8.rawValue) {
+            return data.withUnsafeBytes { body($0.bindMemory(to: UInt8.self)) }
+        }
+        var native = self
+        return native.withUTF8(body)
+    }
+}

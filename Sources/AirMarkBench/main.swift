@@ -88,6 +88,20 @@ if CommandLine.arguments.contains("--edits") {
     }
     exit(0)
 }
+
+// The editor never hands over a native string: its text is bridged from the text storage's NSString,
+// which has no UTF-8 to point at. Every other mode here measures native strings, so this one measures
+// the same work on the text as the app sees it.
+if CommandLine.arguments.contains("--bridged") {
+    for size in [1_000_000, 10_000_000] {
+        let native = String(repeating: fixture, count: size / fixture.utf8.count)
+        let bridged = NSMutableString(string: native).copy() as! String
+        func p50(_ body: () -> Void) -> Double { percentile((0..<5).map { _ in measure(body) }, 0.5) }
+        print(String(format: "BRIDGED bytes=%d parse_native=%.2fms parse_bridged=%.2fms",
+                     native.utf8.count, p50 { _ = MarkdownParser.parse(native) }, p50 { _ = MarkdownParser.parse(bridged) }))
+    }
+    exit(0)
+}
 // Inputs chosen to defeat the index and the math scanner rather than to look like real notes.
 // Each corpus is measured at doubling sizes; the exponent between neighbours (log2 of the time ratio)
 // is about 1 for linear work and about 2 for quadratic work, whatever the absolute times are.
