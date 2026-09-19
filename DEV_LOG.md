@@ -563,8 +563,34 @@ own commit with its input as a test. Two were holes in that day's work, three we
   later line that is one past its containers. Minimised by the fuzzer to `- ~~` / `  ===` / `1. b`.
 - **`Scripts/check-parser.sh`.** Lists the pinned swift-cmark and every place AirMark reads or writes cmark
   outside its API, then runs the core tests, the same under AddressSanitizer, 400 fuzz rounds per pool for
-  three seeds, and the partial-parse benchmarks. About three minutes after the first build. The sanitizer
+  three seeds, and the partial-parse benchmarks. About three minutes once built. The sanitizer
   runs Release: in Debug its padding makes the tree walk's frames large enough that the nesting tests
   overflow the parser's 16MB stack at a depth the app handles.
-- **Checked.** The script passes; seven seeds of 400 rounds per pool, about 330,000 partial parses, no
-  difference. 112 + 73 tests, Debug.
+- **Checked, then reviewed.** The script passed and seven seeds of 400 rounds per pool found nothing, and
+  that was not enough: a review agent ran seeds 8 to 40 and found two differences, and read cmark for a
+  third. All three are fixed below, each with its input kept in `foundDifferencesStayFixed`.
+
+### What the review of this found
+
+- **A regression of the setext fix above.** The underline's indentation was counted in spaces, so a tab
+  before it inside a list item or a quote (`- a` / tab `===`) was not taken for one, and the heading swallowed
+  the next line again. Indentation is now counted in columns from where the containers stop, as cmark does.
+- **Inline styles after link reference definitions were lost, older than all of this.** cmark takes the
+  definitions off the front of a paragraph and numbers the lines of the rest from the paragraph's first line,
+  so `**bold**` on the line after `[a]: /u` was looked for on the definition's line, not found, and left
+  unstyled; links too. The lines the definitions took are now added back, found from where the paragraph
+  really ends against where cmark put its last inline. The same numbering put a setext heading made from such
+  a paragraph at the definitions: it is now styled from its text, and its underline is the line before
+  cmark's end or cmark's end itself, whichever is one, instead of the first underline-shaped line (a `---`
+  after definitions is text). The reference parser is corrected the same way.
+- **A window could start after `$$` it needed, older than the fuzzer.** A paragraph of nothing but
+  definitions leaves no block, so a window starting at the next block left that text out, and a `$$` in it
+  paired differently. A window now starts at the blank line before its first block.
+- **The tests.** The reference parser's underline check knows nothing of lazy lines or four-column indents,
+  so the differential tests now compare setext headings by where they start and hold the parser's to what an
+  underline is. The fuzz test compared styles as sets, which misses a style given twice; it compares sorted
+  lists now. Its ratio of partial to whole parses was flaky for the references pool (as low as 3.1 against 4
+  over 40 seeds) and has its own floor. The script's list of places AirMark reaches into cmark missed a third
+  of them; it now names the map's entries, the chunks and the allocator too.
+- **Checked again.** The script passes (3 minutes 17 once built). Seeds 1 to 20 at 400 rounds per pool,
+  about 945,000 partial parses, no difference. 112 + 73 tests, Debug.

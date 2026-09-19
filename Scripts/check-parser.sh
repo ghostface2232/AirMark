@@ -9,11 +9,13 @@
 # fails to compile; a change to what they mean does not, which is what the steps below are for.
 #
 #   1. The core tests: the parser against the swift-markdown reference, `reparse` against `parse`.
-#   2. The same under AddressSanitizer, for the map entries AirMark allocates and cmark frees.
+#   2. The same under AddressSanitizer, for the map entries AirMark allocates and cmark frees: a
+#      use after free, a double free or an overflow. Not leaks, which it does not detect on macOS.
 #   3. A long fuzz of `reparse` against `parse`, which is where differences have shown up before.
 #   4. The partial-parse benchmarks, to see that windows are still partial where they should be.
 #
-# About 5 minutes, the first time about 8. FUZZ_ROUNDS and FUZZ_SEEDS lengthen or shorten step 3.
+# About three minutes once built; building the sanitized copy the first time adds several. FUZZ_ROUNDS
+# and FUZZ_SEEDS lengthen or shorten step 3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
@@ -33,9 +35,10 @@ run() {
 
 step "swift-cmark as resolved"
 python3 -c 'import json; [print(p["identity"], p["state"].get("version"), p["state"]["revision"]) for p in json.load(open("Package.resolved"))["pins"]]'
-echo "cmark fields read or written outside its API:"
-grep -nE 'pointee\.(refs|size|ref_size|mem|as\.|entry|url|title|attributes|is_attributes_reference|linebuf|current)|refmap' \
-  Sources/AirMarkCore/MarkdownTree.swift | sed 's/^/  /'
+echo "Where AirMark reaches into cmark past its API (MarkdownTree.swift): the parser and node fields,"
+echo "the reference map and its entries, the chunks and the allocator they are made with."
+grep -nE 'pointee|cmark_map|cmark_reference|cmark_chunk|mem\.|calloc|refmap|\.as\.' \
+  Sources/AirMarkCore/MarkdownTree.swift | sed 's/^/  /' || true
 
 step "1. core tests"
 run swift test --disable-sandbox --filter AirMarkCoreTests
@@ -50,7 +53,7 @@ step "3. fuzz, $rounds rounds per pool, seeds $seeds (Release)"
 AIRMARK_FUZZ_ROUNDS="$rounds" AIRMARK_FUZZ_SEEDS="$seeds" run swift test -c release --disable-sandbox --filter ReparseFuzzTests
 
 step "4. partial-parse benchmarks (Release)"
-swift build -c release --disable-sandbox --product AirMarkBench >/dev/null 2>&1
+run swift build -c release --disable-sandbox --product AirMarkBench
 .build/release/AirMarkBench --references
 .build/release/AirMarkBench --lists
 echo
