@@ -42,6 +42,18 @@ import AirMarkCore
         #expect(editor.source == source)
         #expect(editor.textKitFallbackCount == 0)
     }
+    /// A closed editor goes away, and takes its notification observers with it: block observers stay
+    /// registered until removed, and three of the editor's listen to every window in the app.
+    @Test func releasedEditorDeallocates() async throws {
+        weak var released: EditorController?
+        do {
+            let editor = try await make("# Heading\n\nBody **bold**")
+            editor.textView.insertText("x", replacementRange: NSRange(location: 0, length: 0))
+            released = editor
+        }
+        for _ in 0..<100 where released != nil { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(released == nil)
+    }
     @Test func editsKeepMarkdownAndUndo() async throws {
         let editor = try await make("hello")
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)

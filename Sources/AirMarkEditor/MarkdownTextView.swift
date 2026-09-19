@@ -40,12 +40,14 @@ import AirMarkCore
            editor?.convertToTask(before: selectedRange().location) == true { return }
         super.insertText(string, replacementRange: replacementRange)
     }
+    /// A list, task or quote prefix at the start of a line. Compiled once, not per Return.
+    private static let linePrefix = try! NSRegularExpression(pattern: "^([ \\t]*)([-+*]|[0-9]+[.)]|>)([ \\t]+)(\\[[ xX]\\][ \\t]+)?")
     public override func insertNewline(_ sender: Any?) {
-        guard !hasMarkedText(), selectedRange().length == 0 else { super.insertNewline(sender); return }
-        let selected = selectedRange(), paragraph = (string as NSString).paragraphRange(for: selected)
-        let before = (string as NSString).substring(with: NSRange(location: paragraph.location, length: selected.location - paragraph.location))
-        if let regex = try? NSRegularExpression(pattern: "^([ \\t]*)([-+*]|[0-9]+[.)]|>)([ \\t]+)(\\[[ xX]\\][ \\t]+)?"),
-           let match = regex.firstMatch(in: before, range: NSRange(location: 0, length: before.utf16.count)) {
+        guard !hasMarkedText(), selectedRange().length == 0, let text = editor?.text else { super.insertNewline(sender); return }
+        // The storage's own string: `string` bridges a copy of the whole document, and this read it three times.
+        let selected = selectedRange(), paragraph = text.paragraphRange(for: selected)
+        let before = text.substring(with: NSRange(location: paragraph.location, length: selected.location - paragraph.location))
+        if let match = Self.linePrefix.firstMatch(in: before, range: NSRange(location: 0, length: before.utf16.count)) {
             let ns = before as NSString
             var prefix = ns.substring(with: match.range)
             let content = ns.substring(from: NSMaxRange(match.range))
@@ -57,7 +59,7 @@ import AirMarkCore
                 // them to the next item empty, as a bulleted task's box is carried below.
                 if match.range(at: 4).location != NSNotFound { prefix += "[ ] " }
             } else { prefix = prefix.replacingOccurrences(of: "[x]", with: "[ ]").replacingOccurrences(of: "[X]", with: "[ ]") }
-            let newline = Self.lineEnding(of: paragraph, in: string as NSString)
+            let newline = Self.lineEnding(of: paragraph, in: text)
             editor?.performEdit(range: selected, replacement: newline + prefix)
         } else { super.insertNewline(sender) }
     }
