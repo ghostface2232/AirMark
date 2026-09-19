@@ -353,6 +353,12 @@ public enum MarkdownParser {
         /// found elsewhere nearby takes that shift for all its inline nodes. A delimited node that cannot be
         /// matched to its source is left unstyled.
         var inlineColumnShift: [Int: Int] = [:]
+        /// Lines to add to the inline positions of the paragraph or heading being walked. cmark takes
+        /// the link reference definitions off the front of a paragraph before it parses its inlines, and
+        /// then numbers the lines of what is left from the paragraph's first line, so every inline after
+        /// a definition was placed that many lines early: its delimiters were not found there and it
+        /// went unstyled, `**bold**` on the line after `[a]: /u` included.
+        var inlineLineShift = 0
         func offsets(_ r: MarkdownTree.Range, shift lower: Int, _ upper: Int) -> SourceSpan? {
             guard let a = index.offset(line: r.lowerLine, utf8Column: r.lowerColumn + lower),
                   let b = index.offset(line: r.upperLine, utf8Column: r.upperColumn + upper), b >= a, b <= index.utf16Count else { return nil }
@@ -370,8 +376,9 @@ public enum MarkdownParser {
             }
         }
         func span(_ node: MarkdownTree.Node) -> SourceSpan? {
-            guard let r = node.range else { return nil }
+            guard var r = node.range else { return nil }
             guard !node.isBlock else { return offsets(r, shift: 0, 0) }
+            r.lowerLine += inlineLineShift; r.upperLine += inlineLineShift
             let lowerLine = r.lowerLine, upperLine = r.upperLine
             let lower = inlineColumnShift[lowerLine] ?? 0, upper = inlineColumnShift[upperLine] ?? 0
             let estimated = offsets(r, shift: lower, upper)
@@ -487,6 +494,28 @@ public enum MarkdownParser {
             contentStart[line - 1] = offset; contentColumn[line - 1] = column
             return SourceSpan(start, offset - start)
         }
+        /// Whether one-based `line`'s content, past its containers, is a setext underline: up to three
+        /// columns of indentation, counted as cmark counts them from where the containers left off (a tab
+        /// they took part of is part of it), then only `=` or only `-`, then spaces and tabs. A lazy line
+        /// is not one.
+        func isSetextUnderline(_ line: Int) -> Bool {
+            guard line >= 1, line <= index.lines.count, contentStart[line - 1] != lazy else { return false }
+            let end = index.contentEnd(ofLine: line), column = contentColumn[line - 1]
+            let indented = indentation(from: max(contentStart[line - 1], index.lines[line - 1].location), column: column, to: end)
+            guard indented.column - column <= 3 else { return false }
+            var position = indented.offset
+            let mark = index.unit(at: position)
+            guard position < end, mark == 61 || mark == 45 else { return false }                          // "=" or "-"
+            while position < end, index.unit(at: position) == mark { position += 1 }
+            while position < end, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
+            return position == end
+        }
+        /// Lines the link reference definitions at the front of a paragraph took, found by where its last
+        /// inline really ends against where cmark numbered it; 0 when the last inline has no position.
+        func definitionLines(lastTextLine: Int, _ node: MarkdownTree.Node) -> Int {
+            guard let last = node.lastChild?.range else { return 0 }
+            return max(0, lastTextLine - last.upperLine)
+        }
         /// A list item's later lines start their content past the item's indentation, which cmark keeps
         /// as columns from where the containers around the item stop. A line indented less is blank or
         /// continues a paragraph lazily.
@@ -520,10 +549,12 @@ public enum MarkdownParser {
                 if topLevel {
                     if let span = span(node) { output.blocks.append(Block(span)) } else { blockSpansComplete = false }
                 }
-                let outer = inlineColumnShift
+                let outer = (inlineColumnShift, inlineLineShift)
                 inlineColumnShift = continuationShifts(node)
+                // A paragraph's last inline ends on its last line.
+                inlineLineShift = node.range.map { definitionLines(lastTextLine: $0.upperLine, node) } ?? 0
                 for child in node.children { walk(child, depth: depth + 1) }
-                inlineColumnShift = outer
+                (inlineColumnShift, inlineLineShift) = outer
                 return
             }
             // Plain text and line breaks are most nodes and add no style; their spans have no side
@@ -545,12 +576,24 @@ public enum MarkdownParser {
                 return
             }
             // cmark gives a setext heading, like a fenced block, the end of the line being read when it
-            // closes, and a heading closes on the line after its underline: the span took that line in,
-            // hid it as the underline, and left the underline showing. Before a blank line the span
-            // stopped short of nothing but the marker did, and hid only the line break. The heading ends
-            // with its underline, which is the line after its text.
-            if node.isSetextHeading, let last = node.lastChild?.range?.upperLine, last < index.lines.count {
-                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: last + 1) - s.location))
+            // closes, which is the line after its underline, or the underline itself at the end of the
+            // input: the span took the next line in, hid it as the underline, and left the underline
+            // showing. The heading ends with its underline, the one of those two lines that is one. (Not
+            // found from the heading's text: text cmark made from delimiters it did not match, such as a
+            // lone `~~`, has no position.)
+            //
+            // A heading made from a paragraph that began with link reference definitions keeps the
+            // paragraph's start, though the definitions are not its text, and its inlines are numbered
+            // from there as a paragraph's are. The heading's text starts where its first inline does.
+            var headingLines = 0, headingStart: Int?
+            if node.isSetextHeading, let range = node.range,
+               let underline = [range.upperLine - 1, range.upperLine].first(where: { $0 > range.lowerLine && isSetextUnderline($0) }) {
+                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: underline) - s.location))
+                headingLines = definitionLines(lastTextLine: underline - 1, node)
+                if headingLines > 0, let first = node.firstChild?.range,
+                   let start = index.offset(line: first.lowerLine + headingLines, utf8Column: first.lowerColumn), start < s.end {
+                    headingStart = start
+                }
             }
             // A fence left open ends with the container it is in, but cmark gives a fenced block the
             // end of the line being read when it closes, taking that for the closing fence; here it is
@@ -565,14 +608,16 @@ public enum MarkdownParser {
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch kind {
             case .heading:
-                let raw = index.text(in: s)
+                // The block keeps the definitions before a setext heading's text; the style does not.
+                let styled = headingStart.map { SourceSpan($0, s.end - $0) } ?? s
+                let raw = index.text(in: styled)
                 let prefix = raw.prefix { $0 == "#" || $0 == " " }.utf16.count
                 var markers: [SourceSpan] = []
-                if raw.hasPrefix("#") { markers.append(SourceSpan(s.location, prefix)) }
+                if raw.hasPrefix("#") { markers.append(SourceSpan(styled.location, prefix)) }
                 else if let last = raw.lastIndex(where: { $0.isNewline }) {                // "\r\n" is one Character
-                    markers.append(SourceSpan(s.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
+                    markers.append(SourceSpan(styled.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
                 }
-                add(.heading(node.headingLevel), markers: markers)
+                output.styles.append(StyleRun(span: styled, kind: .heading(node.headingLevel), markers: markers))
             case .strong: add(.strong, markers: edges(2))
             case .emphasis: add(.emphasis, markers: edges(1))
             case .strikethrough: add(.strike, markers: edges(2))
@@ -650,7 +695,10 @@ public enum MarkdownParser {
             default: break
             }
             let inside = kind == .blockQuote || kind == .listItem ? s.end : within
+            let outer = inlineLineShift
+            if kind == .heading { inlineLineShift = headingLines }
             for child in node.children { walk(child, within: inside, depth: depth + 1) }
+            inlineLineShift = outer
         }
         // Nodes point into the tree, which nothing after this line would otherwise keep alive.
         withExtendedLifetime(document) {

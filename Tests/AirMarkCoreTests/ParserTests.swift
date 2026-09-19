@@ -314,6 +314,17 @@ import Testing
     #expect(heading("Two\nlines\r\n---\r\nnext") == ["Two\nlines\r\n---", "\r\n---"])
     #expect(heading("- a\n  ===\n- b\n") == ["a\n  ===", "\n  ==="])
     #expect(heading("#tag\n===\nnext\n").first == "#tag\n===")
+    // Text cmark made from unmatched delimiters has no position; the underline is found in the source.
+    #expect(heading("- ~~\n  ===\n1. b\n") == ["~~\n  ===", "\n  ==="])
+    #expect(heading("> a\n> b\n> ---\nnext\n") == ["a\n> b\n> ---", "\n> ---"])
+    // Indentation is columns from where the containers stop, and a tab they took part of counts.
+    #expect(heading("- a\n\t===\nnext\n") == ["a\n\t===", "\n\t==="])
+    #expect(heading("- a\n  \t===\nnext\n") == ["a\n  \t===", "\n  \t==="])
+    #expect(heading("> a\n>\t===\nnext\n") == ["a\n>\t===", "\n>\t==="])
+    #expect(heading("a\n    ===\n===\nnext\n") == ["a\n    ===\n===", "\n==="])
+    // After link reference definitions, the heading is the text after them, and a `---` among the
+    // definitions' lines is text.
+    #expect(heading("[a]: /u\n---\nTitle\n---\nnext\n") == ["---\nTitle\n---", "\n---"])
     let blocks = MarkdownParser.parse("Title\n===\nnext\n").blocks.map(\.span)
     #expect(blocks == [SourceSpan(0, 9), SourceSpan(10, 4)])
 }

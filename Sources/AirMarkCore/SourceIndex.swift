@@ -111,6 +111,15 @@ public struct SourceIndex: Sendable {
         guard string.length > 0 else { return SourceSpan(0, 0) }
         return SourceSpan(string.paragraphRange(for: NSRange(location: min(max(0, offset), string.length), length: 0)))
     }
+    /// The one-based line holding `offset`.
+    public func lineNumber(at offset: Int) -> Int {
+        var low = 0, high = lines.count
+        while low < high {
+            let middle = (low + high) / 2
+            if lines[middle].location <= offset { low = middle + 1 } else { high = middle }
+        }
+        return max(1, low)
+    }
     /// Where one-based `line` ends, before its line break.
     public func contentEnd(ofLine line: Int) -> Int {
         let span = lines[line - 1]

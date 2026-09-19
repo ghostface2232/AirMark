@@ -45,15 +45,42 @@ struct ParserDifferentialTests {
     /// the same `>` without a list item's indentation before it. And
     /// the parser's quote markers must each be a `>` with at most three spaces before it and one space
     /// or tab after, none shared between two quotes.
+    ///
+    /// Setext headings are the other exception. cmark ends one on the line after its underline, and both
+    /// parsers correct that, but finding the underline takes the containers into account (a line indented
+    /// four columns, or one a quote continues lazily, is not one) and the reference, which has no container
+    /// cursor, cannot. So a setext heading's span and its block are compared by where they start, and the
+    /// parser's are held to what an underline is: its marker is a line break and a line that, past quote
+    /// markers and indentation, is only `=` or only `-`, and the heading ends where the marker does.
     static func expectSame(_ source: String, _ context: @autoclosure () -> String) -> Bool {
         let actual = MarkdownParser.parse(source, revision: 0, enforcingLimit: false), expected = ReferenceParser.parse(source)
-        func withoutQuoteMarkers(_ document: ParsedDocument) -> ParsedDocument {
+        let index = SourceIndex(source)
+        func isSetext(_ run: StyleRun) -> Bool {
+            if case .heading = run.kind { return index.unit(at: run.span.location) != 35 }                // "#"
+            return false
+        }
+        /// Quote markers dropped, and setext headings and their blocks reduced to their first line.
+        func normalized(_ document: ParsedDocument) -> ParsedDocument {
             var document = document
-            document.styles = document.styles.map { $0.kind == .quote ? StyleRun(span: $0.span, kind: .quote) : $0 }
+            let setext = Set(document.styles.filter(isSetext).map(\.span.location))
+            func firstLine(_ span: SourceSpan) -> SourceSpan { SourceSpan(span.location, index.contentEnd(ofLine: index.lineNumber(at: span.location)) - span.location) }
+            document.styles = document.styles.map { run in
+                if run.kind == .quote { return StyleRun(span: run.span, kind: .quote) }
+                return isSetext(run) ? StyleRun(span: firstLine(run.span), kind: run.kind) : run
+            }
+            document.blocks = document.blocks.map { setext.contains($0.location) ? Block(firstLine($0.span), isListItem: $0.isListItem) : $0 }
             return document
         }
-        guard BlockReparseTests.expectSame(withoutQuoteMarkers(actual), withoutQuoteMarkers(expected), context(), definitions: false) else { return false }
-        let index = SourceIndex(source)
+        guard BlockReparseTests.expectSame(normalized(actual), normalized(expected), context(), definitions: false) else { return false }
+        var headingsSound = true
+        for heading in actual.styles.filter(isSetext) {
+            let underline = heading.markers.last.map { index.text(in: $0) } ?? ""
+            let content = underline.drop { $0.isNewline }.drop { $0 == " " || $0 == "\t" || $0 == ">" }.trimmingCharacters(in: .whitespaces)
+            let shaped = underline.first?.isNewline == true && (content.first == "=" || content.first == "-") && content.allSatisfy { $0 == content.first }
+            if !shaped || heading.markers.last?.end != heading.span.end { headingsSound = false }
+        }
+        #expect(headingsSound, "setext headings \(actual.styles.filter(isSetext).map { index.text(in: $0.span).debugDescription }) \(context().prefix(300))")
+        guard headingsSound else { return false }
         let quotes = actual.styles.filter { $0.kind == .quote }, referenceQuotes = expected.styles.filter { $0.kind == .quote }
         let markers = quotes.flatMap(\.markers)
         var sound = Set(markers).count == markers.count, unsound: [String] = []
