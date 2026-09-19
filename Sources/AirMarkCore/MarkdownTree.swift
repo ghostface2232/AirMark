@@ -77,6 +77,9 @@ final class MarkdownTree {
         var children: Children { Children(cursor: cmark_node_first_child(pointer)) }
 
         var headingLevel: Int { Int(cmark_node_get_heading_level(pointer)) }
+        /// Columns from where a list item's marker may start to where its content does: what a later
+        /// line must be indented by to stay in the item. cmark has no accessor for this.
+        var itemIndentation: Int { Int(pointer.pointee.as.list.marker_offset + pointer.pointee.as.list.padding) }
         /// A heading made by underlining a paragraph. cmark has no accessor for this.
         var isSetextHeading: Bool { kind == .heading && pointer.pointee.as.heading.setext }
         /// A text node's text, a code span's or block's code, an HTML node's source.

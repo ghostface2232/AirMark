@@ -415,40 +415,91 @@ public enum MarkdownParser {
             }
             return shifts
         }
-        /// Where, on each line, the containers walked so far stop and their content starts; -1 is the
-        /// line's start. A block quote's marker on a line is the next `>` from there, and a list item's
-        /// content starts at the item's indentation, so each container reads one line's prefix once and
-        /// leaves the rest to the containers inside it.
+        /// Where, on each line, the containers walked so far stop and their content starts, as cmark
+        /// leaves it after matching them: an offset, and the column there, which differs from the
+        /// offset after a tab and may stand inside one that a container took part of. -1 is the line's
+        /// start; `lazy` is a line that continues a paragraph without its containers' markers, on which
+        /// the containers further in have none either. A block quote's marker on a line is the next `>`
+        /// from there, and a list item's content starts past its indentation, so each container reads
+        /// one line's prefix once and leaves the rest to the containers inside it.
         ///
         /// Matching `^[ \t]{0,3}>` over each quote's own text instead found, on every line after a
         /// nested quote's first, the outer quote's `>` again: the inner one was never hidden, and the
         /// text of a quote was copied and matched once for each quote around it.
+        let lazy = -2
         var contentStart = [Int](repeating: -1, count: index.lines.count)
-        /// The marker of a block quote on one-based `line`: up to three spaces, `>`, and one space or
-        /// tab. `first` is where the quote itself starts, on its first line. Nil on a line the quote only
-        /// continues lazily, which has no marker and none for the quotes inside either.
-        func quoteMarker(onLine line: Int, first: Int?) -> SourceSpan? {
-            let end = index.lines[line - 1].end
-            let start = first ?? (contentStart[line - 1] >= 0 ? contentStart[line - 1] : index.lines[line - 1].location)
-            var position = start
-            while position < end, position - start < 3, index.unit(at: position) == 32 { position += 1 }
-            guard position < end, index.unit(at: position) == 62 else { return nil }                 // ">"
-            position += 1
-            if position < end, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
-            contentStart[line - 1] = position
-            return SourceSpan(start, position - start)
+        var contentColumn = [Int](repeating: 0, count: index.lines.count)
+        /// Where the spaces and tabs at `offset` on one-based `line` end, with tabs to stops of four from
+        /// `column`. Every list item around a line asks this of the same run of spaces, each from a
+        /// little further in, so the answer is kept until a `>` moves the line past it.
+        var indentationEnd = [(offset: Int, column: Int)](repeating: (-1, 0), count: index.lines.count)
+        func indentation(onLine line: Int, from offset: Int, column: Int, to end: Int) -> (offset: Int, column: Int) {
+            if indentationEnd[line - 1].offset >= offset { return indentationEnd[line - 1] }
+            indentationEnd[line - 1] = indentation(from: offset, column: column, to: end)
+            return indentationEnd[line - 1]
         }
-        /// A list item's later lines start their content where its first line does: past the marker,
-        /// measured from the start of the line. A line indented less continues the item lazily.
+        func indentation(from offset: Int, column: Int, to end: Int) -> (offset: Int, column: Int) {
+            var offset = offset, column = column
+            while offset < end {
+                switch index.unit(at: offset) {
+                case 32: column += 1
+                case 9: column += 4 - column % 4
+                default: return (offset, column)
+                }
+                offset += 1
+            }
+            return (offset, column)
+        }
+        /// Moves `count` columns on, as cmark's `S_advance_offset` does: a tab wider than what is left
+        /// to take is taken in part, and the offset stays on it.
+        func advance(_ offset: inout Int, _ column: inout Int, by count: Int, to end: Int) {
+            var count = count
+            while count > 0, offset < end {
+                let width = index.unit(at: offset) == 9 ? 4 - column % 4 : 1
+                column += min(count, width)
+                if count >= width { offset += 1 }
+                count -= min(count, width)
+            }
+        }
+        /// The marker of a block quote on one-based `line`: up to three columns of indentation, `>`,
+        /// and one column of space after it. `first` is where the quote itself starts, on its first
+        /// line. Nil on a line the quote only continues lazily.
+        func quoteMarker(onLine line: Int, first: Int?) -> SourceSpan? {
+            let lineStart = index.lines[line - 1].location, end = index.contentEnd(ofLine: line)
+            guard contentStart[line - 1] != lazy || first != nil else { return nil }
+            let start = first ?? max(contentStart[line - 1], lineStart)
+            let mark: (offset: Int, column: Int)
+            if let first {
+                // The prefix before it is markers, spaces and tabs, a column each but for the tabs.
+                var column = 0
+                for offset in lineStart..<first { column += index.unit(at: offset) == 9 ? 4 - column % 4 : 1 }
+                mark = (first, column)
+            } else {
+                let column = contentColumn[line - 1]
+                mark = indentation(onLine: line, from: start, column: column, to: end)
+                guard mark.column - column <= 3, mark.offset < end, index.unit(at: mark.offset) == 62 else {   // ">"
+                    if mark.offset < end { contentStart[line - 1] = lazy }
+                    return nil
+                }
+            }
+            var offset = mark.offset + 1, column = mark.column + 1
+            if offset < end, index.unit(at: offset) == 32 || index.unit(at: offset) == 9 { advance(&offset, &column, by: 1, to: end) }
+            contentStart[line - 1] = offset; contentColumn[line - 1] = column
+            return SourceSpan(start, offset - start)
+        }
+        /// A list item's later lines start their content past the item's indentation, which cmark keeps
+        /// as columns from where the containers around the item stop. A line indented less is blank or
+        /// continues a paragraph lazily.
         func indentItemContent(_ item: MarkdownTree.Node, _ range: MarkdownTree.Range) {
             guard range.upperLine > range.lowerLine else { return }
-            let child = item.firstChild?.range
-            let indentation = (child.flatMap { $0.lowerLine == range.lowerLine ? $0.lowerColumn : nil } ?? range.lowerColumn + 2) - 1
-            for line in (range.lowerLine + 1)...min(range.upperLine, index.lines.count) {
-                let span = index.lines[line - 1]
-                var position = contentStart[line - 1] >= 0 ? contentStart[line - 1] : span.location
-                while position < span.end, position - span.location < indentation, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
-                contentStart[line - 1] = position
+            for line in (range.lowerLine + 1)...min(range.upperLine, index.lines.count) where contentStart[line - 1] != lazy {
+                let end = index.contentEnd(ofLine: line)
+                var offset = max(contentStart[line - 1], index.lines[line - 1].location), column = contentColumn[line - 1]
+                let content = indentation(onLine: line, from: offset, column: column, to: end)
+                if content.offset == end { (offset, column) = content }
+                else if content.column - column >= item.itemIndentation { advance(&offset, &column, by: item.itemIndentation, to: end) }
+                else { contentStart[line - 1] = lazy; continue }
+                contentStart[line - 1] = offset; contentColumn[line - 1] = column
             }
         }
         // Top-level blocks, and the items of top-level lists, are what `reparse` cuts between; their

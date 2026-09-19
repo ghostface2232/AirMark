@@ -58,7 +58,7 @@ struct ParserDifferentialTests {
         let markers = quotes.flatMap(\.markers)
         var sound = Set(markers).count == markers.count, unsound: [String] = []
         for marker in markers {
-            let text = index.text(in: marker).drop { $0 == " " }
+            let text = index.text(in: marker).drop { $0 == " " || $0 == "\t" }
             if marker.length - text.utf16.count > 3 || ![">", "> ", ">\t"].contains(String(text)) { sound = false; unsound.append("\(marker.location):" + index.text(in: marker).debugDescription) }
         }
         for (quote, reference) in zip(quotes, referenceQuotes) {
@@ -132,6 +132,17 @@ struct ParserDifferentialTests {
         #expect(markers("1. > q\n   > r\n\n   > s\n") == [["3:> ", "10:> "], ["18:> "]])
         #expect(markers("> - a\n>   > q\n>   > r\n") == [["0:> ", "6:> ", "14:> "], ["10:> ", "18:> "]])
         #expect(markers(" > a\r\n >\r\n > b") == [["1:> ", "6: >", "10: > "]])
+        // Indentation is columns, not characters: a tab here is four, which is past the item's content
+        // and makes `> b` text; with spaces to the same column it is the same. A wide marker's item needs
+        // as many columns, and a line short of them is lazy.
+        #expect(markers("- > a\n\t  > b\n") == [["2:> "]])
+        #expect(markers("- > a\n      > b\n") == [["2:> "]])
+        #expect(markers("100.\n     > a\n    > b\n") == [["10:> "]])
+        #expect(markers("100. > a\n     > b\n") == [["5:> ", "14:> "]])
+        // A tab that is exactly the item's indentation is the item's; one a quote takes a column of is
+        // left to what is inside, where it is indentation again.
+        #expect(markers("-\t> a\n\t> b\n") == [["2:> ", "7:> "]])
+        #expect(markers(">\t> a\n>\t> b\n") == [["0:>", "6:>"], ["2:> ", "7:\t> "]])
     }
 
     /// The tree is freed when the parse returns; nothing the parse hands back may point into it.
