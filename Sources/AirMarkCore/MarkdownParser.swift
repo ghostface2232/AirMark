@@ -487,6 +487,23 @@ public enum MarkdownParser {
             contentStart[line - 1] = offset; contentColumn[line - 1] = column
             return SourceSpan(start, offset - start)
         }
+        /// The first line after `first` whose content, past its containers, is a setext underline: up to
+        /// three spaces, then only `=` or only `-`, then spaces and tabs. A heading's text ends at the first
+        /// such line, since cmark takes it as the underline there. A lazy line is not one.
+        func setextUnderline(after first: Int, through last: Int) -> Int? {
+            guard first < last else { return nil }
+            for line in (first + 1)...min(last, index.lines.count) where contentStart[line - 1] != lazy {
+                let end = index.contentEnd(ofLine: line)
+                var position = max(contentStart[line - 1], index.lines[line - 1].location), spaces = 0
+                while position < end, spaces < 3, index.unit(at: position) == 32 { position += 1; spaces += 1 }
+                let mark = index.unit(at: position)
+                guard position < end, mark == 61 || mark == 45 else { continue }                          // "=" or "-"
+                while position < end, index.unit(at: position) == mark { position += 1 }
+                while position < end, index.unit(at: position) == 32 || index.unit(at: position) == 9 { position += 1 }
+                if position == end { return line }
+            }
+            return nil
+        }
         /// A list item's later lines start their content past the item's indentation, which cmark keeps
         /// as columns from where the containers around the item stop. A line indented less is blank or
         /// continues a paragraph lazily.
@@ -548,9 +565,10 @@ public enum MarkdownParser {
             // closes, and a heading closes on the line after its underline: the span took that line in,
             // hid it as the underline, and left the underline showing. Before a blank line the span
             // stopped short of nothing but the marker did, and hid only the line break. The heading ends
-            // with its underline, which is the line after its text.
-            if node.isSetextHeading, let last = node.lastChild?.range?.upperLine, last < index.lines.count {
-                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: last + 1) - s.location))
+            // with its underline. That is found in the source, not from the heading's text: text that
+            // cmark made from delimiters it did not match, such as a lone `~~`, has no position.
+            if node.isSetextHeading, let range = node.range, let underline = setextUnderline(after: range.lowerLine, through: range.upperLine) {
+                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: underline) - s.location))
             }
             // A fence left open ends with the container it is in, but cmark gives a fenced block the
             // end of the line being read when it closes, taking that for the closing fence; here it is

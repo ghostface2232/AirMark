@@ -124,8 +124,15 @@ enum ReferenceParser {
                 for child in node.children { walk(child) }
                 return
             }
-            if node is Heading, index.unit(at: s.location) != 35, let last = Array(node.children).last?.range?.upperBound.line, last < index.lines.count {
-                s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: last + 1) - s.location))
+            // The underline is the first later line that is one once quote markers and indentation are
+            // taken off; the parser finds it through its container cursor instead.
+            if node is Heading, index.unit(at: s.location) != 35, let range = node.range, range.upperBound.line > range.lowerBound.line {
+                for line in (range.lowerBound.line + 1)...min(range.upperBound.line, index.lines.count) {
+                    let text = index.text(in: index.lines[line - 1]).drop { $0 == " " || $0 == "\t" || $0 == ">" }.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let mark = text.first, mark == "=" || mark == "-", text.allSatisfy({ $0 == mark }) {
+                        s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: line) - s.location)); break
+                    }
+                }
             }
             let isList = node is UnorderedList || node is OrderedList
             if topLevel && !isList || topLevelItem { output.blocks.append(Block(s, isListItem: topLevelItem)) }

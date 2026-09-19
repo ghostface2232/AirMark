@@ -314,6 +314,9 @@ import Testing
     #expect(heading("Two\nlines\r\n---\r\nnext") == ["Two\nlines\r\n---", "\r\n---"])
     #expect(heading("- a\n  ===\n- b\n") == ["a\n  ===", "\n  ==="])
     #expect(heading("#tag\n===\nnext\n").first == "#tag\n===")
+    // Text cmark made from unmatched delimiters has no position; the underline is found in the source.
+    #expect(heading("- ~~\n  ===\n1. b\n") == ["~~\n  ===", "\n  ==="])
+    #expect(heading("> a\n> b\n> ---\nnext\n") == ["a\n> b\n> ---", "\n> ---"])
     let blocks = MarkdownParser.parse("Title\n===\nnext\n").blocks.map(\.span)
     #expect(blocks == [SourceSpan(0, 9), SourceSpan(10, 4)])
 }
