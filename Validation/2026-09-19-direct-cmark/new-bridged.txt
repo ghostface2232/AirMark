@@ -1,0 +1,2 @@
+BRIDGED bytes=999948 parse_native=36.87ms parse_bridged=36.54ms
+BRIDGED bytes=9999894 parse_native=366.18ms parse_bridged=362.97ms

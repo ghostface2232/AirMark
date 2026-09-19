@@ -322,6 +322,48 @@ after the review fixes below; the UI state after them is in that entry.
 - **Not end to end.** These stop when `performEdit` returns. Input-to-screen latency and the time for
   formatting to catch up after typing are different measurements and were not taken here.
 
+
+## 2026-09-19 — cmark's tree read directly, a flat edit shift, and a review
+
+`Validation/2026-09-19-direct-cmark/`. Release, base `fd44d09` in a separate worktree, runs alternated.
+
+- **A whole parse is five times cheaper.** Sampled at 10MB, cmark-gfm was 6% of a parse; swift-markdown
+  converting cmark's tree into its own was 37%, and walking that tree 43%, mostly dynamic casts from
+  `any Markup`. `MarkdownTree` reads cmark's nodes in place — same cmark-gfm 0.8.0, same options and
+  extensions, same position adjustments as swift-markdown's `Document(parsing:)`. p50: 100KB 19.1 → 3.5 ms,
+  1MB 193 → 35 ms, 10MB 1,959 → 374 ms, three alternating runs each. The two depth-256 adversarial corpora
+  did not move (1.0–1.1×); their cost is marker matching over each nested container's text.
+- **This keeps PLAN.md's rule and changes its letter.** PLAN.md leaves Markdown semantics to swift-markdown
+  and rules out a parser of our own. Semantics are still decided by the cmark-gfm that swift-markdown wraps,
+  at the version it pins; what was removed is the conversion layer. swift-markdown stays in the package as
+  the core tests' reference and is no longer linked into the app.
+- **Held to the old parser.** `ReferenceParser` is the previous `parse` word for word. 3,000 generated
+  documents, 300 documents through 10 random edits each, and every Markdown file in the repository, native
+  and bridged, produce identical styles, markers, elements, checkboxes and block spans. Dropping
+  `CMARK_OPT_SMART` or the backtick widening fails these tests; dropping the end-before-start guard does
+  not, and that guard is uncovered.
+- **The benchmarks parsed text the app never sees.** They use native strings; the editor's text is bridged
+  from `NSString`. At `fd44d09` 10MB parsed in 1,992 ms native and 2,222 ms bridged. The UTF-8 is now
+  produced once per parse, in bulk, for the estimates, the `]:` scan and cmark; `AirMarkBench --bridged`
+  measures both (10MB: 366 / 363 ms).
+- **An edit's shift is flat.** Moving the styles after an edit went style by style and recomputed each
+  reach from its markers; it is four passes over contiguous integers, and elements move through a
+  specialized protocol instead of a key path. `--edits` 1MB head 75 → 16 ms per 200 edits, interleaved. In
+  the editor at 10MB: head p50 4.12–4.35 → 1.19–1.20 ms, plain space max 7.32 → 4.80 ms, Return 2.05–2.19 →
+  0.61–0.63 ms. The earlier figures are 2026-09-18's, not re-run today. Still linear in what follows the
+  edit; not input-to-screen latency.
+- **Review fixes.** `EditorController` never removed its five block observers, so each closed document left
+  them registered, three listening to every window; removed in an `isolated deinit`, with a test that the
+  editor deallocates. `insertNewline` compiled its expression and bridged the document three times per
+  Return. `willProcessEditing` copied the replaced text only to count it. `fileLocationChanged` and
+  `adoptEnvironment` used `parsed`'s stale coordinates while a parse was pending. A scroll step in a
+  document with nothing to render still laid out screens of text to find render and release windows.
+- **Tried and dropped.** Bulk-encoding `DocumentBytes.data` measured the same 13 ms for a bridged 10MB
+  source as before; the cost is the transcoding. Reverted.
+- **Tests.** Debug and Release: 110 tests in 16 suites and 64 in 5 suites. Release app build succeeded and
+  has no swift-markdown symbols. UI tests not run: the runner timed out enabling automation mode before any
+  test, which needs someone at the console.
+
 ## 2026-09-19 — A quit with an edit pending, and where a quit can be cancelled
 
 `Validation/2026-09-19-quit-review/`. Debug, base `fd44d09` in a separate worktree.

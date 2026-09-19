@@ -1,0 +1,45 @@
+=== run 1 ===
+SCALE load=48ms parse=71ms elements=7693 rendered=23 keystroke p50=0.26ms p95=0.44ms max=1.57ms
+DOCUMENT_SCALE position=head samples=30 p50=0.53ms p95=0.74ms max=2.40ms layout p50=0.09ms p95=0.15ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.31ms p95=0.43ms max=0.47ms layout p50=0.20ms p95=0.21ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.13ms p95=0.18ms max=0.21ms layout p50=0.17ms p95=0.25ms
+DOCUMENT_SCALE_10MB position=head samples=30 p50=1.19ms p95=1.43ms max=2.87ms layout p50=0.09ms p95=0.12ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=0.61ms p95=0.76ms max=0.95ms layout p50=0.19ms p95=0.23ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.15ms max=0.42ms layout p50=0.17ms p95=0.18ms
+SPACE_SCALE bytes=1000090 check p50=0.0015ms p95=0.0054ms plain p50=0.822ms p95=1.455ms max=4.526ms shortcut p50=0.309ms p95=0.407ms max=0.489ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0016ms p95=0.0026ms plain p50=1.180ms p95=1.667ms max=4.666ms shortcut p50=0.654ms p95=0.854ms max=0.896ms
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.290ms p95=0.473ms max=1.615ms
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.285ms p95=0.395ms max=1.599ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=0.615ms p95=0.776ms max=2.087ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=0.615ms p95=0.828ms max=2.104ms
+✔ Test run with 12 tests in 1 suite passed after 20.223 seconds.
+=== run 2 ===
+SCALE load=49ms parse=70ms elements=7693 rendered=23 keystroke p50=0.27ms p95=0.66ms max=1.55ms
+DOCUMENT_SCALE position=head samples=30 p50=0.51ms p95=0.72ms max=2.22ms layout p50=0.08ms p95=0.14ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.30ms p95=0.40ms max=0.47ms layout p50=0.19ms p95=0.22ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.13ms p95=0.17ms max=0.24ms layout p50=0.18ms p95=0.20ms
+DOCUMENT_SCALE_10MB position=head samples=30 p50=1.19ms p95=1.38ms max=3.00ms layout p50=0.09ms p95=0.12ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=0.62ms p95=0.74ms max=0.94ms layout p50=0.19ms p95=0.26ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.14ms max=0.38ms layout p50=0.16ms p95=0.18ms
+SPACE_SCALE bytes=1000090 check p50=0.0015ms p95=0.0053ms plain p50=0.817ms p95=1.291ms max=4.580ms shortcut p50=0.304ms p95=0.496ms max=0.511ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0017ms p95=0.0027ms plain p50=1.153ms p95=1.612ms max=4.677ms shortcut p50=0.633ms p95=0.828ms max=0.832ms
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.289ms p95=0.485ms max=1.621ms
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.285ms p95=0.463ms max=1.576ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=0.626ms p95=0.753ms max=2.093ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=0.617ms p95=0.808ms max=2.110ms
+✔ Test run with 12 tests in 1 suite passed after 20.129 seconds.
+=== run 3 ===
+SCALE load=50ms parse=70ms elements=7693 rendered=23 keystroke p50=0.27ms p95=0.43ms max=1.57ms
+DOCUMENT_SCALE position=head samples=30 p50=0.53ms p95=0.75ms max=2.29ms layout p50=0.08ms p95=0.11ms
+DOCUMENT_SCALE position=middle samples=30 p50=0.33ms p95=0.48ms max=0.50ms layout p50=0.21ms p95=0.26ms
+DOCUMENT_SCALE position=tail samples=30 p50=0.15ms p95=0.21ms max=0.26ms layout p50=0.20ms p95=0.27ms
+DOCUMENT_SCALE_10MB position=head samples=30 p50=1.20ms p95=1.45ms max=2.84ms layout p50=0.09ms p95=0.13ms
+DOCUMENT_SCALE_10MB position=middle samples=30 p50=0.62ms p95=0.76ms max=0.92ms layout p50=0.18ms p95=0.23ms
+DOCUMENT_SCALE_10MB position=tail samples=30 p50=0.12ms p95=0.18ms max=0.43ms layout p50=0.15ms p95=0.19ms
+SPACE_SCALE bytes=1000090 check p50=0.0016ms p95=0.0055ms plain p50=0.816ms p95=1.366ms max=4.535ms shortcut p50=0.302ms p95=0.338ms max=0.492ms
+SPACE_SCALE_10MB bytes=10000120 check p50=0.0015ms p95=0.0025ms plain p50=1.138ms p95=1.892ms max=4.797ms shortcut p50=0.630ms p95=0.836ms max=0.871ms
+RETURN_SCALE newline=lf bytes=1000090 samples=30 p50=0.295ms p95=0.484ms max=1.640ms
+RETURN_SCALE newline=crlf bytes=1046248 samples=30 p50=0.284ms p95=0.404ms max=1.573ms
+RETURN_SCALE_10MB newline=lf bytes=10000120 samples=30 p50=0.613ms p95=0.750ms max=2.081ms
+RETURN_SCALE_10MB newline=crlf bytes=10461664 samples=30 p50=0.634ms p95=0.899ms max=2.079ms
+✔ Test run with 12 tests in 1 suite passed after 20.181 seconds.

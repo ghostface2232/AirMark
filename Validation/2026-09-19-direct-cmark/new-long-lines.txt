@@ -1,0 +1,3 @@
+LONG_LINE bytes=15000 lookups=1000 lookup_p50=0.092ms lookup_p95=0.094ms parse_p50=0.567ms parse_p95=0.680ms
+LONG_LINE bytes=60000 lookups=4000 lookup_p50=0.394ms lookup_p95=0.402ms parse_p50=2.303ms parse_p95=2.443ms
+LONG_LINE bytes=240000 lookups=16000 lookup_p50=1.688ms lookup_p95=1.704ms parse_p50=9.429ms parse_p95=9.601ms
