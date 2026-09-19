@@ -216,8 +216,13 @@ public enum MarkdownParser {
     /// literal. Lines inside a fenced code block are skipped. Counts restart at blank lines, which end
     /// paragraphs; CRLF is one line break. Linear; no parse.
     public static func inlineNestingEstimate(_ source: String) -> Int { withBytes(source, inlineNestingEstimate) }
-    static func inlineNestingEstimate(_ bytes: Bytes) -> Int {
-        var deepest = 0, emphasis = 0, brackets = 0, index = 0
+    static func inlineNestingEstimate(_ bytes: Bytes) -> Int { inlineNesting(bytes).estimate }
+    /// The estimate, and whether any line was taken for a fence. Fences are the one thing the estimate
+    /// carries from one paragraph to the next, so text without them is estimated the same alone as in
+    /// its document; `reparse` relies on that.
+    static func inlineNesting(_ source: String) -> (estimate: Int, fences: Bool) { withBytes(source) { inlineNesting($0) } }
+    static func inlineNesting(_ bytes: Bytes) -> (estimate: Int, fences: Bool) {
+        var deepest = 0, emphasis = 0, brackets = 0, index = 0, fences = false
         var fence: (character: UInt8, length: Int)? = nil
         func isSpace(_ byte: UInt8) -> Bool { byte == 32 || byte == 9 || byte == 10 || byte == 13 }
         func isWordCharacter(_ byte: UInt8) -> Bool { byte >= 0x80 || (48...57).contains(byte) || (65...90).contains(byte) || (97...122).contains(byte) }
@@ -234,6 +239,7 @@ public enum MarkdownParser {
                 // A backtick fence's info string cannot contain a backtick; such a line is inline code.
                 let isFence = run - start >= 3 && (bytes[start] == 126 || fence != nil || !bytes[run..<lineEnd].contains(96))
                 if isFence {
+                    fences = true
                     if let open = fence {
                         if open.character == bytes[start], run - start >= open.length { fence = nil }
                     } else {
@@ -276,7 +282,7 @@ public enum MarkdownParser {
             if blank { emphasis = 0; brackets = 0 }
             index = next
         }
-        return deepest
+        return (deepest, fences)
     }
 
     /// Compiled once: compiling this per list item was about an eighth of a 10MB parse.

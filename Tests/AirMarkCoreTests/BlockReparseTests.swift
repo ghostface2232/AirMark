@@ -185,6 +185,37 @@ struct BlockReparseTests {
         #expect(Self.expectSame(result.document, MarkdownParser.parse(text as String, revision: 1), "window \(result.changed)"))
     }
 
+    /// A document over the inline nesting limit is presented as plain text, and the limit is judged on
+    /// an estimate that is counted through a paragraph and skips what it takes for fenced code. A window
+    /// must get the verdict its document gets: where an edit moves a fence, and where items are cut apart
+    /// with no blank line to restart the count.
+    @Test func theNestingVerdictIsTheDocuments() {
+        // Nesting near the limit needs the stack the parsing worker gives it, not a test thread's.
+        let done = DispatchSemaphore(value: 0)
+        let thread = Thread { Self.checkTheNestingVerdict(); done.signal() }
+        thread.stackSize = 16 << 20
+        thread.start()
+        done.wait()
+    }
+    static func checkTheNestingVerdict() {
+        func reparse(_ old: String, _ range: NSRange, _ replacement: String) -> ParsedDocument? {
+            let new = (old as NSString).replacingCharacters(in: range, with: replacement)
+            let result = MarkdownParser.reparse(new, revision: 1, previous: MarkdownParser.parse(old), edits: [PresentationEdit(range: range, replacement: replacement)])
+            if let result { #expect(Self.expectSame(result.document, MarkdownParser.parse(new, revision: 1), "\(range) \(replacement.debugDescription)")) }
+            return result?.document
+        }
+        let stars = String(repeating: "*", count: 1_200)
+        // `~~~` in an HTML block hides the deep paragraph from the estimate; deleting it shows it.
+        let hidden = "<div>\n~~~\n</div>\n\npara one\n\npara two\n\npara three\n\n" + stars + "a" + stars + "\n"
+        #expect(!MarkdownParser.parse(hidden).styles.isEmpty)
+        #expect(reparse(hidden, NSRange(location: 6, length: 1), "") == nil)
+        // A thousand items that each open emphasis are under the limit together; one more is over it.
+        let list = (0..<1_000).map { _ in "- *open\n" }.joined() + "- last\n"
+        #expect(!MarkdownParser.parse(list).styles.isEmpty)
+        #expect(reparse(list, NSRange(location: (list as NSString).length - 5, length: 0), "*") == nil)
+        #expect(reparse(list, NSRange(location: (list as NSString).length - 1, length: 0), "x") != nil)
+    }
+
     /// cmark refuses reference links once their destinations add up to the size of the document
     /// (100KB for a smaller one). A window has less to spend than its document, so a document near the
     /// cap, where a refusal is possible at all, is parsed whole.

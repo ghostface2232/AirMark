@@ -74,17 +74,20 @@ extension MarkdownParser {
             itemCut = true
             return true
         }
-        /// Whether `$$` stands outside the window `start..<end` of blocks `lower...upper`, before the
-        /// blank lines on either side of it.
-        func displayMathAround(_ lower: Int, _ upper: Int, _ start: Int, _ end: Int) -> Bool {
+        /// The text around the window `start..<end` of blocks `lower...upper` out to the blank lines on
+        /// either side of it, in the old text.
+        func run(around lower: Int, _ upper: Int, _ start: Int, _ end: Int) -> (from: Int, to: Int) {
             var first = lower, last = upper
             while first > 0, !blankLine(between: blocks[first - 1].end, blocks[first].location) { first -= 1 }
             while last < count - 1, !blankLine(between: blocks[last].end, blocks[last + 1].location) { last += 1 }
-            let from = first == 0 ? 0 : blocks[first].location, to = last == count - 1 ? old.length : blocks[last + 1].location
+            return (min(start, first == 0 ? 0 : blocks[first].location), max(end, last == count - 1 ? old.length : blocks[last + 1].location))
+        }
+        /// Whether `$$` stands in `run` outside the window `start..<end`.
+        func displayMath(in run: (from: Int, to: Int), outside start: Int, _ end: Int) -> Bool {
             func found(_ lower: Int, _ upper: Int) -> Bool {
                 upper > lower && old.range(of: "$$", options: .literal, range: NSRange(location: lower, length: upper - lower)).location != NSNotFound
             }
-            return found(min(from, start), start) || found(end, max(to, end))
+            return found(run.from, start) || found(end, run.to)
         }
         let limit = max(65_536, old.length / 4)
         var margin = 1
@@ -98,18 +101,26 @@ extension MarkdownParser {
             let oldEnd = upper == count - 1 ? old.length : old.lineRange(for: NSRange(location: blocks[upper + 1].location, length: 0)).location
             guard oldEnd - start <= limit || whole else { return nil }
             let window = SourceSpan(start, oldEnd + delta - start)
-            if itemCut, displayMathAround(lower, upper, start, oldEnd) { betweenItems = false; continue }
+            let around = itemCut ? run(around: lower, upper, start, oldEnd) : (from: start, to: oldEnd)
+            if itemCut, displayMath(in: around, outside: start, oldEnd) { betweenItems = false; continue }
             let text = new.substring(with: window.nsRange)
-            guard nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
+            // `parse` presents a document over a nesting limit as plain text, and the result here has to
+            // be what it would give. Container nesting is estimated line by line, so the window's lines
+            // answer for themselves and the rest were under the limit before. Inline nesting is counted
+            // through a paragraph, up to a blank line, so between items the count is taken over the text
+            // out to the blank lines, where the document's count restarts too. And it skips what it takes
+            // for fenced code: a fence line in the window, before or after the edit, can change what is
+            // skipped anywhere below, and then the whole text is estimated, as `parse` would.
+            let oldText = old.substring(with: NSRange(location: start, length: oldEnd - start))
+            var inline = inlineNesting(itemCut ? new.substring(with: NSRange(location: around.from, length: around.to + delta - around.from)) : text)
+            if inline.fences || inlineNesting(oldText).fences { inline = inlineNesting(source) }
+            guard nestingEstimate(text) <= nestingLimit, inline.estimate <= inlineNestingLimit else { return nil }
             // The definitions the window held, and where they stand among the document's. Two equal
             // runs are interchangeable: either way the parse below ranks the same definitions in the
             // same order as the document does.
             let all = previous.definitions
             var held: [ReferenceDefinition] = []
-            if !all.isEmpty {
-                let oldText = old.substring(with: NSRange(location: start, length: oldEnd - start))
-                if mayDefineReferences(oldText) { held = parse(oldText, revision: revision).definitions }
-            }
+            if !all.isEmpty, mayDefineReferences(oldText) { held = parse(oldText, revision: revision).definitions }
             guard let position = held.isEmpty ? all.count : (0...(all.count - min(all.count, held.count))).first(where: { all[$0...].starts(with: held) }),
                   let part = parse(text, revision: revision, enforcingLimit: true, before: Array(all[..<position]), after: Array(all[(position + held.count)...])),
                   part.definitions == held else { return nil }
