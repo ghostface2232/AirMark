@@ -7,8 +7,9 @@ import Testing
 /// found five differences that `BlockReparseTests` had not; each pool keeps the lines that found them.
 ///
 /// Unlike `BlockReparseTests`, half the steps continue from the partial result rather than from a whole
-/// parse, so what a partial parse carries forward (its definitions, its expansion count, its blocks) is
-/// used again by the next one. One round in four edits at raw UTF-16 offsets, which can split a surrogate
+/// parse, so what a partial parse carries forward (its definitions and its blocks) is used again by the
+/// next one. The expansion count it carries only makes `reparse` decline, and these documents never come
+/// near the cap, so that is not tested here but in `BlockReparseTests`. One round in four edits at raw UTF-16 offsets, which can split a surrogate
 /// pair or a CRLF, as the editor never does; the result must still equal the whole parse.
 ///
 /// A short run is part of the suite. Longer ones, for a parser change or a swift-cmark upgrade:
@@ -51,10 +52,12 @@ struct ReparseFuzzTests {
 
     /// The fields that differ between two parses; empty when they are the same.
     static func differences(_ actual: ParsedDocument, _ expected: ParsedDocument) -> [String] {
-        let styles = (Set(BlockReparseTests.canonical(actual)), Set(BlockReparseTests.canonical(expected)))
+        // Compared as sorted lists, so a style given twice is a difference; as sets it was not.
+        let styles = (BlockReparseTests.canonical(actual), BlockReparseTests.canonical(expected))
         var result: [String] = []
         if styles.0 != styles.1 {
-            result.append("styles only in reparse \(styles.0.subtracting(styles.1).sorted().prefix(3)), only in parse \(styles.1.subtracting(styles.0).sorted().prefix(3))")
+            let sets = (Set(styles.0), Set(styles.1))
+            result.append("styles (\(styles.0.count) against \(styles.1.count)) only in reparse \(sets.0.subtracting(sets.1).sorted().prefix(3)), only in parse \(sets.1.subtracting(sets.0).sorted().prefix(3))")
         }
         if actual.elements != expected.elements { result.append("elements \(actual.elements.map(\.span)) != \(expected.elements.map(\.span))") }
         if actual.checkboxes != expected.checkboxes { result.append("checkboxes") }
@@ -148,8 +151,11 @@ struct ReparseFuzzTests {
         for seed in Self.seeds {
             let run = Self.run(pool: pool, seed: seed, rounds: Self.rounds)
             for failure in run.failures { Issue.record(Comment(rawValue: failure)) }
-            // Most steps must reparse in part, or the comparison says little.
-            #expect(run.partial > run.whole * 4, "pool \(pool) seed \(seed): partial \(run.partial), whole \(run.whole)")
+            // Most steps must reparse in part, or the comparison says little. Documents from the references
+            // pool change a definition often, which parses whole: over 40 seeds its ratio went as low as 3.1
+            // at the default length, and the others stayed above 20.
+            let floor = pool == "references" ? 2 : 4
+            #expect(run.partial > run.whole * floor, "pool \(pool) seed \(seed): partial \(run.partial), whole \(run.whole)")
             if Self.rounds > 60 { print("FUZZ pool=\(pool) seed=\(seed) rounds=\(Self.rounds) partial=\(run.partial) small=\(run.small) whole=\(run.whole) failures=\(run.failures.count)") }
         }
     }
@@ -171,6 +177,11 @@ struct ReparseFuzzTests {
         // A setext heading whose text is a lone `~~`, which has no position; found by this suite's first long run.
         #expect(reproduce("-- n\n- !  a](\n- ~~\n  ===\n1. b\n", NSRange(location: 5, length: 1), "\r\n") == nil)
         #expect(reproduce(" > t\n  > ===\n-\t- n\n- ~~\n  ===\n1. b\n", NSRange(location: 14, length: 1), "") == nil)
+        // `$$` in a paragraph of only definitions, before the window: found at seed 8, older than the fuzzer.
+        #expect(reproduce("[c]:\n\n[c]:\n  /$$c\n- text [a]\n[b]: /$$'title'\n- ite#m\n[x][S`ẞ]\n", NSRange(location: 57, length: 0), "|") == nil)
+        // A tab before an underline in a container: found at seeds 11 and 12.
+        #expect(reproduce("x\n\n- a\n\t===\n- b\n", NSRange(location: 0, length: 1), "y") == nil)
+        #expect(reproduce("* - -\n- t\n  \t---\n- *a\n", NSRange(location: 4, length: 0), "|") == nil)
         let stars = String(repeating: "*", count: 1_200)
         #expect(reproduce("<div>\n~~~\n</div>\n\npara one\n\npara two\n\npara three\n\n" + stars + "a" + stars + "\n", NSRange(location: 6, length: 1), "") == nil)
     }
