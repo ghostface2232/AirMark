@@ -51,20 +51,22 @@ extension MarkdownParser {
         // Touched blocks are `touchedFirst...touchedLast` (empty when the edit lies between blocks).
         let touchedFirst = firstIndex(blocks) { $0.end >= dirty.location }
         let touchedLast = firstIndex(blocks) { $0.location > dirtyOldEnd } - 1
-        func blankLine(between lower: Int, _ upper: Int) -> Bool {
-            var index = lower, lineStart = false
+        func blankLine(between lower: Int, _ upper: Int) -> Bool { lastBlankLine(between: lower, upper) != nil }
+        /// Where the line after the last blank line in `lower..<upper` starts, or nil when there is none.
+        func lastBlankLine(between lower: Int, _ upper: Int) -> Int? {
+            var index = lower, lineStart = false, found: Int?
             while index < upper {
                 let unit = old.character(at: index)
                 if unit == 10 || unit == 13 {
                     if unit == 13, index + 1 < upper, old.character(at: index + 1) == 10 { index += 1 }
-                    if lineStart { return true }
+                    if lineStart { found = index + 1 }
                     lineStart = true
                 } else if unit != 32 && unit != 9 {
                     lineStart = false
                 }
                 index += 1
             }
-            return false
+            return found
         }
         var betweenItems = true
         /// Whether the window may be cut before block `index`; `itemCut` reports a cut with no blank line.
@@ -97,7 +99,11 @@ extension MarkdownParser {
             while lower > 0, !cut(before: lower, itemCut: &itemCut) { lower -= 1 }
             while upper < count - 1, !cut(before: upper + 1, itemCut: &itemCut) { upper += 1 }
             let whole = lower == 0 && upper == count - 1
-            let start = lower == 0 ? 0 : old.lineRange(for: NSRange(location: blocks[lower].location, length: 0)).location
+            // From the blank line before the first block, not from the block: a paragraph of nothing but
+            // link reference definitions leaves no block, and its text, `$$` included, belongs to the window
+            // as much as the blocks do. Between two items there is no blank line and nothing between them.
+            let start = lower == 0 ? 0 : lastBlankLine(between: blocks[lower - 1].end, blocks[lower].location)
+                ?? old.lineRange(for: NSRange(location: blocks[lower].location, length: 0)).location
             let oldEnd = upper == count - 1 ? old.length : old.lineRange(for: NSRange(location: blocks[upper + 1].location, length: 0)).location
             guard oldEnd - start <= limit || whole else { return nil }
             let window = SourceSpan(start, oldEnd + delta - start)
