@@ -322,3 +322,27 @@ after the review fixes below; the UI state after them is in that entry.
 - **Not end to end.** These stop when `performEdit` returns. Input-to-screen latency and the time for
   formatting to catch up after typing are different measurements and were not taken here.
 
+## 2026-09-19 — A quit with an edit pending, and where a quit can be cancelled
+
+`Validation/2026-09-19-quit-review/`. Debug, base `fd44d09` in a separate worktree.
+
+- **The case left open was not there.** A probe app logging AppKit's order shows that every point where
+  a quit can be called off, Cmd-Q or a logout Apple Event, comes before `applicationShouldTerminate`,
+  and nothing after `.terminateNow` does. The documents of a clean quit close after
+  `applicationWillTerminate`, not merely after the delegate.
+- **A quit right after an edit lost the session.** With any document edited, AppKit reviews and closes
+  every document, clean ones too, before the delegate. Each close wrote `.closed`, and the delegate found
+  nothing to record. `testQuitRightAfterAnEditRecordsTheDocumentAsQuit` (Edit ▸ Paste, then quit through
+  the menu, nothing typed) fails on the base with `closed`.
+- **Fix.** `AirMarkDocumentController.reviewUnsavedDocuments` begins the quit, recording `.quit` and
+  setting the flag before AppKit's review, and clears the flag when the review's `didReviewAll` answer
+  says the quit was cancelled. That answer is the callback the earlier note said did not exist, and the
+  quit now begins before a point that can cancel it. A close during a quit writes `.quit` again, keeping
+  the window order taken when the quit began. An edited document at close is still discarded, which is
+  what Delete in the review panel means.
+- **Tests.** Three new UI tests pass. The Cancel test fails with the flag-clearing line removed. The
+  existing quit and session tests and all five typing tests pass. The typing tests now run under PriType's
+  English mode instead of ABC, because PriType is the only input method on the machine they run on. Unit:
+  109 + 60. One batch run had `testCancelledCloseKeepsTheDraftAfterRelaunch` miss its sheet; it passed
+  alone on base and fix and in a full rerun.
+- **Not verified.** A real logout; the review panel's Save; Release.
