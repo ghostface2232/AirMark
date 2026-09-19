@@ -7,8 +7,9 @@ import Markdown
 /// `MarkdownParser.finish`, and the marker helpers are shared: what differs, and what the
 /// differential tests compare, is how the tree is reached. One thing was added since: a top-level
 /// list is recorded as its items, as the parser now records it, so that `blocks` stays comparable.
-/// And one thing was corrected in both: a setext heading ends with its underline, not on the line
-/// after it, where cmark puts it.
+/// And two things were corrected in both: a setext heading ends with its underline, not on the line
+/// after it, where cmark puts it; and the inlines of a paragraph or heading that begins with link
+/// reference definitions are moved down by the lines the definitions took, which cmark numbers from.
 enum ReferenceParser {
     static func parse(_ source: String, revision: UInt64 = 0) -> ParsedDocument {
         let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
@@ -26,6 +27,7 @@ enum ReferenceParser {
         /// found elsewhere nearby takes that shift for all its inline nodes. A delimited node that cannot be
         /// matched to its source is left unstyled.
         var inlineColumnShift: [Int: Int] = [:]
+        var inlineLineShift = 0
         func offsets(_ r: SourceRange, shift lower: Int, _ upper: Int) -> SourceSpan? {
             guard let a = index.offset(line: r.lowerBound.line, utf8Column: r.lowerBound.column + lower),
                   let b = index.offset(line: r.upperBound.line, utf8Column: r.upperBound.column + upper), b >= a, b <= index.utf16Count else { return nil }
@@ -43,8 +45,10 @@ enum ReferenceParser {
             }
         }
         func span(_ node: any Markup) -> SourceSpan? {
-            guard let r = node.range else { return nil }
+            guard var r = node.range else { return nil }
             guard !(node is BlockMarkup) else { return offsets(r, shift: 0, 0) }
+            r = SourceLocation(line: r.lowerBound.line + inlineLineShift, column: r.lowerBound.column, source: nil)
+                ..< SourceLocation(line: r.upperBound.line + inlineLineShift, column: r.upperBound.column, source: nil)
             let lowerLine = r.lowerBound.line, upperLine = r.upperBound.line
             let lower = inlineColumnShift[lowerLine] ?? 0, upper = inlineColumnShift[upperLine] ?? 0
             let estimated = offsets(r, shift: lower, upper)
@@ -106,10 +110,11 @@ enum ReferenceParser {
                 if topLevel {
                     if let span = span(paragraph) { output.blocks.append(Block(span)) } else { blockSpansComplete = false }
                 }
-                let outer = inlineColumnShift
+                let outer = (inlineColumnShift, inlineLineShift)
                 inlineColumnShift = continuationShifts(paragraph)
+                if let range = paragraph.range, let last = Array(paragraph.children).last?.range { inlineLineShift = max(0, range.upperBound.line - last.upperBound.line) }
                 for child in node.children { walk(child) }
-                inlineColumnShift = outer
+                (inlineColumnShift, inlineLineShift) = outer
                 return
             }
             // Plain text and line breaks are most nodes and add no style; their spans have no side
@@ -124,14 +129,23 @@ enum ReferenceParser {
                 for child in node.children { walk(child) }
                 return
             }
-            // The underline is the first later line that is one once quote markers and indentation are
-            // taken off; the parser finds it through its container cursor instead.
-            if node is Heading, index.unit(at: s.location) != 35, let range = node.range, range.upperBound.line > range.lowerBound.line {
-                for line in (range.lowerBound.line + 1)...min(range.upperBound.line, index.lines.count) {
+            // Roughly: the line before cmark's end, or its end, whichever is an underline once quote markers
+            // and indentation are taken off. It knows nothing of lazy lines or four-column indentation,
+            // which the parser's container cursor does, so the differential tests compare setext headings
+            // by where they start.
+            var headingLines = 0, headingStart: Int?
+            if node is Heading, index.unit(at: s.location) != 35, let range = node.range {
+                func isUnderline(_ line: Int) -> Bool {
+                    guard line > range.lowerBound.line, line <= index.lines.count else { return false }
                     let text = index.text(in: index.lines[line - 1]).drop { $0 == " " || $0 == "\t" || $0 == ">" }.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let mark = text.first, mark == "=" || mark == "-", text.allSatisfy({ $0 == mark }) {
-                        s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: line) - s.location)); break
-                    }
+                    return text.first.map { ($0 == "=" || $0 == "-") && text.allSatisfy { $0 == text.first } } ?? false
+                }
+                if let underline = [range.upperBound.line - 1, range.upperBound.line].first(where: isUnderline) {
+                    s = SourceSpan(s.location, max(0, index.contentEnd(ofLine: underline) - s.location))
+                    let children = Array(node.children)
+                    if let last = children.last?.range { headingLines = max(0, underline - 1 - last.upperBound.line) }
+                    if headingLines > 0, let first = children.first?.range,
+                       let start = index.offset(line: first.lowerBound.line + headingLines, utf8Column: first.lowerBound.column), start < s.end { headingStart = start }
                 }
             }
             let isList = node is UnorderedList || node is OrderedList
@@ -144,14 +158,15 @@ enum ReferenceParser {
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
             switch node {
             case let heading as Heading:
-                let raw = index.text(in: s)
+                let styled = headingStart.map { SourceSpan($0, s.end - $0) } ?? s
+                let raw = index.text(in: styled)
                 let prefix = raw.prefix { $0 == "#" || $0 == " " }.utf16.count
                 var markers: [SourceSpan] = []
-                if raw.hasPrefix("#") { markers.append(SourceSpan(s.location, prefix)) }
+                if raw.hasPrefix("#") { markers.append(SourceSpan(styled.location, prefix)) }
                 else if let last = raw.lastIndex(where: { $0.isNewline }) {                // "\r\n" is one Character
-                    markers.append(SourceSpan(s.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
+                    markers.append(SourceSpan(styled.location + last.utf16Offset(in: raw), raw[last...].utf16.count))
                 }
-                add(.heading(heading.level), markers: markers)
+                output.styles.append(StyleRun(span: styled, kind: .heading(heading.level), markers: markers))
             case is Strong: add(.strong, markers: edges(2))
             case is Emphasis: add(.emphasis, markers: edges(1))
             case is Strikethrough: add(.strike, markers: edges(2))
@@ -229,7 +244,10 @@ enum ReferenceParser {
             case is HTMLBlock, is InlineHTML: protected.append(s)
             default: break
             }
+            let outer = inlineLineShift
+            if node is Heading { inlineLineShift = headingLines }
             for child in node.children { walk(child) }
+            inlineLineShift = outer
         }
         for child in document.children { walk(child, topLevel: true) }
         if !blockSpansComplete { output.blocks.removeAll() }
