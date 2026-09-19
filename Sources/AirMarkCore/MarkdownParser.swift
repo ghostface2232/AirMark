@@ -438,7 +438,8 @@ public enum MarkdownParser {
         // Top-level blocks are what `reparse` cuts between; their spans are the ones `walk` computes
         // anyway, except for a paragraph, whose own span it has no other use for.
         var blockSpansComplete = true
-        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false) {
+        /// `within` is where the block quote or list item around the node ends.
+        func walk(_ node: MarkdownTree.Node, topLevel: Bool = false, within: Int? = nil) {
             let kind = node.kind
             if kind == .paragraph {
                 if topLevel {
@@ -453,11 +454,15 @@ public enum MarkdownParser {
             // Plain text and line breaks are most nodes and add no style; their spans have no side
             // effects (no delimiters to match), so skip computing them.
             if kind == .text || kind == .softBreak || kind == .lineBreak { return }
-            guard let s = span(node) else {
+            guard var s = span(node) else {
                 if topLevel { blockSpansComplete = false }
-                for child in node.children { walk(child) }
+                for child in node.children { walk(child, within: within) }
                 return
             }
+            // A fence left open ends with the container it is in, but cmark gives a fenced block the
+            // end of the line being read when it closes, taking that for the closing fence; here it is
+            // the first line after the container, which was then styled as code and kept from math.
+            if kind == .codeBlock, let within, s.end > within { s = SourceSpan(s.location, max(0, within - s.location)) }
             if topLevel { output.blocks.append(s) }
             func add(_ kind: StyleKind, markers: [SourceSpan] = []) { output.styles.append(StyleRun(span: s, kind: kind, markers: markers)) }
             func edges(_ n: Int) -> [SourceSpan] { s.length >= n * 2 ? [SourceSpan(s.location, n), SourceSpan(s.end - n, n)] : [] }
@@ -547,7 +552,8 @@ public enum MarkdownParser {
             case .htmlBlock, .inlineHTML: protected.append(s)
             default: break
             }
-            for child in node.children { walk(child) }
+            let inside = kind == .blockQuote || kind == .listItem ? s.end : within
+            for child in node.children { walk(child, within: inside) }
         }
         // Nodes point into the tree, which nothing after this line would otherwise keep alive.
         withExtendedLifetime(document) {

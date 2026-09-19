@@ -265,3 +265,21 @@ import Testing
     #expect(MarkdownParser.inlineNestingEstimate(source) < 100, "estimate \(MarkdownParser.inlineNestingEstimate(source))")
     #expect(MarkdownParser.parse(source).styles.contains { $0.kind == .strong })
 }
+
+/// A fence left open inside a list item or a block quote ends where the item or the quote ends. cmark
+/// reports such a block as ending on the line that closed it, which is the line after.
+@Test func openFenceEndsWithItsContainer() {
+    func codeBlocks(_ source: String) -> [String] {
+        let index = SourceIndex(source)
+        return MarkdownParser.parse(source).styles.filter { $0.kind == .codeBlock }.map { index.text(in: $0.span) }
+    }
+    #expect(codeBlocks("- ```\n  code\n- next **b**\n") == ["```\n  code"])
+    // The blank line is inside the fence, so it is code; `para` is not.
+    #expect(codeBlocks("- ```\n  code\n\npara\n") == ["```\n  code\n"])
+    #expect(codeBlocks("> ```\n> code\npara\n") == ["```\n> code"])
+    #expect(codeBlocks("- ```\n  code\n  ```\n- next\n") == ["```\n  code\n  ```"])
+    // What follows is Markdown again: its math is found and a diagram fence takes only its own lines.
+    #expect(MarkdownParser.parse("- ```\n  code\n\npara $x$\n").elements.map(\.content) == ["x"])
+    let diagram = MarkdownParser.parse("- ```mermaid\n  graph TD\n- next\n")
+    #expect(diagram.elements.map(\.span) == [SourceSpan(2, 21)])
+}
