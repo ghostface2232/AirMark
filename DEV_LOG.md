@@ -547,3 +547,24 @@ own commit with its input as a test. Two were holes in that day's work, three we
   keys the 45 ms parse delay restarts with nearly every key and the 150 ms staleness limit starts the
   parse. The partial parse is about a millisecond now, so the delay is all of it.
 - **Tests.** 112 + 71, Debug.
+
+## 2026-09-20 — The review's fuzzer kept, and a check to run before touching cmark
+
+- **`ReparseFuzzTests`.** The fuzzer that found five differences in review now lives in the core tests,
+  with its five pools of lines (lists, references, math, quotes, exotic) and 36 insertions. Unlike
+  `BlockReparseTests`, half its steps continue from the partial result instead of a whole parse, so what a
+  partial parse carries forward is used again; one round in four edits at raw UTF-16 offsets. A difference is
+  reported reduced to the fewest lines that still show it, as a `reproduce(…)` call to paste into a test.
+  60 rounds per pool run with the suite (about a second); `AIRMARK_FUZZ_ROUNDS` and `AIRMARK_FUZZ_SEEDS`
+  lengthen it. It catches the setext fix and the `$$` rule when either is taken out.
+- **It found one more on its first long run.** A setext heading whose text is a lone `~~` swallowed the
+  next line again: cmark gives text it made from unmatched delimiters no position, and the setext fix
+  found the underline from the heading's last child. The underline is now found in the source, the first
+  later line that is one past its containers. Minimised by the fuzzer to `- ~~` / `  ===` / `1. b`.
+- **`Scripts/check-parser.sh`.** Lists the pinned swift-cmark and every place AirMark reads or writes cmark
+  outside its API, then runs the core tests, the same under AddressSanitizer, 400 fuzz rounds per pool for
+  three seeds, and the partial-parse benchmarks. About three minutes after the first build. The sanitizer
+  runs Release: in Debug its padding makes the tree walk's frames large enough that the nesting tests
+  overflow the parser's 16MB stack at a depth the app handles.
+- **Checked.** The script passes; seven seeds of 400 rounds per pool, about 330,000 partial parses, no
+  difference. 112 + 73 tests, Debug.
