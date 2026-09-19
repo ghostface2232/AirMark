@@ -521,3 +521,29 @@ own commit with its input as a test. Two were holes in that day's work, three we
   marker starts at its `>` while later lines include the spaces before it.
 - **Tests.** 111 + 71, Debug and Release. Per 1MB after the fixes: normal 35.6 ms, nested-list-depth-256
   16.9, nested-quote-depth-256 30.6; `--lists` flat 2.2 ms, `--references` 1.0 ms.
+
+## 2026-09-19 — Typing measured to the draw, and a regression it caught the same day
+
+`Validation/2026-09-19-typing-latency/`. Release, 200 keys 50 ms apart, three runs with elements at 1MB and
+10MB and one of prose.
+
+- **The benchmark that was missing.** `ScaleTests` stops when `performEdit` returns and `ParsePacingBench`
+  when a parse is installed. `TypingLatencyBench` (`AIRMARK_TYPING_BYTES`) types through `insertText` and
+  `insertNewline` for ten seconds at the head, middle and tail and records, per key, when the call
+  returned, when TextKit drew the fragment holding the key in AppKit's own display pass, when that run
+  loop turn ended after Core Animation's commit, and when a parse including the key was installed; and
+  how long blocks posted to the main queue waited. p50/p95/p99/max. Not HID, no input method, and nothing
+  past the commit: the window server and the display cannot be timed from inside the process.
+- **Figures.** Drawn p95 5.5–9.4 ms and p99 6.5–10.0 ms across sizes and positions, worst key 24.3 ms.
+  Longest main-thread stall 21–28 ms, at the head; 13 of about 85,000 probes over 16.7 ms. `returned` p50
+  1.3–4.1 ms, several times `performEdit` alone: the rest is `NSTextView`'s own work, not broken down.
+- **It caught a regression of this branch.** Skipping `scheduleRenders` in documents with nothing to
+  render (`b7bccdb`) also skipped the layout around the viewport that finding the render windows does,
+  and that layout kept `layoutViewport` short. Typing at the tail of a 10MB prose document after edits
+  further up: drawn p50 42 ms, one key 994 ms. Removed; p50 2.5 ms, max 7.0 ms. A 4-second run did not
+  show it, and no unit test could have.
+- **Not explained.** 1MB costs more per key than 10MB (returned p50 about 4 against 2.5 ms).
+- **Next candidate.** Formatting trails typing by 70–110 ms at p50 and 200–240 ms at p95: at 50 ms between
+  keys the 45 ms parse delay restarts with nearly every key and the 150 ms staleness limit starts the
+  parse. The partial parse is about a millisecond now, so the delay is all of it.
+- **Tests.** 112 + 71, Debug.
