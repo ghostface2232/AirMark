@@ -39,7 +39,7 @@ struct ParserDifferentialTests {
 
     static func expectSame(_ source: String, _ context: @autoclosure () -> String) -> Bool {
         let actual = MarkdownParser.parse(source, revision: 0, enforcingLimit: false)
-        return BlockReparseTests.expectSame(actual, ReferenceParser.parse(source), context())
+        return BlockReparseTests.expectSame(actual, ReferenceParser.parse(source), context(), definitions: false)
     }
 
     @Test func generatedDocumentsParseAsTheReferenceDoes() {

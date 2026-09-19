@@ -12,12 +12,18 @@ extension MarkdownParser {
     /// the edit did not reach past them: an unterminated fence, an HTML block, or a paragraph or list
     /// that absorbed its neighbour would change them. The window then doubles its margins, and past a
     /// quarter of the document (or 64KB) the document is parsed whole. Inline syntax and math do not cross
-    /// a blank line, so the window holds them too. Link reference definitions resolve links anywhere,
-    /// so a document that may contain one is always parsed whole.
+    /// a blank line, so the window holds them too.
+    ///
+    /// Link reference definitions resolve links anywhere in the document, and nothing else about them
+    /// reaches outside their own paragraph: cmark collects them while it builds blocks and reads them
+    /// only when it parses inlines. So the window is parsed with the document's other definitions
+    /// standing before and after it, as they do in the document, and the result is kept only if the
+    /// window's own definitions are the ones it had. A change to a definition parses the document
+    /// whole; typing anywhere else does not, however many definitions there are.
     public static func reparse(_ source: String, revision: UInt64, previous: ParsedDocument, edits: [PresentationEdit])
         -> (document: ParsedDocument, changed: SourceSpan)? {
         let blocks = previous.blocks, count = blocks.count
-        guard count > 0, !previous.mayDefineReferences else { return nil }
+        guard count > 0 else { return nil }
         let old = previous.source as NSString, new = source as NSString
         guard let first = edits.first else {
             guard old.length == new.length else { return nil }
@@ -67,8 +73,22 @@ extension MarkdownParser {
             guard oldEnd - start <= limit || whole else { return nil }
             let window = SourceSpan(start, oldEnd + delta - start)
             let text = new.substring(with: window.nsRange)
-            guard !mayDefineReferences(text), nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
-            let part = parse(text, revision: revision)
+            guard nestingEstimate(text) <= nestingLimit, inlineNestingEstimate(text) <= inlineNestingLimit else { return nil }
+            // The definitions the window held, and where they stand among the document's. Two equal
+            // runs are interchangeable: either way the parse below ranks the same definitions in the
+            // same order as the document does.
+            let all = previous.definitions
+            var held: [ReferenceDefinition] = []
+            if !all.isEmpty {
+                let oldText = old.substring(with: NSRange(location: start, length: oldEnd - start))
+                if mayDefineReferences(oldText) { held = parse(oldText, revision: revision).definitions }
+            }
+            guard let position = held.isEmpty ? all.count : (0...(all.count - min(all.count, held.count))).first(where: { all[$0...].starts(with: held) }),
+                  let part = parse(text, revision: revision, enforcingLimit: true, before: Array(all[..<position]), after: Array(all[(position + held.count)...])),
+                  part.definitions == held else { return nil }
+            let largest = all.lazy.map(\.size).max() ?? 0
+            guard part.referenceExpansion + largest <= referenceExpansionFloor,
+                  previous.referenceExpansion + part.referenceExpansion + largest <= max(referenceExpansionFloor, new.length) else { return nil }
             let reparsed = part.blocks.map { SourceSpan($0.location + start, $0.length) }
             let leading = blocks[lower..<max(lower, touchedFirst)]
             let trailing = blocks[min(touchedLast + 1, upper + 1)..<(upper + 1)].map { SourceSpan($0.location + delta, $0.length) }
@@ -97,6 +117,8 @@ extension MarkdownParser {
             return result
         }
         var document = ParsedDocument(source: source, revision: revision)
+        document.definitions = previous.definitions
+        document.referenceExpansion = previous.referenceExpansion + part.referenceExpansion
         document.styles = stitch(previous.styles, part.styles, location: \.span.location) { run, offset in
             StyleRun(span: moved(run.span, by: offset), kind: run.kind, markers: run.markers.map { moved($0, by: offset) })
         }

@@ -388,3 +388,33 @@ after the review fixes below; the UI state after them is in that entry.
   109 + 60. One batch run had `testCancelledCloseKeepsTheDraftAfterRelaunch` miss its sheet; it passed
   alone on base and fix and in a full rerun.
 - **Not verified.** A real logout; the review panel's Save; Release.
+
+## 2026-09-19 — Link reference definitions no longer force a whole parse
+
+`Validation/2026-09-19-incremental/references.txt`. Release.
+
+- **What was wrong.** Any document containing `]:` was parsed whole on every keystroke, because a
+  definition resolves links anywhere. The five Markdown files in this repository that contain `]:`,
+  this one among them, contain no definition at all.
+- **What cmark does.** It collects definitions while it builds blocks, as each paragraph closes, and reads
+  them only when it parses inlines, in `cmark_parser_finish`; of two with one label the earlier wins.
+  Nothing else about a definition reaches outside its own paragraph. So `reparse` parses its window with
+  the document's other definitions put into cmark's map before and after the feed, in document order, and
+  keeps the result only if the window's own definitions are the ones it held before. A changed, added or
+  removed definition parses whole; typing anywhere else does not.
+- **Not public API.** cmark has no call for this. The map is declared in headers swift-cmark exports, and
+  the package pins swift-cmark exactly; entries are made as `cmark_reference_create` makes them, with
+  values already cleaned. `finish` frees the map before returning, so it is read from an extension's
+  postprocess hook, the one call cmark makes between resolving links and freeing it.
+- **The expansion cap.** cmark refuses reference links once their destinations and titles add up to the
+  document's size (100KB if smaller). A window has less to spend, so a partial parse is used only while
+  the document's total, which partial parses only ever overestimate, leaves room for the largest
+  definition. `documentsNearTheExpansionCapParseWhole`.
+- **Measured.** One edit in the middle, p50 of five: 1MB with one definition 33.4 ms whole → 1.0 ms
+  partial; with 2,000 definitions 35.8 → 1.6 ms; 10MB 339 → 9.9 ms and 351 → 12.8 ms.
+  `AirMarkBench --references`.
+- **Tests.** Half the generated documents of `reparseEqualsWholeParseAfterRandomEdits` now define up to
+  six references: duplicate labels, another case, a title over two lines, angle brackets, entities and
+  escapes, one inside a quote, swift-cmark's attribute form; over 1,000 partial parses of documents with
+  definitions are asserted. Parsing the window with no definitions, with all of them ranked before it, or
+  without comparing the window's own, each fails the suite. 110 + 65 tests, Debug.

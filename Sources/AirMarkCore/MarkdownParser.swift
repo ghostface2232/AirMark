@@ -33,13 +33,17 @@ public struct ParsedDocument: Sendable {
     /// Spans of the top-level blocks in order, which `MarkdownParser.reparse` cuts between. Empty when
     /// a block has no source range or the document exceeded a nesting limit.
     public var blocks: [SourceSpan]
-    /// The source contains `]:`, so it may define link references, which change links anywhere in the
-    /// document and rule out reparsing part of it.
-    public var mayDefineReferences: Bool
+    /// The source's link reference definitions, in order. They resolve links anywhere in the document,
+    /// so `MarkdownParser.reparse` hands the ones outside its window to the parse of the window.
+    public var definitions: [ReferenceDefinition] = []
+    /// At least the bytes this document's reference links expand to, which cmark caps; see
+    /// `MarkdownParser.referenceExpansionFloor`. Exact after a whole parse, and only ever over after
+    /// a partial one, which adds its window's without taking away what the window held before.
+    public var referenceExpansion = 0
     public init(source: String, revision: UInt64 = 0, styles: [StyleRun] = [], elements: [RenderElement] = [], checkboxes: [SourceSpan] = [],
-                blocks: [SourceSpan] = [], mayDefineReferences: Bool = false) {
+                blocks: [SourceSpan] = []) {
         self.source = source; self.revision = revision; self.styles = styles; self.elements = elements; self.checkboxes = checkboxes
-        self.blocks = blocks; self.mayDefineReferences = mayDefineReferences
+        self.blocks = blocks
     }
 }
 
@@ -270,6 +274,13 @@ public enum MarkdownParser {
     nonisolated(unsafe) static let quoteMarker = try? NSRegularExpression(pattern: "^[ \\t]{0,3}>[ \\t]?", options: .anchorsMatchLines)
     nonisolated(unsafe) static let listItemMarker = try? NSRegularExpression(pattern: "^[ \\t]*([-+*]|[0-9]+[.)])[ \\t]+(?:(\\[[ xX]\\])(?=[ \\t]))?")
 
+    /// cmark stops resolving reference links once their destinations and titles add up to the size of
+    /// the document, or to this when the document is smaller: a defence against a short document that
+    /// expands without bound. A window is smaller than its document, so its parse has less to spend.
+    /// A partial parse is used only while the whole document's links fit under the cap with room for
+    /// the largest definition; then no link in either parse is refused, and the two agree.
+    static let referenceExpansionFloor = 100_000
+
     /// Whether `source` contains `]:`, which every link reference definition does.
     static func mayDefineReferences(_ source: String) -> Bool { withBytes(source, mayDefineReferences) }
     static func mayDefineReferences(_ bytes: Bytes) -> Bool {
@@ -297,13 +308,26 @@ public enum MarkdownParser {
         parse(source, revision: revision, enforcingLimit: true)
     }
     static func parse(_ source: String, revision: UInt64, enforcingLimit: Bool) -> ParsedDocument {
+        parse(source, revision: revision, enforcingLimit: enforcingLimit, before: [], after: [])!
+    }
+    /// `source` parsed as part of a document whose other link reference definitions are `before` and
+    /// `after` it; the result's `definitions` are the source's own. Nil when the source ends inside a
+    /// paragraph, whose definitions could then not be ranked before `after`.
+    static func parse(_ source: String, revision: UInt64, enforcingLimit: Bool, before: [ReferenceDefinition], after: [ReferenceDefinition]) -> ParsedDocument? {
         var output = ParsedDocument(source: source, revision: revision)
-        let parsed: MarkdownTree? = withBytes(source) { bytes in
-            if enforcingLimit, nestingEstimate(bytes) > nestingLimit || inlineNestingEstimate(bytes) > inlineNestingLimit { return nil }
-            output.mayDefineReferences = mayDefineReferences(bytes)
-            return MarkdownTree(parsing: bytes)
+        var bytes = 0
+        let parsed: MarkdownTree? = withBytes(source) {
+            bytes = $0.count
+            if enforcingLimit, nestingEstimate($0) > nestingLimit || inlineNestingEstimate($0) > inlineNestingLimit { return nil }
+            return MarkdownTree(parsing: $0, before: before, after: after)
         }
         guard let document = parsed else { return output }
+        guard document.definitionsAreOrdered else { return nil }
+        output.definitions = Array(document.definitions[document.ownDefinitions])
+        // A whole parse that came near the cap may have had links refused, which no window would see.
+        let largest = document.definitions.lazy.map(\.size).max() ?? 0
+        let refused = document.referenceExpansion + largest > max(referenceExpansionFloor, bytes)
+        output.referenceExpansion = refused ? .max / 2 : document.referenceExpansion
         let index = SourceIndex(source)
         var protected: [SourceSpan] = []
         /// Column corrections for inline nodes, by line. cmark reports inline columns on a paragraph's

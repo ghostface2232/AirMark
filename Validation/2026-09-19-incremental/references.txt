@@ -1,0 +1,4 @@
+REFERENCES bytes=1000042 definitions=1 partial=true reparse_p50=1.00ms whole_p50=33.43ms
+REFERENCES bytes=1102668 definitions=2000 partial=true reparse_p50=1.58ms whole_p50=35.84ms
+REFERENCES bytes=10000024 definitions=1 partial=true reparse_p50=9.94ms whole_p50=338.87ms
+REFERENCES bytes=10102650 definitions=2000 partial=true reparse_p50=12.77ms whole_p50=350.78ms

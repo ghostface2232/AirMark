@@ -210,7 +210,6 @@ enum ReferenceParser {
         }
         for child in document.children { walk(child, topLevel: true) }
         if !blockSpansComplete { output.blocks.removeAll() }
-        output.mayDefineReferences = MarkdownParser.mayDefineReferences(source)
         MarkdownParser.finish(&output, protected: protected, units: nil)
         return output
     }

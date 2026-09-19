@@ -104,17 +104,112 @@ final class MarkdownTree {
 
     private let document: UnsafeMutablePointer<cmark_node>
     var root: Node { Node(pointer: document) }
+    /// Every link reference definition the parse resolved links against, in the order cmark ranks
+    /// them: those given as `before`, then the source's own (`ownDefinitions`), then those given as `after`.
+    let definitions: [ReferenceDefinition]
+    let ownDefinitions: Swift.Range<Int>
+    /// False when `after` could not be ranked after the source's own definitions: cmark makes a
+    /// paragraph's definitions when the paragraph closes, and one still open when the source ends closes
+    /// in `cmark_parser_finish`, by which time `after` is in the map. A source that ends in a blank
+    /// line, as a reparse window before other blocks does, has nothing open.
+    let definitionsAreOrdered: Bool
+    /// Bytes of destinations and titles the parse's reference links expanded to, which cmark caps.
+    let referenceExpansion: Int
 
-    init(parsing source: MarkdownParser.Bytes) {
+    /// Parses `source` as part of a document whose other link reference definitions are `before` and
+    /// `after` it. cmark collects definitions while it builds blocks and reads them only when it
+    /// parses inlines, in `cmark_parser_finish`, taking the earliest of two with one label; so
+    /// definitions put into its map around the feed resolve this source's links exactly as the whole
+    /// document would. cmark has no API for that. Its headers, which swift-cmark exports and this
+    /// package pins, declare the map, and entries are made here as `cmark_reference_create` makes
+    /// them, except that the values are already cleaned and are copied as they are.
+    init(parsing source: MarkdownParser.Bytes, before: [ReferenceDefinition] = [], after: [ReferenceDefinition] = []) {
         cmark_gfm_core_extensions_ensure_registered()
-        let parser = cmark_parser_new(CMARK_OPT_TABLE_SPANS | CMARK_OPT_SMART | CMARK_OPT_SOURCEPOS)
+        let parser = cmark_parser_new(CMARK_OPT_TABLE_SPANS | CMARK_OPT_SMART | CMARK_OPT_SOURCEPOS)!
         defer { cmark_parser_free(parser) }
         for name in ["table", "strikethrough", "tasklist"] {
             cmark_parser_attach_syntax_extension(parser, cmark_find_syntax_extension(name))
         }
+        cmark_parser_attach_syntax_extension(parser, Self.referenceReader)
+        let map = parser.pointee.refmap!
+        for definition in before { definition.insert(into: map) }
         source.withMemoryRebound(to: CChar.self) { cmark_parser_feed(parser, $0.baseAddress, $0.count) }
+        let own = before.count..<map.pointee.size
+        let open = parser.pointee.linebuf.size > 0 || parser.pointee.current?.pointee.type == UInt16(CMARK_NODE_PARAGRAPH.rawValue)
+        definitionsAreOrdered = after.isEmpty || !open
+        for definition in after { definition.insert(into: map) }
         document = cmark_parser_finish(parser)
+        let storage = Thread.current.threadDictionary
+        let read = storage[Self.referenceKey] as? References
+        storage.removeObject(forKey: Self.referenceKey)
+        definitions = read?.definitions ?? []
+        // A paragraph still open at the end made its definitions in `finish`; with no `after` they are the last.
+        ownDefinitions = after.isEmpty ? before.count..<definitions.count : own
+        referenceExpansion = read?.expansion ?? 0
     }
 
+    /// The map as `cmark_parser_finish` leaves it, which it frees before it returns. An extension's
+    /// postprocess hook is the one call cmark makes between resolving the links and freeing the map,
+    /// so an extension with nothing but that hook reads it, on the thread that is parsing.
+    private final class References {
+        let definitions: [ReferenceDefinition], expansion: Int
+        init(_ map: UnsafeMutablePointer<cmark_map>) {
+            var entries: [(age: Int, definition: ReferenceDefinition)] = []
+            var entry = map.pointee.refs
+            while let current = entry {
+                entries.append((current.pointee.age, ReferenceDefinition(current)))
+                entry = current.pointee.next
+            }
+            definitions = entries.sorted { $0.age < $1.age }.map(\.definition)
+            expansion = map.pointee.ref_size
+        }
+    }
+    private static let referenceKey = "AirMark.MarkdownTree.references"
+    /// Made once and never freed; cmark only reads it.
+    nonisolated(unsafe) private static let referenceReader: UnsafeMutablePointer<cmark_syntax_extension> = {
+        let reader = cmark_syntax_extension_new("airmark-references")!
+        cmark_syntax_extension_set_postprocess_func(reader) { _, parser, _ in
+            if let map = parser?.pointee.refmap { Thread.current.threadDictionary[MarkdownTree.referenceKey] = References(map) }
+            return nil
+        }
+        return reader
+    }()
+
     deinit { cmark_node_free(document) }
+}
+
+/// A link reference definition as cmark keeps it: the label normalized, the destination and title
+/// cleaned of their delimiters and escapes. Bytes, so nothing is decoded and encoded on the way back in.
+public struct ReferenceDefinition: Hashable, Sendable {
+    var label: [UInt8], destination: [UInt8], title: [UInt8]
+    /// swift-cmark's `^[label]: attributes` form, which shares the map.
+    var attributes: [UInt8]?
+    /// What one use of this definition counts against cmark's expansion cap.
+    var size: Int { attributes == nil ? destination.count + title.count : 0 }
+
+    fileprivate init(_ entry: UnsafeMutablePointer<cmark_map_entry>) {
+        let reference = UnsafeMutableRawPointer(entry).assumingMemoryBound(to: cmark_reference.self).pointee
+        func bytes(_ chunk: cmark_chunk) -> [UInt8] { chunk.data.map { Array(UnsafeBufferPointer(start: $0, count: Int(chunk.len))) } ?? [] }
+        label = Array(UnsafeBufferPointer(start: entry.pointee.label, count: strlen(entry.pointee.label)))
+        destination = bytes(reference.url); title = bytes(reference.title)
+        attributes = reference.is_attributes_reference ? bytes(reference.attributes) : nil
+    }
+
+    /// Appends this definition to `map`, younger than everything in it.
+    fileprivate func insert(into map: UnsafeMutablePointer<cmark_map>) {
+        let memory = map.pointee.mem.pointee
+        func copy(_ bytes: [UInt8]) -> UnsafeMutablePointer<UInt8> {
+            let data = memory.calloc(bytes.count + 1, 1)!.assumingMemoryBound(to: UInt8.self)
+            data.update(from: bytes, count: bytes.count)
+            return data
+        }
+        func chunk(_ bytes: [UInt8]) -> cmark_chunk { cmark_chunk(data: copy(bytes), len: bufsize_t(bytes.count), alloc: 1) }
+        let reference = memory.calloc(1, MemoryLayout<cmark_reference>.size)!.assumingMemoryBound(to: cmark_reference.self)
+        reference.pointee.is_attributes_reference = attributes != nil
+        reference.pointee.url = chunk(destination); reference.pointee.title = chunk(title)
+        reference.pointee.attributes = chunk(attributes ?? [])
+        reference.pointee.entry = cmark_map_entry(next: map.pointee.refs, label: copy(label), age: map.pointee.size, size: size)
+        map.pointee.refs = UnsafeMutableRawPointer(reference).assumingMemoryBound(to: cmark_map_entry.self)
+        map.pointee.size += 1
+    }
 }
