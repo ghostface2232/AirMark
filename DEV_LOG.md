@@ -478,3 +478,46 @@ after the review fixes below; the UI state after them is in that entry.
   against swift-markdown's tree. 111 + 68, Debug and Release.
 - **Left.** Cuts inside a long block quote, and between the items of a nested list, would need the
   container's prefix stripped and positions mapped back. A list that holds `$$` is one block as before.
+
+## 2026-09-19 — What a review of the three changes found
+
+A review agent read the branch with cmark's sources beside it and fuzzed `reparse` against `parse` from a
+scratch package, about 400,000 comparisons. Five findings were confirmed with inputs; each is fixed in its
+own commit with its input as a test. Two were holes in that day's work, three were older.
+
+- **A crash, older than the branch.** The inline nesting estimate takes `~~~` inside an HTML block for a
+  fence and skips what follows, so `<div>` / `~~~` / `</div>` and then 200,000 `*` on each side of a letter
+  was estimated at nothing and overflowed the stack in the walk. The walk now counts its own depth and
+  refuses a tree deeper than both limits together; `plainText`, which an image calls before the walk goes
+  down, follows cmark's links instead of recursing. The test ends the process without the guard.
+- **The verdict on nesting was the window's, not the document's.** `parse` presents a document over a limit
+  as plain text; `reparse` judged its window alone. An edit that removed a `~~~` uncovered a deep paragraph
+  below, and between list items there is no blank line to restart the count, so a thousand items that each
+  open emphasis add up: the second is a hole the item cuts opened. The count is now taken out to the blank
+  lines around an item cut, and the whole text is estimated when the window holds a fence line before or
+  after the edit.
+- **Setext headings, older than the branch.** cmark ends one on the line after its underline. Followed by
+  text, that line was hidden as the underline and the underline shown; followed by a blank line, only the
+  line break was hidden. The one test had the heading at the end of the document, the only place cmark is
+  right. In a list item it also broke an item cut, which is how it was found.
+- **A NUL on the next line.** cmark counts a NUL as three bytes, so an end given on such a line is nowhere;
+  an open fence in a container and a setext heading lost their span in the whole parse and kept it in a
+  window. Their start is enough, since their end is worked out in the walk.
+- **Quote markers counted characters.** After `- > a`, a tab and two spaces and `> b` is past the item's
+  content and is text; after `100.`, four columns are short of the item's five. Both `>` were hidden.
+  Prefixes are now advanced in columns as cmark advances them, with an item's indentation read from
+  cmark's node, and a lazy line is marked so nothing further in takes a marker from it.
+- **Checked again.** The reviewer's fuzzer, rebuilt against the fixes: 15 runs over its five pools
+  (lists, references, math, quotes, exotic), about 143,000 partial parses, 0 differences, and three more
+  runs (29,000) after the last change.
+  `listItemsAreCutPoints` now has setext headings, an open `~~~`, a NUL, tabs and lazy `>` lines among
+  its items.
+- **Found sound by the review.** The map entries made for cmark (allocator, ages, sizes; ASan and `leaks`
+  clean), reading the map in the postprocess hook, the thread-dictionary hand-off, `definitionsAreOrdered`,
+  duplicate labels, the expansion cap arithmetic, the `$$` rule, the flat shift in `PresentationStore`.
+- **Left as they are.** Backspace on a bullet in a long list merges the item into the block before it, so
+  the margins double to the whole list: a whole parse for that key. A block that ends on a line holding a
+  NUL has no span, which leaves its document without blocks and always parsed whole. A quote's first-line
+  marker starts at its `>` while later lines include the spaces before it.
+- **Tests.** 111 + 71, Debug and Release. Per 1MB after the fixes: normal 35.6 ms, nested-list-depth-256
+  16.9, nested-quote-depth-256 30.6; `--lists` flat 2.2 ms, `--references` 1.0 ms.
